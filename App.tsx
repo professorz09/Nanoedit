@@ -46,6 +46,7 @@ function App() {
   const [imageLoadError, setImageLoadError] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showMobileTools, setShowMobileTools] = useState(false);
   const [batchCount, setBatchCount] = useState(1);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const [brushMode, setBrushMode] = useState(false);
@@ -373,6 +374,7 @@ function App() {
     for (let i = 0; i < batchCount; i++) {
       setTimeout(() => addToQueue(prompt), i * 100);
     }
+    setShowMobileTools(false);
   }, [prompt, addToQueue, batchCount]);
 
   const handleRemoveBackground = () => {
@@ -914,6 +916,26 @@ function App() {
                 </div>
             )}
 
+            {globalError && uiVisible && (
+                <div className="w-full max-w-4xl mx-auto animate-fade-in-up">
+                    <div className="bg-red-950/30 border border-red-800/60 rounded-xl p-4 shadow-lg relative">
+                        <button
+                            onClick={() => setGlobalError(null)}
+                            className="absolute top-3 right-3 p-1 text-red-300/70 hover:text-red-200 transition-colors"
+                            aria-label="Dismiss error"
+                        >
+                            <IconX />
+                        </button>
+                        <h3 className="text-red-300 text-xs font-bold uppercase tracking-wider mb-2">
+                            Error
+                        </h3>
+                        <p className="text-sm text-red-100/90 pr-8">
+                            {globalError}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {(generatedImages.length > 0 || queue.length > 0) && (
                 <div className="w-full">
                     <h3 className={`text-zinc-500 text-sm font-medium mb-4 uppercase tracking-wider flex items-center justify-between transition-opacity ${uiVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -998,7 +1020,7 @@ function App() {
                         {generatedImages.map((img) => (
                             <div key={img.id} className="relative group rounded-xl overflow-hidden bg-nano-card border border-zinc-800 aspect-square flex items-center justify-center">
                                 <img src={img.url} alt={img.prompt} className="w-full h-full object-cover cursor-pointer" onClick={() => setViewedImage(img.url)} />
-                                <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-4 transition-all duration-300 ${uiVisible ? 'opacity-0 group-hover:opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-3 sm:p-4 transition-all duration-300 ${uiVisible ? 'opacity-100 md:opacity-0 md:group-hover:opacity-100' : 'opacity-0 pointer-events-none'}`}>
                                     <p 
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -1013,12 +1035,12 @@ function App() {
                                     >
                                         {copiedPromptId === img.id ? '✓ Copied!' : img.prompt}
                                     </p>
-                                    <div className="grid grid-cols-5 gap-2">
-                                         <button onClick={() => setViewedImage(img.url)} className="px-2 py-2 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="View Fullscreen"><IconEye /></button>
-                                        <button onClick={() => handleBrushSelect(img.url)} className="px-2 py-2 bg-purple-900/50 text-purple-200 text-xs font-bold rounded-lg hover:bg-purple-900 flex items-center justify-center transition-colors" title="Brush Edit">🖌️</button>
-                                        <button onClick={() => addToLayers(img.url)} className="px-2 py-2 bg-nano-accent text-nano-bg text-xs font-bold rounded-lg hover:bg-nano-accentHover flex items-center justify-center transition-colors" title="Add Layer"><IconLayerPlus /></button>
-                                        <button onClick={() => downloadImage(img.url)} className="px-2 py-2 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="Download"><IconDownload /></button>
-                                        <button onClick={() => deleteGeneratedImage(img.id)} className="px-2 py-2 bg-red-900/50 text-red-200 text-xs font-bold rounded-lg hover:bg-red-900 flex items-center justify-center transition-colors" title="Delete"><IconTrash /></button>
+                                    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                                         <button onClick={() => setViewedImage(img.url)} className="px-2 py-2.5 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="View Fullscreen"><IconEye /></button>
+                                        <button onClick={() => handleBrushSelect(img.url)} className="px-2 py-2.5 bg-purple-900/50 text-purple-200 text-xs font-bold rounded-lg hover:bg-purple-900 flex items-center justify-center transition-colors" title="Brush Edit">🖌️</button>
+                                        <button onClick={() => addToLayers(img.url)} className="px-2 py-2.5 bg-nano-accent text-nano-bg text-xs font-bold rounded-lg hover:bg-nano-accentHover flex items-center justify-center transition-colors" title="Add Layer"><IconLayerPlus /></button>
+                                        <button onClick={() => downloadImage(img.url)} className="px-2 py-2.5 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="Download"><IconDownload /></button>
+                                        <button onClick={() => deleteGeneratedImage(img.id)} className="px-2 py-2.5 bg-red-900/50 text-red-200 text-xs font-bold rounded-lg hover:bg-red-900 flex items-center justify-center transition-colors" title="Delete"><IconTrash /></button>
                                     </div>
                                 </div>
                             </div>
@@ -1056,7 +1078,16 @@ function App() {
               </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between px-2 pb-1 gap-2">
+          <div className="sm:hidden px-2 pb-1">
+              <button
+                  onClick={() => setShowMobileTools(prev => !prev)}
+                  className="w-full py-2 rounded-lg border border-zinc-800 bg-zinc-900/60 text-zinc-300 text-xs font-semibold"
+              >
+                  {showMobileTools ? 'Hide Tools' : 'More Tools'}
+              </button>
+          </div>
+
+          <div className={`${showMobileTools ? 'flex' : 'hidden'} sm:flex flex-wrap items-center justify-between px-2 pb-1 gap-2`}>
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full sm:w-auto">
                   <button 
                     onClick={() => setIsImageMode(!isImageMode)}
