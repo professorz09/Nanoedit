@@ -914,6 +914,26 @@ function App() {
                 </div>
             )}
 
+            {globalError && uiVisible && (
+                <div className="w-full max-w-4xl mx-auto animate-fade-in-up">
+                    <div className="bg-red-950/30 border border-red-800/60 rounded-xl p-4 shadow-lg relative">
+                        <button
+                            onClick={() => setGlobalError(null)}
+                            className="absolute top-3 right-3 p-1 text-red-300/70 hover:text-red-200 transition-colors"
+                            aria-label="Dismiss error"
+                        >
+                            <IconX />
+                        </button>
+                        <h3 className="text-red-300 text-xs font-bold uppercase tracking-wider mb-2">
+                            Error
+                        </h3>
+                        <p className="text-sm text-red-100/90 pr-8">
+                            {globalError}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {(generatedImages.length > 0 || queue.length > 0) && (
                 <div className="w-full">
                     <h3 className={`text-zinc-500 text-sm font-medium mb-4 uppercase tracking-wider flex items-center justify-between transition-opacity ${uiVisible ? 'opacity-100' : 'opacity-0'}`}>
