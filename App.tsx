@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { editImageWithGemini } from './services/geminiService';
 import { saveToIndexedDB, getFromIndexedDB, saveToLocalStorage, getFromLocalStorage, STORAGE_KEYS } from './services/storageService';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
-import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEyeOff, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
+import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
 // @ts-ignore
 import JSZip from 'jszip';
 
@@ -1134,10 +1134,6 @@ function App() {
               </div>
 
                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                   <button onClick={() => setUiVisible(false)} className="flex items-center gap-2 px-3 py-1.5 bg-transparent border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600 rounded-lg text-xs font-medium transition-all" title="Hide UI (Shift + H)">
-                      <IconEyeOff />
-                  </button>
-
                   <button onClick={() => setShowHelp(!showHelp)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium transition-all ${showHelp ? 'bg-nano-accent/20 border-nano-accent/50 text-nano-accent' : 'bg-transparent border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'}`} title="Help & Shortcuts (Shift + ?)">
                       ?
                   </button>
@@ -1271,7 +1267,6 @@ function App() {
                           </div>
                           <div className="space-y-1">
                               <div className="flex justify-between"><span className="text-zinc-400">Toggle Mode</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧I</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Hide UI</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧H</kbd></div>
                               <div className="flex justify-between"><span className="text-zinc-400">Clear</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">Esc</kbd></div>
                               <div className="flex justify-between"><span className="text-zinc-400">Clear Prompt</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧K</kbd></div>
                               <div className="flex justify-between"><span className="text-zinc-400">Add Layer</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧D</kbd></div>
