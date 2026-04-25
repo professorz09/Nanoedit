@@ -914,6 +914,26 @@ function App() {
                 </div>
             )}
 
+            {globalError && uiVisible && (
+                <div className="w-full max-w-4xl mx-auto animate-fade-in-up">
+                    <div className="bg-red-950/30 border border-red-800/60 rounded-xl p-4 shadow-lg relative">
+                        <button
+                            onClick={() => setGlobalError(null)}
+                            className="absolute top-3 right-3 p-1 text-red-300/70 hover:text-red-200 transition-colors"
+                            aria-label="Dismiss error"
+                        >
+                            <IconX />
+                        </button>
+                        <h3 className="text-red-300 text-xs font-bold uppercase tracking-wider mb-2">
+                            Error
+                        </h3>
+                        <p className="text-sm text-red-100/90 pr-8">
+                            {globalError}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {(generatedImages.length > 0 || queue.length > 0) && (
                 <div className="w-full">
                     <h3 className={`text-zinc-500 text-sm font-medium mb-4 uppercase tracking-wider flex items-center justify-between transition-opacity ${uiVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -1098,7 +1118,7 @@ function App() {
                       className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium transition-all whitespace-nowrap ${showAdvanced ? 'bg-nano-accent/20 border-nano-accent/50 text-nano-accent' : 'bg-transparent border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'}`}
                       title="Advanced Features"
                   >
-                      ⚡ <span className="hidden sm:inline">Advanced</span>
+                      <span>Advanced</span>
                   </button>
               </div>
 
@@ -1115,7 +1135,7 @@ function App() {
 
           {/* Advanced Features Row */}
           {showAdvanced && (
-              <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-t border-zinc-800/50 pt-2">
+              <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-t border-zinc-800/50 pt-3 mt-1 bg-zinc-900/30 rounded-xl">
                    <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
                       <IconPalette />
                       <select value={settings.style} onChange={(e) => setSettings(prev => ({...prev, style: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-20">
