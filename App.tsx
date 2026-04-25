@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { editImageWithGemini } from './services/geminiService';
 import { saveToIndexedDB, getFromIndexedDB, saveToLocalStorage, getFromLocalStorage, STORAGE_KEYS } from './services/storageService';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
-import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEyeOff, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
+import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
 // @ts-ignore
 import JSZip from 'jszip';
 
@@ -914,6 +914,26 @@ function App() {
                 </div>
             )}
 
+            {globalError && uiVisible && (
+                <div className="w-full max-w-4xl mx-auto animate-fade-in-up">
+                    <div className="bg-red-950/30 border border-red-800/60 rounded-xl p-4 shadow-lg relative">
+                        <button
+                            onClick={() => setGlobalError(null)}
+                            className="absolute top-3 right-3 p-1 text-red-300/70 hover:text-red-200 transition-colors"
+                            aria-label="Dismiss error"
+                        >
+                            <IconX />
+                        </button>
+                        <h3 className="text-red-300 text-xs font-bold uppercase tracking-wider mb-2">
+                            Error
+                        </h3>
+                        <p className="text-sm text-red-100/90 pr-8">
+                            {globalError}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {(generatedImages.length > 0 || queue.length > 0) && (
                 <div className="w-full">
                     <h3 className={`text-zinc-500 text-sm font-medium mb-4 uppercase tracking-wider flex items-center justify-between transition-opacity ${uiVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -1098,15 +1118,11 @@ function App() {
                       className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium transition-all whitespace-nowrap ${showAdvanced ? 'bg-nano-accent/20 border-nano-accent/50 text-nano-accent' : 'bg-transparent border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'}`}
                       title="Advanced Features"
                   >
-                      ⚡ <span className="hidden sm:inline">Advanced</span>
+                      <span>Advanced</span>
                   </button>
               </div>
 
                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                   <button onClick={() => setUiVisible(false)} className="flex items-center gap-2 px-3 py-1.5 bg-transparent border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600 rounded-lg text-xs font-medium transition-all" title="Hide UI (Shift + H)">
-                      <IconEyeOff />
-                  </button>
-
                   <button onClick={() => setShowHelp(!showHelp)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium transition-all ${showHelp ? 'bg-nano-accent/20 border-nano-accent/50 text-nano-accent' : 'bg-transparent border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'}`} title="Help & Shortcuts (Shift + ?)">
                       ?
                   </button>
@@ -1115,7 +1131,7 @@ function App() {
 
           {/* Advanced Features Row */}
           {showAdvanced && (
-              <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-t border-zinc-800/50 pt-2">
+              <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-t border-zinc-800/50 pt-3 mt-1 bg-zinc-900/30 rounded-xl">
                    <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
                       <IconPalette />
                       <select value={settings.style} onChange={(e) => setSettings(prev => ({...prev, style: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-20">
@@ -1240,7 +1256,6 @@ function App() {
                           </div>
                           <div className="space-y-1">
                               <div className="flex justify-between"><span className="text-zinc-400">Toggle Mode</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧I</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Hide UI</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧H</kbd></div>
                               <div className="flex justify-between"><span className="text-zinc-400">Clear</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">Esc</kbd></div>
                               <div className="flex justify-between"><span className="text-zinc-400">Clear Prompt</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧K</kbd></div>
                               <div className="flex justify-between"><span className="text-zinc-400">Add Layer</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧D</kbd></div>
