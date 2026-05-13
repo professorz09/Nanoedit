@@ -33,21 +33,69 @@
         color: #f4f4f5;
         font-family: 'Inter', sans-serif;
       }
-      /* Custom scrollbar for gallery */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #18181b; }
+      ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 99px; }
+      ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+      /* ── Fade-in-up animation ── */
+      @keyframes fade-in-up {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
       }
-      ::-webkit-scrollbar-track {
-        background: #18181b; 
+      .animate-fade-in-up {
+        animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
       }
-      ::-webkit-scrollbar-thumb {
-        background: #3f3f46; 
-        border-radius: 4px;
+
+      /* ── Shimmer / skeleton ── */
+      @keyframes shimmer {
+        0%   { background-position: -400% 0; }
+        100% { background-position:  400% 0; }
       }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #52525b; 
+      .animate-shimmer {
+        background: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
+        background-size: 400% 100%;
+        animation: shimmer 1.6s ease infinite;
       }
+
+      /* ── No-scrollbar utility ── */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* ── Smooth image fade-in on load ── */
+      @keyframes img-appear {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      .img-fade { animation: img-appear 0.4s ease both; }
+
+      /* ── Mobile tools smooth reveal ── */
+      .tools-reveal {
+        display: flex;
+        overflow: hidden;
+        transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                    opacity 0.25s ease;
+      }
+      .tools-reveal.collapsed {
+        max-height: 0 !important;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .tools-reveal.expanded {
+        max-height: 200px;
+        opacity: 1;
+      }
+
+      /* ── Error auto-dismiss progress bar ── */
+      @keyframes progress-shrink {
+        from { width: 100%; }
+        to   { width: 0%; }
+      }
+
+      /* ── Active press feedback ── */
+      button:active:not(:disabled) { transform: scale(0.97); }
     </style>
   <script type="importmap">
 {

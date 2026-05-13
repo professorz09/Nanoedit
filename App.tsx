@@ -235,6 +235,13 @@ function App() {
       setIsProcessing(processing);
   }, [queue]);
 
+  // Auto-dismiss error after 6 seconds
+  useEffect(() => {
+      if (!globalError) return;
+      const t = setTimeout(() => setGlobalError(null), 6000);
+      return () => clearTimeout(t);
+  }, [globalError]);
+
 
   const handleConnectKey = async () => {
     if (window.aistudio) {
@@ -794,13 +801,6 @@ function App() {
                 addToLayers(generatedImages[0].url);
             }
         }
-        // Shift + D: Duplicate last generated to layers
-        if (e.shiftKey && e.key === 'D') {
-            e.preventDefault();
-            if (generatedImages.length > 0) {
-                addToLayers(generatedImages[0].url);
-            }
-        }
         // Shift + C: Clear canvas
         if (e.shiftKey && e.key === 'C') {
             e.preventDefault();
@@ -880,8 +880,8 @@ function App() {
                             <span className="text-[10px] font-medium">Add</span>
                         </div>
                         {sourceImages.map((img, idx) => (
-                            <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-zinc-800">
-                                <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-300" onClick={() => setViewedImage(img)} />
+                            <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-zinc-800 animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
+                                <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
                                 <div className="absolute top-1 left-1 bg-nano-accent text-nano-bg text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                                     {idx + 1}
                                 </div>
@@ -918,7 +918,7 @@ function App() {
 
             {globalError && uiVisible && (
                 <div className="w-full max-w-4xl mx-auto animate-fade-in-up">
-                    <div className="bg-red-950/30 border border-red-800/60 rounded-xl p-4 shadow-lg relative">
+                    <div className="bg-red-950/30 border border-red-800/60 rounded-xl p-4 shadow-lg relative overflow-hidden">
                         <button
                             onClick={() => setGlobalError(null)}
                             className="absolute top-3 right-3 p-1 text-red-300/70 hover:text-red-200 transition-colors"
@@ -926,12 +926,12 @@ function App() {
                         >
                             <IconX />
                         </button>
-                        <h3 className="text-red-300 text-xs font-bold uppercase tracking-wider mb-2">
-                            Error
-                        </h3>
-                        <p className="text-sm text-red-100/90 pr-8">
-                            {globalError}
-                        </p>
+                        <h3 className="text-red-300 text-xs font-bold uppercase tracking-wider mb-2">Error</h3>
+                        <p className="text-sm text-red-100/90 pr-8">{globalError}</p>
+                        {/* Auto-dismiss progress bar */}
+                        <div className="absolute bottom-0 left-0 h-0.5 bg-red-500/20 w-full">
+                            <div className="h-full bg-red-400/60" style={{ animation: 'progress-shrink 6s linear forwards' }} />
+                        </div>
                     </div>
                 </div>
             )}
@@ -1017,9 +1017,13 @@ function App() {
                         ))}
 
                         {/* Generated Images */}
-                        {generatedImages.map((img) => (
-                            <div key={img.id} className="relative group rounded-xl overflow-hidden bg-nano-card border border-zinc-800 aspect-square flex items-center justify-center">
-                                <img src={img.url} alt={img.prompt} className="w-full h-full object-cover cursor-pointer" onClick={() => setViewedImage(img.url)} />
+                        {generatedImages.map((img, index) => (
+                            <div
+                                key={img.id}
+                                className="relative group rounded-xl overflow-hidden bg-nano-card border border-zinc-800 aspect-square flex items-center justify-center animate-fade-in-up"
+                                style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+                            >
+                                <img src={img.url} alt={img.prompt} loading="lazy" className="w-full h-full object-cover cursor-pointer img-fade" onClick={() => setViewedImage(img.url)} />
                                 <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-3 sm:p-4 transition-all duration-300 ${uiVisible ? 'opacity-100 md:opacity-0 md:group-hover:opacity-100' : 'opacity-0 pointer-events-none'}`}>
                                     <p 
                                         onClick={(e) => {
@@ -1051,7 +1055,7 @@ function App() {
         </div>
       </main>
 
-      <div className={`fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-2 sm:px-4 z-50 transition-all duration-500 pointer-events-none ${uiVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+      <div className={`fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-2 sm:px-4 z-50 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none ${uiVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
         <div className="bg-nano-card/95 backdrop-blur-2xl border border-zinc-700/50 p-1.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-1.5 sm:gap-2 pointer-events-auto max-h-[65vh] sm:max-h-[70vh] overflow-y-auto">
           
           <div className="flex items-center gap-2 p-0.5 sm:p-1 flex-col sm:flex-row">
@@ -1068,13 +1072,13 @@ function App() {
                       <span className="text-[10px] text-zinc-600 border border-zinc-800 rounded px-1.5 py-0.5 hidden md:block">Shift+Enter</span>
                   </div>
               </div>
-              <button 
+              <button
                   onClick={handleGenerate}
                   disabled={!prompt.trim()}
-                  className="h-11 sm:h-12 px-5 sm:px-6 w-full sm:w-auto bg-nano-accent hover:bg-nano-accentHover disabled:opacity-50 disabled:cursor-not-allowed text-nano-bg font-bold rounded-lg sm:rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(204,255,0,0.2)] text-sm whitespace-nowrap"
+                  className={`h-11 sm:h-12 px-5 sm:px-6 w-full sm:w-auto bg-nano-accent hover:bg-nano-accentHover disabled:opacity-40 disabled:cursor-not-allowed text-nano-bg font-bold rounded-lg sm:rounded-xl flex items-center justify-center gap-2 transition-all text-sm whitespace-nowrap ${isProcessing ? 'shadow-[0_0_20px_rgba(204,255,0,0.35)]' : 'shadow-[0_0_12px_rgba(204,255,0,0.15)]'}`}
               >
-                 {isProcessing ? 'Queue' : 'Generate'}
-                 <IconSparkles />
+                  {isProcessing ? 'Queue' : 'Generate'}
+                  <IconSparkles />
               </button>
           </div>
 
@@ -1087,7 +1091,7 @@ function App() {
               </button>
           </div>
 
-          <div className={`${showMobileTools ? 'flex' : 'hidden'} sm:flex flex-wrap items-center justify-between px-2 pb-1 gap-2`}>
+          <div className={`tools-reveal flex-wrap items-center justify-between px-2 pb-1 gap-2 sm:max-h-[200px] sm:opacity-100 sm:pointer-events-auto ${showMobileTools ? 'expanded' : 'collapsed'}`}>
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full sm:w-auto">
                   <button 
                     onClick={() => setIsImageMode(!isImageMode)}
@@ -1444,11 +1448,12 @@ function App() {
                           src={viewedImage} 
                           alt="Full View" 
                           className="origin-center select-none block"
-                          style={{ 
+                          style={{
                               transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                               maxWidth: '90vw',
                               maxHeight: '80vh',
-                              transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                              transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
+                              willChange: 'transform'
                           }}
                           draggable={false}
                           onError={() => setImageLoadError(true)}
@@ -1465,10 +1470,11 @@ function App() {
                           <canvas
                               ref={canvasRef}
                               className="absolute top-0 left-0 w-full h-full cursor-crosshair"
-                              style={{ 
+                              style={{
                                   transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                                   transformOrigin: 'center',
-                                  transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                                  transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
+                                  willChange: 'transform'
                               }}
                               onMouseDown={startDrawing}
                               onMouseMove={draw}
