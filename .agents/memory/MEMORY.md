@@ -1,0 +1,1 @@
+- [Claude Code Foundry Setup](claude-code-foundry.md) — Claude Code CLI working via Azure Foundry with claude-opus-4-8; env vars set in shared environment
