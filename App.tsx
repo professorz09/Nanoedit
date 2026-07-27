@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { editImageWithGemini } from './services/geminiService';
 import { saveToIndexedDB, getFromIndexedDB, saveToLocalStorage, getFromLocalStorage, STORAGE_KEYS } from './services/storageService';
+import ThumbnailStudio from './components/ThumbnailStudio';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
 // @ts-ignore
@@ -12,6 +13,8 @@ function App() {
   const [prompt, setPrompt] = useState(() => getFromLocalStorage('nano_prompt', ''));
   const [isImageMode, setIsImageMode] = useState(() => getFromLocalStorage('nano_is_image_mode', false));
   const [uiVisible, setUiVisible] = useState(() => getFromLocalStorage('nano_ui_visible', true));
+  // Which screen is shown: the thumbnail studio (landing/generator) or the Nano Edit editor
+  const [view, setView] = useState<'studio' | 'editor'>(() => getFromLocalStorage('nano_view', 'studio'));
   
   // Settings initialization - Defaulting to 4K/Pro as requested, ensuring all fields exist
   const [settings, setSettings] = useState<EditorSettings>(() => {
@@ -40,7 +43,6 @@ function App() {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isCheckingKey, setIsCheckingKey] = useState(true);
 
-  
   // State for Full Screen Image Viewer
   const [viewedImage, setViewedImage] = useState<string | null>(null);
   const [imageLoadError, setImageLoadError] = useState(false);
@@ -100,6 +102,10 @@ function App() {
   useEffect(() => {
       saveToLocalStorage('nano_ui_visible', uiVisible);
   }, [uiVisible]);
+
+  useEffect(() => {
+      saveToLocalStorage('nano_view', view);
+  }, [view]);
 
   useEffect(() => {
       saveToLocalStorage('nano_settings', settings);
@@ -383,6 +389,40 @@ function App() {
     }
     setShowMobileTools(false);
   }, [prompt, addToQueue, batchCount]);
+
+  // ── Thumbnail Studio bridge ──────────────────────────────────────
+  // Generate straight into the shared queue, forcing 16:9 HD (Pro) output.
+  const handleStudioGenerate = useCallback((studioPrompt: string, sources: string[]) => {
+      if (!studioPrompt.trim()) return;
+      const effectiveSettings: EditorSettings = {
+          ...settings,
+          aspectRatio: '16:9',
+          modelType: 'pro',
+          resolution: '4K',
+      };
+      const newItem: QueueItem = {
+          id: crypto.randomUUID(),
+          prompt: studioPrompt,
+          settings: effectiveSettings,
+          sourceImages: sources,
+          status: 'pending',
+          timestamp: Date.now(),
+      };
+      setQueue(prev => [...prev, newItem]);
+  }, [settings]);
+
+  // Send a finished thumbnail into the Nano Edit editor for fine-tuning.
+  const handleOpenEditor = useCallback((url?: string) => {
+      if (url) {
+          setSourceImages([url]);
+          setIsImageMode(true);
+          const img = new Image();
+          img.onload = () => setSettings(prev => ({ ...prev, aspectRatio: detectAspectRatio(img.width, img.height) }));
+          img.src = url;
+      }
+      setView('editor');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const handleRemoveBackground = () => {
       if (!isImageMode || sourceImages.length === 0) {
@@ -843,11 +883,43 @@ function App() {
     );
   }
 
+  // ── Thumbnail Studio screen (default landing / generator) ──
+  if (view === 'studio') {
+      return (
+          <>
+              <ThumbnailStudio
+                  onGenerate={handleStudioGenerate}
+                  generatedImages={generatedImages}
+                  queue={queue}
+                  isProcessing={isProcessing}
+                  itemTimers={itemTimers}
+                  onView={setViewedImage}
+                  onDownload={downloadImage}
+                  onDownloadAll={handleDownloadAll}
+                  onDelete={deleteGeneratedImage}
+                  onOpenEditor={handleOpenEditor}
+              />
+              {/* Lightweight lightbox for the studio (advanced zoom/brush lives in the editor) */}
+              {viewedImage && (
+                  <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setViewedImage(null)}>
+                      <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setViewedImage(null)}><IconX /></button>
+                      <img src={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => handleOpenEditor(viewedImage)} className="px-5 py-2.5 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-100 transition-colors flex items-center gap-2"><IconLayerPlus /> Edit in Nano Edit</button>
+                          <button onClick={() => downloadImage(viewedImage!)} className="px-5 py-2.5 bg-[#f5334c] text-white text-sm font-bold rounded-full hover:brightness-110 transition-all flex items-center gap-2"><IconDownload /> Download</button>
+                      </div>
+                  </div>
+              )}
+          </>
+      );
+  }
+
   return (
     <div className="min-h-screen bg-nano-bg text-nano-text selection:bg-nano-accent selection:text-nano-bg flex flex-col font-sans">
-      
+
       <header className={`p-6 flex justify-between items-center z-10 transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="flex items-center gap-2">
+            <button onClick={() => setView('studio')} className="mr-1 text-xs font-semibold text-zinc-400 hover:text-nano-accent border border-zinc-800 hover:border-nano-accent/50 rounded-full px-3 py-1.5 transition-colors" title="Back to Thumbnail Studio">← Thumbnails</button>
             <div className="w-8 h-8 bg-nano-accent rounded-full flex items-center justify-center text-nano-bg font-bold">N</div>
             <span className="font-semibold text-lg tracking-tight">Nano Edit</span>
         </div>
