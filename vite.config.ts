@@ -72,6 +72,72 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
           return send(500, { error: e?.message || String(e) });
         }
       });
+
+      // ── Text generation (titles / chapters) ──────────────────────────────
+      server.middlewares.use('/api/text', async (req, res) => {
+        const send = (status: number, obj: unknown) => {
+          res.statusCode = status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(obj));
+        };
+        if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
+        try {
+          const { prompt } = JSON.parse((await readBody(req)) || '{}');
+          if (!prompt) return send(400, { error: 'Missing prompt' });
+          if (!credPath) return send(500, { error: 'GOOGLE_APPLICATION_CREDENTIALS not set — add the service-account JSON path to .env.local and restart the dev server.' });
+
+          const { GoogleGenAI } = await import('@google/genai');
+          const ai = new GoogleGenAI({ vertexai: true, project, location });
+          const result: any = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          });
+          let text = '';
+          for (const p of result?.candidates?.[0]?.content?.parts ?? []) {
+            if (p.text) text += p.text;
+          }
+          if (!text.trim()) return send(502, { error: 'No text generated.' });
+          return send(200, { text });
+        } catch (e: any) {
+          return send(500, { error: e?.message || String(e) });
+        }
+      });
+
+      // ── YouTube transcript fetch via Supadata (key stays server-side) ─────
+      server.middlewares.use('/api/transcript', async (req, res) => {
+        const send = (status: number, obj: unknown) => {
+          res.statusCode = status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(obj));
+        };
+        if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
+        try {
+          const { videoId } = JSON.parse((await readBody(req)) || '{}');
+          if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) return send(400, { error: 'Invalid videoId' });
+          const apiKey = env.SUPADATA_API_KEY || process.env.SUPADATA_API_KEY;
+          if (!apiKey) return send(500, { error: 'SUPADATA_API_KEY not set — add it to .env.local and restart the dev server.' });
+
+          const url = `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`;
+          const r = await fetch(url, { headers: { 'x-api-key': apiKey } });
+          const data: any = await r.json().catch(() => ({}));
+          if (!r.ok) return send(200, { segments: [], reason: data?.message || `supadata ${r.status}` });
+
+          // content is an array of { text, offset (ms), duration, lang } (or a string when text=true)
+          const content = data?.content;
+          const segments: { start: number; text: string }[] = [];
+          if (Array.isArray(content)) {
+            for (const c of content) {
+              const text = String(c?.text || '').replace(/\s+/g, ' ').trim();
+              if (text) segments.push({ start: Math.floor((c?.offset ?? 0) / 1000), text });
+            }
+          } else if (typeof content === 'string' && content.trim()) {
+            segments.push({ start: 0, text: content.trim() });
+          }
+          return send(200, { segments });
+        } catch (e: any) {
+          return send(500, { error: e?.message || String(e) });
+        }
+      });
     },
   };
 }
@@ -86,12 +152,11 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react(), vertexProxyPlugin(env)],
       define: {
-        // Image generation in a DEPLOYED build falls back to Vertex Express mode.
-        // VERTEX_API_KEY is a single-string Express key (NOT a service-account JSON).
-        // The service-account JSON is used ONLY by the local dev proxy above and is
-        // never bundled. Microsoft Foundry / Anthropic keys are intentionally NOT
-        // exposed here — they are for Claude Code configuration only.
-        'process.env.VERTEX_API_KEY': JSON.stringify(env.VERTEX_API_KEY),
+        // In a DEPLOYED build, image generation goes through the secure Supabase
+        // Edge Function (services/geminiService.ts) — the image-gen key lives as a
+        // Supabase secret and is NEVER bundled into the browser.
+        // Only SUPADATA (transcript) key is defined here for the prod fallback.
+        'process.env.SUPADATA_API_KEY': JSON.stringify(env.SUPADATA_API_KEY),
       },
       resolve: {
         alias: {

@@ -63,36 +63,37 @@ export const STYLES = [
   { label: 'Neon Glow', value: 'Neon Glow' },
 ];
 
+// One-click quick actions tuned for what a thumbnail creator needs instantly.
 export const PRESET_PROMPTS = [
   {
-    label: 'Study Notes',
-    icon: '📝',
-    prompt: 'Create a handwritten-style study note. Use a messy but readable student-style handwriting on lined notebook paper. Highlight all key terms with a yellow neon marker and circle any dates or numbers in red. Add small, simple doodles or sketches to explain concepts visually. Make sure the entire layout fits on a single A4-size printable page with good spacing, clear sections, and a neat heading. Include arrows, boxes, and mini callouts wherever helpful to improve memory recall.',
+    label: 'Cutout Subject',
+    icon: '✂️',
+    prompt: 'Create a professional cutout of the main subject with a fully transparent background. Remove every background element while preserving the subject with perfect, clean edges. Output as PNG with transparency.',
   },
   {
-    label: 'White BG',
-    icon: '⬜',
-    prompt: 'Change the background of this image to pure white (#FFFFFF). Keep the main subject completely unchanged with clean, natural edges. Preserve all details, colors, and lighting of the subject.',
+    label: 'Pop Colors',
+    icon: '🎨',
+    prompt: 'Make this thumbnail pop: dramatically boost color saturation, vibrance and contrast for a punchy, high-energy YouTube look. Add bright rim lighting and crisp highlights while keeping the subject natural and sharp.',
   },
   {
-    label: 'Black BG',
-    icon: '⬛',
-    prompt: 'Change the background of this image to pure black (#000000). Keep the main subject completely unchanged with clean, natural edges. Preserve all details, colors, and lighting of the subject.',
+    label: 'Face Focus',
+    icon: '😲',
+    prompt: "Sharpen and enhance the person's face and expression so it becomes the clear focal point. Improve skin detail, eyes and facial clarity, brighten the face slightly and add subtle dramatic lighting, keeping it realistic.",
   },
   {
-    label: 'Transparent BG',
-    icon: '🔲',
-    prompt: 'Create a professional cutout of the main subject from this image with transparent background. Remove all background elements completely while preserving the subject with perfect edge quality. Output as PNG format with transparency.',
+    label: 'Cinematic Light',
+    icon: '💡',
+    prompt: 'Add cinematic, dramatic studio lighting to the subject: strong rim light, moody depth, glowing accents and rich contrast for a premium thumbnail feel. Keep the subject and composition unchanged.',
   },
   {
     label: 'Enhance',
     icon: '✨',
-    prompt: 'Enhance this image: Improve quality, sharpness, color balance, and overall visual appeal while preserving the original content and composition.',
+    prompt: 'Enhance this image: improve quality, sharpness, color balance and overall visual appeal while preserving the original content and composition.',
   },
   {
-    label: 'Upscale',
+    label: 'Upscale HD',
     icon: '🔍',
-    prompt: 'Upscale this image to higher resolution while maintaining sharpness and adding fine details. Keep the original style and content intact.',
+    prompt: 'Upscale this image to higher resolution while maintaining sharpness and adding fine detail. Keep the original style and content intact.',
   },
 ];
 

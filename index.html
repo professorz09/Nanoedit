@@ -102,6 +102,16 @@
         max-height: 200px;
         opacity: 1;
       }
+      /* Desktop: always show the tools row regardless of the mobile collapse toggle */
+      @media (min-width: 640px) {
+        .tools-reveal.collapsed,
+        .tools-reveal.expanded {
+          max-height: none !important;
+          opacity: 1 !important;
+          pointer-events: auto !important;
+          overflow: visible;
+        }
+      }
 
       /* ── Error auto-dismiss progress bar ── */
       @keyframes progress-shrink {
@@ -112,26 +122,79 @@
       /* ── Active press feedback ── */
       button:active:not(:disabled) { transform: scale(0.97); }
 
-      /* ── Thumbnail Studio: premium deep-red button ── */
+      /* ── Thumbnail Studio: premium red button ──
+         Cleaner, brighter red — the old gradient muddied into dark maroon at
+         the bottom which read cheap. This keeps a rich vibrant red with a crisp
+         top highlight and a soft red halo for a jewel-like, premium feel. */
       .thumb-btn {
-        background: linear-gradient(180deg, #f5324a 0%, #d81232 52%, #ab0c26 100%);
+        background: linear-gradient(180deg, #ff4d63 0%, #f51f3e 48%, #d80f30 100%);
         box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.24),
-          inset 0 -3px 8px rgba(80,0,10,0.45),
-          0 12px 24px -10px rgba(120,8,28,0.6);
+          inset 0 1px 0 rgba(255,255,255,0.38),
+          inset 0 -2px 6px rgba(120,0,20,0.35),
+          0 6px 16px -6px rgba(255,45,80,0.5),
+          0 14px 30px -12px rgba(160,10,36,0.55);
         transition: box-shadow .3s ease, filter .2s ease, transform .12s ease;
       }
       .thumb-btn:hover:not(:disabled) {
-        filter: brightness(1.05);
+        filter: brightness(1.06) saturate(1.05);
         box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.3),
-          inset 0 -3px 8px rgba(80,0,10,0.45),
-          0 18px 36px -10px rgba(120,8,28,0.7);
+          inset 0 1px 0 rgba(255,255,255,0.45),
+          inset 0 -2px 6px rgba(120,0,20,0.35),
+          0 8px 22px -6px rgba(255,45,80,0.62),
+          0 20px 42px -12px rgba(160,10,36,0.65);
       }
       .thumb-btn:disabled {
         background: #26262c;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
         cursor: not-allowed;
+      }
+
+      /* ── Liquid pill: red-into-black, glowing luminous edge ──
+         Used for the SELECTED state of option toggles (Variations / Quality /
+         tool switches). Kills the flat red/white look with a living glass feel. */
+      .thumb-liquid {
+        background:
+          linear-gradient(180deg, rgba(255,120,140,0.22) 0%, transparent 42%),
+          linear-gradient(165deg, #a01230 0%, #6e0c22 55%, #34060f 100%);
+        border: 1px solid rgba(255,110,135,0.32);
+        color: #fff1f3 !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.20),
+          inset 0 -6px 12px rgba(0,0,0,0.4),
+          0 4px 14px -6px rgba(150,16,40,0.5);
+        text-shadow: 0 1px 3px rgba(60,4,14,0.5);
+        transition: box-shadow .3s ease, filter .2s ease, transform .12s ease;
+      }
+      .thumb-liquid:hover:not(:disabled) {
+        filter: brightness(1.06);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.28),
+          inset 0 -6px 12px rgba(0,0,0,0.4),
+          0 6px 18px -6px rgba(150,16,40,0.62);
+      }
+      /* Light theme: solid readable red glass on a pale surface */
+      .thumb-light .thumb-liquid {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.28) 0%, transparent 45%),
+          linear-gradient(165deg, #d81638 0%, #b31030 100%);
+        border-color: rgba(140,10,32,0.4);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.4),
+          0 4px 14px -6px rgba(170,14,40,0.5);
+      }
+
+      /* ── 3D liquid gloss text (per-word gradient set inline) ── */
+      .liquid-text {
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+        background-size: 100% 200%;
+        animation: liquid-sheen 5s ease-in-out infinite;
+      }
+      @keyframes liquid-sheen {
+        0%, 100% { background-position: 50% 0%; }
+        50%      { background-position: 50% 100%; }
       }
 
       /* Premium card shadow + hairline for dark surfaces */
@@ -263,6 +326,11 @@
       .thumb-light.text-thumb-sub,
       .thumb-light .text-thumb-sub { color: #5c5c6e; }
       .thumb-light .text-thumb-ink\/70 { color: rgba(21,21,29,0.7); }
+      /* hover:/group-hover: variants don't inherit the base override — pin them so
+         hovering a button in light theme doesn't turn its text near-white/invisible. */
+      .thumb-light .hover\:text-thumb-ink:hover,
+      .thumb-light .group:hover .group-hover\:text-thumb-ink { color: #15151d; }
+      .thumb-light .hover\:text-thumb-sub:hover { color: #5c5c6e; }
       /* Marquee / feed edge fades that fade to the page bg */
       .thumb-light .from-thumb-bg { --tw-gradient-from: #f3f4f8 var(--tw-gradient-from-position); }
       .thumb-light .to-thumb-bg { --tw-gradient-to: #f3f4f8 var(--tw-gradient-to-position); }
@@ -271,6 +339,13 @@
       .thumb-light .bg-thumb-soft { background-color: #ececef; }
       .thumb-light .bg-thumb-card { background-color: #ffffff; }
       .thumb-light .border-thumb-line { border-color: #e3e3ea; }
+      /* hover:/group-hover: bg variants don't inherit the base override — pin them so
+         hovering a nav item/button in light theme keeps a light (not near-black) fill. */
+      .thumb-light .hover\:bg-thumb-soft:hover,
+      .thumb-light .group:hover .group-hover\:bg-thumb-soft { background-color: #ececef; }
+      .thumb-light .hover\:bg-thumb-card:hover { background-color: #ffffff; }
+      .thumb-light .hover\:bg-thumb-line\/50:hover { background-color: rgba(227,227,234,0.6); }
+      .thumb-light .hover\:border-thumb-line:hover { border-color: #e3e3ea; }
 
       /* Dark surface fills → light (inputs, tracks). Overlays ≥40% stay dark. */
       .thumb-light .bg-black\/20,

@@ -15,6 +15,9 @@ function App() {
   const [uiVisible, setUiVisible] = useState(() => getFromLocalStorage('nano_ui_visible', true));
   // Which screen is shown: the thumbnail studio (landing/generator) or the Nano Edit editor
   const [view, setView] = useState<'studio' | 'editor'>(() => getFromLocalStorage('nano_view', 'studio'));
+  // App-wide light/dark theme, shared with the studio via localStorage (views are mutually exclusive)
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => getFromLocalStorage('nano_theme', 'light'));
+  useEffect(() => { saveToLocalStorage('nano_theme', theme); }, [theme]);
   
   // Settings initialization - Defaulting to 4K/Pro as requested, ensuring all fields exist
   const [settings, setSettings] = useState<EditorSettings>(() => {
@@ -392,23 +395,29 @@ function App() {
 
   // ── Thumbnail Studio bridge ──────────────────────────────────────
   // Generate straight into the shared queue, forcing 16:9 HD (Pro) output.
-  const handleStudioGenerate = useCallback((studioPrompt: string, sources: string[]) => {
+  const handleStudioGenerate = useCallback((studioPrompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro' }) => {
       if (!studioPrompt.trim()) return;
+      const modelType = opts?.modelType ?? 'flash';
+      const count = Math.max(1, Math.min(4, opts?.count ?? 1));
       const effectiveSettings: EditorSettings = {
           ...settings,
           aspectRatio: '16:9',
-          modelType: 'flash',
-          resolution: '1K',
+          modelType,
+          resolution: modelType === 'pro' ? '2K' : '1K',
       };
-      const newItem: QueueItem = {
-          id: crypto.randomUUID(),
-          prompt: studioPrompt,
-          settings: effectiveSettings,
-          sourceImages: sources,
-          status: 'pending',
-          timestamp: Date.now(),
-      };
-      setQueue(prev => [...prev, newItem]);
+      for (let i = 0; i < count; i++) {
+          setTimeout(() => {
+              const newItem: QueueItem = {
+                  id: crypto.randomUUID(),
+                  prompt: studioPrompt,
+                  settings: effectiveSettings,
+                  sourceImages: sources,
+                  status: 'pending',
+                  timestamp: Date.now(),
+              };
+              setQueue(prev => [...prev, newItem]);
+          }, i * 100);
+      }
   }, [settings]);
 
   // Send a finished thumbnail into the Nano Edit editor for fine-tuning.
@@ -776,82 +785,36 @@ function App() {
       initialPinchDistanceRef.current = null;
   };
 
-  // Keyboard Shortcuts - Shift based
+  // Keyboard Shortcuts — Cmd/Ctrl based
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        // Shift + Enter: Generate
-        if (e.shiftKey && e.key === 'Enter') {
-            if (prompt.trim()) {
-                handleGenerate();
-            }
-        }
-        // Escape: Close viewer or clear images
+        const target = e.target as HTMLElement | null;
+        const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+        const mod = e.metaKey || e.ctrlKey;   // ⌘ on Mac, Ctrl elsewhere
+        const k = e.key.toLowerCase();
+
+        // Escape: close viewer or clear source images (works everywhere)
         if (e.key === 'Escape') {
-           if (viewedImage) {
-               setViewedImage(null);
-           } else {
-               clearAllSourceImages();
-           }
+            if (viewedImage) { setViewedImage(null); } else { clearAllSourceImages(); }
+            return;
         }
-        // Shift + S: Save/Download first image
-        if (e.shiftKey && e.key === 'S') {
-            e.preventDefault(); 
-            if (generatedImages.length > 0) {
-                downloadImage(generatedImages[0].url);
-            }
-        }
-        // Shift + H: Toggle UI
-        if (e.shiftKey && e.key === 'H') {
-            e.preventDefault();
-            setUiVisible(prev => !prev);
-        }
-        // Shift + U: Upload image
-        if (e.shiftKey && e.key === 'U') {
-            e.preventDefault();
-            triggerFileUpload();
-        }
-        // Shift + I: Toggle Image Mode
-        if (e.shiftKey && e.key === 'I') {
-            e.preventDefault();
-            setIsImageMode(prev => !prev);
-        }
-        // Shift + A: Download all as ZIP
-        if (e.shiftKey && e.key === 'A') {
-            e.preventDefault();
-            if (generatedImages.length > 0) {
-                handleDownloadAll();
-            }
-        }
-        // Shift + B: Remove background
-        if (e.shiftKey && e.key === 'B') {
-            e.preventDefault();
-            if (isImageMode && sourceImages.length > 0) {
-                handleRemoveBackground();
-            }
-        }
-        // Shift + K: Clear prompt
-        if (e.shiftKey && e.key === 'K') {
-            e.preventDefault();
-            setPrompt('');
-        }
-        // Shift + D: Duplicate last generated to layers
-        if (e.shiftKey && e.key === 'D') {
-            e.preventDefault();
-            if (generatedImages.length > 0) {
-                addToLayers(generatedImages[0].url);
-            }
-        }
-        // Shift + C: Clear canvas
-        if (e.shiftKey && e.key === 'C') {
-            e.preventDefault();
-            if (generatedImages.length > 0) {
-                clearAllGeneratedImages();
-            }
-        }
-        // Shift + ?: Toggle Help
-        if (e.shiftKey && e.key === '?') {
-            e.preventDefault();
-            setShowHelp(prev => !prev);
+
+        // All shortcuts require Cmd/Ctrl and must never fire while typing
+        // (so ⌘C / ⌘A / ⌘V keep working inside the prompt field).
+        if (!mod || typing) return;
+
+        switch (k) {
+            case 'enter': e.preventDefault(); if (prompt.trim()) handleGenerate(); break;
+            case 's': e.preventDefault(); if (generatedImages.length > 0) downloadImage(generatedImages[0].url); break;
+            case 'h': e.preventDefault(); setUiVisible(prev => !prev); break;
+            case 'u': e.preventDefault(); triggerFileUpload(); break;
+            case 'i': e.preventDefault(); setIsImageMode(prev => !prev); break;
+            case 'a': e.preventDefault(); if (generatedImages.length > 0) handleDownloadAll(); break;
+            case 'b': e.preventDefault(); if (isImageMode && sourceImages.length > 0) handleRemoveBackground(); break;
+            case 'k': e.preventDefault(); setPrompt(''); break;
+            case 'd': e.preventDefault(); if (generatedImages.length > 0) addToLayers(generatedImages[0].url); break;
+            case 'backspace': e.preventDefault(); if (generatedImages.length > 0) clearAllGeneratedImages(); break;
+            case '/': e.preventDefault(); setShowHelp(prev => !prev); break;
         }
     };
 
@@ -917,36 +880,23 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-nano-bg text-nano-text selection:bg-nano-accent selection:text-white flex flex-col font-sans">
+    <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans ${theme === 'light' ? 'thumb-light' : ''}`}>
 
-      <header className={`sticky top-0 px-4 sm:px-6 h-16 flex justify-between items-center z-30 thumb-glass border-b border-white/10 transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <div className="flex items-center gap-3">
-            <button
-              onClick={() => setView('studio')}
-              title="Back to Thumbmagic"
-              className="group flex items-center gap-1.5 text-sm font-bold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full pl-2 pr-3.5 py-1.5 transition-all"
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-              Back
-            </button>
-            <span className="w-px h-6 bg-white/10" />
-            <div className="flex items-center gap-2.5">
-              <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white"><IconSparkles /></div>
-              <div className="leading-tight">
-                <div className="font-extrabold tracking-tight text-[15px]">Nano Edit</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Canvas Editor</div>
-              </div>
-            </div>
-        </div>
-      </header>
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 pt-4 sm:pt-6 pb-16">
+        <div className="grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] gap-6 items-start">
+        <div className="min-w-0 order-2">
+        <div className="thumb-glass rounded-3xl p-4 sm:p-5 flex flex-col gap-5 min-h-[60vh] lg:min-h-[calc(100vh-3rem)]">
 
-      <main className="flex-1 flex flex-col items-center justify-start relative w-full max-w-7xl mx-auto px-4 pb-[420px] sm:pb-48 pt-4">
-        <div className="w-full h-full flex flex-col gap-8">
-            
+            {(generatedImages.length > 0 || queue.length > 0) && (
+                <div className="flex items-center justify-end gap-2">
+                    <span className="text-xs font-bold text-thumb-sub">{isProcessing ? 'Generating…' : `${generatedImages.length} image${generatedImages.length === 1 ? '' : 's'}`}{queue.length > 0 && !isProcessing ? ` · ${queue.length} queued` : ''}</span>
+                </div>
+            )}
+
             {isImageMode && uiVisible && (
                 <div className="w-full flex flex-col items-start gap-2 animate-fade-in-up">
                     <div className="flex items-center justify-between w-full px-1">
-                         <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                         <span className="text-xs font-semibold text-thumb-sub uppercase tracking-wider flex items-center gap-2">
                             <IconLayers /> Input Layers ({sourceImages.length})
                         </span>
                         {sourceImages.length > 0 && (
@@ -956,7 +906,7 @@ function App() {
                     
                     <div className="flex items-center gap-3 overflow-x-auto w-full pb-2 no-scrollbar">
                          <div 
-                            className="shrink-0 w-24 h-24 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center gap-1 text-zinc-500 hover:border-nano-accent hover:text-nano-accent transition-all cursor-pointer bg-nano-card/50"
+                            className="shrink-0 w-24 h-24 border-2 border-dashed border-thumb-line rounded-xl flex flex-col items-center justify-center gap-1 text-thumb-sub hover:border-nano-accent hover:text-nano-accent transition-all cursor-pointer bg-thumb-soft"
                             onClick={triggerFileUpload}
                             onDragOver={handleDragOver}
                             onDrop={handleDrop}
@@ -967,7 +917,7 @@ function App() {
                             <span className="text-[10px] font-medium">Add</span>
                         </div>
                         {sourceImages.map((img, idx) => (
-                            <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-zinc-800 animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
+                            <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-thumb-line animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
                                 <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
                                 <div className="absolute top-1 left-1 bg-nano-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                                     {idx + 1}
@@ -986,17 +936,17 @@ function App() {
 
             {textResponse && uiVisible && (
                 <div className="w-full max-w-4xl mx-auto animate-fade-in-up">
-                    <div className="bg-nano-card border border-zinc-700 rounded-xl p-6 shadow-lg relative">
-                        <button 
-                            onClick={() => setTextResponse(null)} 
-                            className="absolute top-4 right-4 p-1 text-zinc-500 hover:text-white transition-colors"
+                    <div className="bg-thumb-card border border-thumb-line rounded-xl p-6 shadow-lg relative">
+                        <button
+                            onClick={() => setTextResponse(null)}
+                            className="absolute top-4 right-4 p-1 text-thumb-sub hover:text-thumb-ink transition-colors"
                         >
                             <IconX />
                         </button>
-                        <h3 className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <h3 className="text-thumb-sub text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
                             <IconSparkles /> AI Response
                         </h3>
-                        <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap font-mono text-zinc-300">
+                        <div className="prose prose-sm max-w-none whitespace-pre-wrap font-mono text-thumb-ink">
                             {textResponse}
                         </div>
                     </div>
@@ -1004,17 +954,17 @@ function App() {
             )}
 
             {globalError && uiVisible && (
-                <div className="w-full max-w-4xl mx-auto animate-fade-in-up">
-                    <div className="bg-red-950/30 border border-red-800/60 rounded-xl p-4 shadow-lg relative overflow-hidden">
+                <div className="w-full animate-fade-in-up">
+                    <div className="bg-thumb-redSoft border border-thumb-red/40 rounded-xl p-4 shadow-lg relative overflow-hidden">
                         <button
                             onClick={() => setGlobalError(null)}
-                            className="absolute top-3 right-3 p-1 text-red-300/70 hover:text-red-200 transition-colors"
+                            className="absolute top-3 right-3 p-1 text-red-300 hover:text-red-200 transition-colors"
                             aria-label="Dismiss error"
                         >
                             <IconX />
                         </button>
-                        <h3 className="text-red-300 text-xs font-bold uppercase tracking-wider mb-2">Error</h3>
-                        <p className="text-sm text-red-100/90 pr-8">{globalError}</p>
+                        <h3 className="text-thumb-red text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">⚠ Error</h3>
+                        <p className="text-sm text-red-200 pr-8 leading-relaxed">{globalError}</p>
                         {/* Auto-dismiss progress bar */}
                         <div className="absolute bottom-0 left-0 h-0.5 bg-red-500/20 w-full">
                             <div className="h-full bg-red-400/60" style={{ animation: 'progress-shrink 6s linear forwards' }} />
@@ -1025,14 +975,7 @@ function App() {
 
             {(generatedImages.length > 0 || queue.length > 0) && (
                 <div className="w-full">
-                    <h3 className={`text-zinc-500 text-sm font-medium mb-4 uppercase tracking-wider flex items-center justify-between transition-opacity ${uiVisible ? 'opacity-100' : 'opacity-0'}`}>
-                        <span>
-                            {isProcessing ? `Generating...` : 'Gallery'} 
-                            {queue.length > 0 && !isProcessing && <span className="text-zinc-600 ml-2">({queue.length} in queue)</span>}
-                        </span>
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full animate-fade-in-up">
+                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 w-full animate-fade-in-up">
                         
                         {/* Queue Items Rendering - Sort to show failed items last */}
                         {[...queue].sort((a, b) => {
@@ -1040,30 +983,30 @@ function App() {
                             if (a.status !== 'failed' && b.status === 'failed') return -1;
                             return 0;
                         }).map((item, idx) => (
-                             <div key={item.id} className="relative aspect-square rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center gap-3 shadow-[0_0_15px_rgba(255,51,85,0.05)] overflow-hidden">
+                             <div key={item.id} className="relative aspect-square rounded-xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-3 shadow-[0_0_15px_rgba(255,51,85,0.05)] overflow-hidden">
                                 {item.status === 'processing' ? (
                                     <>
                                         <div className="w-10 h-10 border-2 border-nano-accent border-t-transparent rounded-full animate-spin"></div>
                                         <span className="text-nano-accent text-sm font-mono">{(itemTimers[item.id] || 0).toFixed(1)}s</span>
-                                        <p className="text-xs text-zinc-500 px-4 text-center line-clamp-1 absolute bottom-4 w-full">{item.prompt}</p>
+                                        <p className="text-xs text-thumb-sub px-4 text-center line-clamp-1 absolute bottom-4 w-full">{item.prompt}</p>
                                     </>
                                 ) : item.status === 'failed' ? (
                                      <>
-                                        <div className="w-full h-full flex flex-col items-center justify-center p-6 space-y-4 bg-gradient-to-br from-red-950/20 to-transparent">
+                                        <div className="w-full h-full flex flex-col items-center justify-center p-6 space-y-4 bg-thumb-redSoft">
                                             <div className="relative">
                                                 <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-red-900/40 to-red-950/40 border border-red-800/30 flex items-center justify-center backdrop-blur-sm shadow-lg">
                                                     <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                     </svg>
                                                 </div>
-                                                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-2 border-nano-bg">
+                                                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-2 border-thumb-card">
                                                     ✕
                                                 </div>
                                             </div>
                                             <div className="text-center space-y-1.5">
                                                 <h4 className="text-base font-bold text-white">Generation Failed</h4>
                                                 {item.error && (
-                                                    <p className="text-[11px] text-red-300/80 line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
+                                                    <p className="text-[11px] text-red-200/90 line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
                                                 )}
                                             </div>
                                             <div className="flex gap-2.5 w-full px-2">
@@ -1078,7 +1021,7 @@ function App() {
                                                 </button>
                                                 <button 
                                                     onClick={() => cancelQueueItem(item.id)} 
-                                                    className="w-12 h-12 bg-zinc-800/80 hover:bg-red-900/50 border border-zinc-700 hover:border-red-800 text-zinc-400 hover:text-red-300 text-sm font-bold rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+                                                    className="w-12 h-12 bg-black/25 hover:bg-red-900/50 border border-white/15 hover:border-red-800 text-red-100 hover:text-white text-sm font-bold rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
                                                 >
                                                     ✕
                                                 </button>
@@ -1087,13 +1030,13 @@ function App() {
                                     </>
                                 ) : (
                                     <>
-                                        <div className="w-8 h-8 rounded-full border-2 border-zinc-700 border-dotted animate-pulse"></div>
-                                        <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Waiting...</span>
-                                        <div className="absolute top-2 left-2 text-[10px] text-zinc-600 font-mono">#{idx + 1}</div>
-                                        <p className="text-xs text-zinc-600 px-4 text-center line-clamp-2 absolute bottom-4 w-full opacity-60">{item.prompt}</p>
-                                        <button 
-                                            onClick={() => cancelQueueItem(item.id)} 
-                                            className="absolute top-2 right-2 p-1 text-zinc-600 hover:text-red-400 transition-colors"
+                                        <div className="w-8 h-8 rounded-full border-2 border-thumb-line border-dotted animate-pulse"></div>
+                                        <span className="text-thumb-sub text-xs font-bold uppercase tracking-widest">Waiting...</span>
+                                        <div className="absolute top-2 left-2 text-[10px] text-thumb-sub font-mono">#{idx + 1}</div>
+                                        <p className="text-xs text-thumb-sub px-4 text-center line-clamp-2 absolute bottom-4 w-full opacity-60">{item.prompt}</p>
+                                        <button
+                                            onClick={() => cancelQueueItem(item.id)}
+                                            className="absolute top-2 right-2 p-1 text-thumb-sub hover:text-red-400 transition-colors"
                                             title="Cancel"
                                         >
                                             <IconX />
@@ -1107,7 +1050,7 @@ function App() {
                         {generatedImages.map((img, index) => (
                             <div
                                 key={img.id}
-                                className="relative group rounded-xl overflow-hidden bg-nano-card border border-zinc-800 aspect-square flex items-center justify-center animate-fade-in-up"
+                                className="relative group rounded-xl overflow-hidden bg-thumb-card border border-thumb-line aspect-square flex items-center justify-center animate-fade-in-up"
                                 style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
                             >
                                 <img src={img.url} alt={img.prompt} loading="lazy" className="w-full h-full object-cover cursor-pointer img-fade" onClick={() => setViewedImage(img.url)} />
@@ -1127,11 +1070,11 @@ function App() {
                                         {copiedPromptId === img.id ? '✓ Copied!' : img.prompt}
                                     </p>
                                     <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
-                                         <button onClick={() => setViewedImage(img.url)} className="px-2 py-2.5 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="View Fullscreen"><IconEye /></button>
-                                        <button onClick={() => handleBrushSelect(img.url)} className="px-2 py-2.5 bg-purple-900/50 text-purple-200 text-xs font-bold rounded-lg hover:bg-purple-900 flex items-center justify-center transition-colors" title="Brush Edit">🖌️</button>
+                                         <button onClick={() => setViewedImage(img.url)} className="px-2 py-2.5 bg-white/10 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors" title="View Fullscreen"><IconEye /></button>
+                                        <button onClick={() => handleBrushSelect(img.url)} className="px-2 py-2.5 bg-white/10 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors" title="Brush Edit">🖌️</button>
                                         <button onClick={() => addToLayers(img.url)} className="px-2 py-2.5 bg-nano-accent text-white text-xs font-bold rounded-lg hover:bg-nano-accentHover flex items-center justify-center transition-colors" title="Add Layer"><IconLayerPlus /></button>
-                                        <button onClick={() => downloadImage(img.url)} className="px-2 py-2.5 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="Download"><IconDownload /></button>
-                                        <button onClick={() => deleteGeneratedImage(img.id)} className="px-2 py-2.5 bg-red-900/50 text-red-200 text-xs font-bold rounded-lg hover:bg-red-900 flex items-center justify-center transition-colors" title="Delete"><IconTrash /></button>
+                                        <button onClick={() => downloadImage(img.url)} className="px-2 py-2.5 bg-white/10 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors" title="Download"><IconDownload /></button>
+                                        <button onClick={() => deleteGeneratedImage(img.id)} className="px-2 py-2.5 bg-red-500/80 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-red-500 flex items-center justify-center transition-colors" title="Delete"><IconTrash /></button>
                                     </div>
                                 </div>
                             </div>
@@ -1140,207 +1083,138 @@ function App() {
                 </div>
             )}
         </div>
-      </main>
+        </div>
 
-      <div className={`fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-2 sm:px-4 z-50 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none ${uiVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-        <div className="bg-nano-card/95 backdrop-blur-2xl border border-zinc-700/50 p-1.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-1.5 sm:gap-2 pointer-events-auto max-h-[65vh] sm:max-h-[70vh] overflow-y-auto">
-          
-          <div className="flex items-center gap-2 p-0.5 sm:p-1 flex-col sm:flex-row">
-              <div className="flex-1 relative w-full">
-                  <input 
-                      type="text" 
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image to generate..."}
-                      className="w-full bg-zinc-900/50 text-white placeholder-zinc-500 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 outline-none focus:ring-1 focus:ring-zinc-700 border border-transparent focus:border-zinc-700 transition-all text-sm"
-                      onKeyDown={(e) => e.key === 'Enter' && !e.ctrlKey && !e.metaKey && handleGenerate()}
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-600 border border-zinc-800 rounded px-1.5 py-0.5 hidden md:block">Shift+Enter</span>
+      <div className={`order-1 lg:sticky lg:top-6 transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className="thumb-glass p-4 sm:p-5 rounded-3xl flex flex-col gap-4">
+
+          {/* Floating brand + back — replaces the top header */}
+          <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setView('studio')}
+                title="Back to Thumbmagic"
+                className="group w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink hover:border-thumb-red/40 transition-all"
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+              </button>
+              <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
+              <div className="leading-tight">
+                <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink">Nano Edit</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Canvas Editor</div>
+              </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Prompt</label>
+              <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image to generate..."}
+                  className="w-full min-h-[120px] lg:min-h-[200px] bg-thumb-soft text-thumb-ink placeholder-thumb-sub/60 rounded-2xl px-4 py-3 outline-none border border-thumb-line focus:border-nano-accent/50 transition-all text-sm resize-none"
+                  onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleGenerate()}
+              />
+          </div>
+          <button
+              onClick={handleGenerate}
+              disabled={!prompt.trim()}
+              className={`thumb-btn w-full py-3.5 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : ''}`}
+          >
+              {isProcessing ? 'Add to queue' : 'Generate'}
+              <IconSparkles />
+          </button>
+
+          <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setIsImageMode(!isImageMode)}
+                className={`flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${isImageMode ? 'thumb-liquid' : 'bg-thumb-soft border-thumb-line text-thumb-sub hover:text-thumb-ink'}`}
+              >
+                 <span>Image input</span>
+                 {isImageMode ? <IconToggleRight /> : <IconToggleLeft />}
+              </button>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                  <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Quality</span>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-xl px-3 py-2.5 border border-thumb-line focus-within:border-nano-accent/50 transition-colors">
+                          <IconSettings />
+                          <select value={settings.resolution} onChange={(e) => setSettings(prev => ({...prev, resolution: e.target.value as any, modelType: (e.target.value === '1K' ? 'flash' : 'pro')}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              <option value="1K" className="bg-thumb-card text-thumb-ink">Fast</option>
+                              <option value="2K" className="bg-thumb-card text-thumb-ink">HD</option>
+                              <option value="4K" className="bg-thumb-card text-thumb-ink">4K</option>
+                          </select>
+                      </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Ratio</span>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-xl px-3 py-2.5 border border-thumb-line focus-within:border-nano-accent/50 transition-colors">
+                          <IconAspectRatio />
+                          <select value={settings.aspectRatio} onChange={(e) => setSettings(prev => ({...prev, aspectRatio: e.target.value}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              {ASPECT_RATIOS.map(ratio => (<option key={ratio.value} value={ratio.value} className="bg-thumb-card text-thumb-ink">{ratio.label}</option>))}
+                          </select>
+                      </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Style</span>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-xl px-3 py-2.5 border border-thumb-line focus-within:border-nano-accent/50 transition-colors">
+                          <IconPalette />
+                          <select value={settings.style} onChange={(e) => setSettings(prev => ({...prev, style: e.target.value}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              {STYLES.map(style => (<option key={style.value} value={style.value} className="bg-thumb-card text-thumb-ink">{style.label}</option>))}
+                          </select>
+                      </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Camera</span>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-xl px-3 py-2.5 border border-thumb-line focus-within:border-nano-accent/50 transition-colors">
+                          <IconCamera />
+                          <select value={settings.cameraAngle} onChange={(e) => setSettings(prev => ({...prev, cameraAngle: e.target.value}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              {CAMERA_ANGLES.map(angle => (<option key={angle.value} value={angle.value} className="bg-thumb-card text-thumb-ink">{angle.label}</option>))}
+                          </select>
+                      </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 col-span-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Quick action</span>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-xl px-3 py-2.5 border border-thumb-line focus-within:border-nano-accent/50 transition-colors">
+                          <IconSparkles />
+                          <select value="" onChange={(e) => { if (e.target.value) { const preset = PRESET_PROMPTS.find(p => p.label === e.target.value); if (preset) { setPrompt(preset.prompt); if (preset.label.includes('BG') && sourceImages.length === 0) { setGlobalError("Upload an image first to change background."); setIsImageMode(true); } } } }} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              <option value="" className="bg-thumb-card text-thumb-ink">Choose…</option>
+                              {PRESET_PROMPTS.map(preset => (<option key={preset.label} value={preset.label} className="bg-thumb-card text-thumb-ink">{preset.icon} {preset.label}</option>))}
+                          </select>
+                      </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 col-span-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Variations</span>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-xl px-3 py-2.5 border border-thumb-line focus-within:border-nano-accent/50 transition-colors">
+                          <IconLayers />
+                          <select value={batchCount} onChange={(e) => setBatchCount(parseInt(e.target.value))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              <option value="1" className="bg-thumb-card text-thumb-ink">1× generation</option>
+                              <option value="2" className="bg-thumb-card text-thumb-ink">2× generations</option>
+                              <option value="3" className="bg-thumb-card text-thumb-ink">3× generations</option>
+                              <option value="4" className="bg-thumb-card text-thumb-ink">4× generations</option>
+                          </select>
+                      </div>
                   </div>
               </div>
-              <button
-                  onClick={handleGenerate}
-                  disabled={!prompt.trim()}
-                  className={`h-11 sm:h-12 px-5 sm:px-6 w-full sm:w-auto bg-nano-accent hover:bg-nano-accentHover disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-lg sm:rounded-xl flex items-center justify-center gap-2 transition-all text-sm whitespace-nowrap ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : 'shadow-[0_0_12px_rgba(255,51,85,0.15)]'}`}
-              >
-                  {isProcessing ? 'Queue' : 'Generate'}
-                  <IconSparkles />
-              </button>
-          </div>
 
-          <div className="sm:hidden px-2 pb-1.5">
-              <button
-                  onClick={() => setShowMobileTools(prev => !prev)}
-                  className="w-full py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/70 text-zinc-200 text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
-              >
-                  <IconSettings />
-                  {showMobileTools ? 'Hide tools' : 'Show tools'}
-                  <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform duration-300 ${showMobileTools ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-              </button>
-          </div>
-
-          <div className={`tools-reveal flex-wrap items-center justify-between px-2 pb-1 gap-2 sm:max-h-[200px] sm:opacity-100 sm:pointer-events-auto ${showMobileTools ? 'expanded' : 'collapsed'}`}>
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full sm:w-auto">
-                  <button 
-                    onClick={() => setIsImageMode(!isImageMode)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all whitespace-nowrap ${isImageMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-transparent border-zinc-800 text-zinc-400 hover:text-white'}`}
-                  >
-                     <span className="hidden sm:inline">Image Input</span>
-                     <span className="sm:hidden">Image</span>
-                     {isImageMode ? <IconToggleRight /> : <IconToggleLeft />}
-                  </button>
-
-                  <div className="w-px h-6 bg-zinc-800 mx-1 hidden sm:block"></div>
-
-                  <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
-                      <IconSettings />
-                      <select 
-                          value={settings.resolution} 
-                          onChange={(e) => setSettings(prev => ({
-                              ...prev, 
-                              resolution: e.target.value as any, 
-                              modelType: (e.target.value === '1K' ? 'flash' : 'pro') 
-                          }))} 
-                          className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-20 sm:w-24"
-                      >
-                          <option value="1K" className="bg-zinc-900 text-white">Fast</option>
-                          <option value="2K" className="bg-zinc-900 text-white">HD</option>
-                          <option value="4K" className="bg-zinc-900 text-white">4K</option>
-                      </select>
-                  </div>
-
-                  <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
-                      <IconAspectRatio />
-                      <select value={settings.aspectRatio} onChange={(e) => setSettings(prev => ({...prev, aspectRatio: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-14 sm:w-16">
-                          {ASPECT_RATIOS.map(ratio => (<option key={ratio.value} value={ratio.value} className="bg-zinc-900 text-white">{ratio.label}</option>))}
-                      </select>
-                  </div>
-
-                  <button 
-                      onClick={() => setShowAdvanced(!showAdvanced)}
-                      className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium transition-all whitespace-nowrap ${showAdvanced ? 'bg-nano-accent/20 border-nano-accent/50 text-nano-accent' : 'bg-transparent border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'}`}
-                      title="Advanced Features"
-                  >
-                      <span>Advanced</span>
-                  </button>
-              </div>
-
-               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                  <button onClick={() => setShowHelp(!showHelp)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium transition-all ${showHelp ? 'bg-nano-accent/20 border-nano-accent/50 text-nano-accent' : 'bg-transparent border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'}`} title="Help & Shortcuts (Shift + ?)">
-                      ?
-                  </button>
-               </div>
-          </div>
-
-          {/* Advanced Features Panel */}
-          {showAdvanced && (
-              <div className="px-2 pb-2 pt-3 mt-1 border-t border-zinc-800/60 animate-fade-in-up">
-                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 sm:p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                          <span className="w-6 h-6 rounded-lg bg-nano-accent/15 text-nano-accent flex items-center justify-center"><IconSettings /></span>
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Advanced options</span>
-                          <button
-                              onClick={() => setShowAdvanced(false)}
-                              className="ml-auto w-7 h-7 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 flex items-center justify-center transition-colors"
-                              title="Close advanced options"
-                              aria-label="Close advanced options"
-                          >
-                              <IconX />
-                          </button>
-                      </div>
-
-                      {/* Labeled selects — 2 cols on mobile, 4 on desktop */}
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                          <div className="flex flex-col gap-1.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Style</span>
-                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
-                                  <IconPalette />
-                                  <select value={settings.style} onChange={(e) => setSettings(prev => ({...prev, style: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full">
-                                      {STYLES.map(style => (<option key={style.value} value={style.value} className="bg-zinc-900 text-white">{style.label}</option>))}
-                                  </select>
-                              </div>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Camera</span>
-                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
-                                  <IconCamera />
-                                  <select value={settings.cameraAngle} onChange={(e) => setSettings(prev => ({...prev, cameraAngle: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full">
-                                      {CAMERA_ANGLES.map(angle => (<option key={angle.value} value={angle.value} className="bg-zinc-900 text-white">{angle.label}</option>))}
-                                  </select>
-                              </div>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Quick action</span>
-                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
-                                  <IconSparkles />
-                                  <select
-                                      value=""
-                                      onChange={(e) => {
-                                          if (e.target.value) {
-                                              const preset = PRESET_PROMPTS.find(p => p.label === e.target.value);
-                                              if (preset) {
-                                                  setPrompt(preset.prompt);
-                                                  if (preset.label.includes('BG') && sourceImages.length === 0) {
-                                                      setGlobalError("Upload an image first to change background.");
-                                                      setIsImageMode(true);
-                                                  }
-                                              }
-                                          }
-                                      }}
-                                      className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full"
-                                  >
-                                      <option value="" className="bg-zinc-900 text-white">Choose…</option>
-                                      {PRESET_PROMPTS.map(preset => (
-                                          <option key={preset.label} value={preset.label} className="bg-zinc-900 text-white">{preset.icon} {preset.label}</option>
-                                      ))}
-                                  </select>
-                              </div>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Variations</span>
-                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
-                                  <IconLayers />
-                                  <select value={batchCount} onChange={(e) => setBatchCount(parseInt(e.target.value))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full">
-                                      <option value="1" className="bg-zinc-900 text-white">1× generation</option>
-                                      <option value="2" className="bg-zinc-900 text-white">2× generations</option>
-                                      <option value="3" className="bg-zinc-900 text-white">3× generations</option>
-                                      <option value="4" className="bg-zinc-900 text-white">4× generations</option>
-                                  </select>
-                              </div>
-                          </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      {((isImageMode && sourceImages.length > 0) || generatedImages.length > 0) && (
-                      <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-zinc-800/60">
-                          {isImageMode && sourceImages.length > 0 && (
-                              <button onClick={handleRemoveBackground} className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-800 text-xs font-semibold text-zinc-300 transition-colors" title="Remove Background">
-                                  <IconEraser /> Remove BG
-                              </button>
-                          )}
-
-                          {generatedImages.length > 0 && (
-                              <button onClick={handleDownloadAll} className="flex items-center gap-1.5 bg-nano-accent/15 hover:bg-nano-accent/25 rounded-xl px-3 py-2 border border-nano-accent/30 text-xs font-bold text-nano-accent transition-colors" title="Download all as ZIP">
-                                  <IconZip /> Download all
-                              </button>
-                          )}
-
-                          {generatedImages.length > 0 && (
-                              <button onClick={clearAllGeneratedImages} className="flex items-center gap-1.5 bg-zinc-900 hover:bg-red-900/60 rounded-xl px-3 py-2 border border-zinc-800 hover:border-red-800 text-xs font-semibold text-zinc-400 hover:text-red-400 transition-colors ml-auto" title="Clear Canvas">
-                                  <IconTrash /> Clear canvas
-                              </button>
-                          )}
-                      </div>
+              {((isImageMode && sourceImages.length > 0) || generatedImages.length > 0) && (
+                  <div className="flex flex-wrap gap-2 pt-3 border-t border-thumb-line">
+                      {isImageMode && sourceImages.length > 0 && (
+                          <button onClick={handleRemoveBackground} className="flex items-center gap-1.5 bg-thumb-soft hover:bg-thumb-card rounded-xl px-3 py-2 border border-thumb-line text-xs font-semibold text-thumb-sub hover:text-thumb-ink transition-colors" title="Remove Background"><IconEraser /> Remove BG</button>
+                      )}
+                      {generatedImages.length > 0 && (
+                          <button onClick={handleDownloadAll} className="flex items-center gap-1.5 bg-nano-accent/15 hover:bg-nano-accent/25 rounded-xl px-3 py-2 border border-nano-accent/30 text-xs font-bold text-nano-accent transition-colors" title="Download all as ZIP"><IconZip /> Download all</button>
+                      )}
+                      {generatedImages.length > 0 && (
+                          <button onClick={clearAllGeneratedImages} className="flex items-center gap-1.5 bg-thumb-soft hover:bg-red-900/60 rounded-xl px-3 py-2 border border-thumb-line hover:border-red-800 text-xs font-semibold text-thumb-sub hover:text-red-400 transition-colors ml-auto" title="Clear Canvas"><IconTrash /> Clear</button>
                       )}
                   </div>
-              </div>
-          )}
+              )}
+
+              <button onClick={() => setShowHelp(!showHelp)} className="self-start flex items-center gap-2 px-3 py-1.5 border rounded-xl text-xs font-medium bg-thumb-soft border-thumb-line text-thumb-sub hover:text-thumb-ink transition-all" title="Help & Shortcuts (⌘ + /)">? Shortcuts</button>
+          </div>
         </div>
       </div>
+        </div>
+      </main>
 
       {!uiVisible && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] opacity-80 hover:opacity-100 transition-opacity">
@@ -1348,7 +1222,7 @@ function App() {
                   onClick={() => setUiVisible(true)}
                   className="bg-black/80 backdrop-blur-md border border-zinc-700 rounded-full px-4 py-2 shadow-2xl cursor-pointer hover:border-nano-accent transition-colors"
               >
-                  <span className="text-xs text-zinc-300 font-medium">Press Shift + H to show controls</span>
+                  <span className="text-xs text-zinc-300 font-medium">Press ⌘ + H to show controls</span>
               </div>
           </div>
       )}
@@ -1356,31 +1230,31 @@ function App() {
       {/* Help Panel */}
       {showHelp && uiVisible && (
           <div className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowHelp(false)}>
-              <div className="bg-nano-card border border-zinc-700 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="thumb-glass border border-thumb-line rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-bold text-white">Shortcuts & Help</h3>
-                      <button onClick={() => setShowHelp(false)} className="p-1 text-zinc-500 hover:text-white"><IconX /></button>
+                      <h3 className="text-lg font-bold text-thumb-ink">Shortcuts & Help</h3>
+                      <button onClick={() => setShowHelp(false)} className="p-1 text-thumb-sub hover:text-thumb-ink"><IconX /></button>
                   </div>
                   <div className="space-y-3 text-sm">
                       <div className="grid grid-cols-2 gap-2 text-xs">
                           <div className="space-y-1">
-                              <div className="flex justify-between"><span className="text-zinc-400">Generate</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧↵</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Upload</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧U</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Save First</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧S</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Save All</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧A</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Remove BG</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧B</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Generate</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘↵</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Upload</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘U</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Save First</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘S</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Save All</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘A</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Remove BG</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘B</kbd></div>
                           </div>
                           <div className="space-y-1">
-                              <div className="flex justify-between"><span className="text-zinc-400">Toggle Mode</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧I</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Clear</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">Esc</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Clear Prompt</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧K</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Add Layer</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧D</kbd></div>
-                              <div className="flex justify-between"><span className="text-zinc-400">Clear Canvas</span><kbd className="bg-zinc-800 px-1.5 py-0.5 rounded text-nano-accent">⇧C</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Toggle Mode</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘I</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Show / Hide UI</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘H</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Clear Prompt</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘K</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Add Layer</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘D</kbd></div>
+                              <div className="flex justify-between"><span className="text-thumb-sub">Clear Canvas</span><kbd className="bg-thumb-soft border border-thumb-line px-1.5 py-0.5 rounded text-nano-accent font-bold">⌘⌫</kbd></div>
                           </div>
                       </div>
-                      <div className="border-t border-zinc-700 pt-3">
-                          <h4 className="text-xs font-semibold text-zinc-400 mb-2">Quick Tips</h4>
-                          <ul className="text-xs text-zinc-500 space-y-1">
+                      <div className="border-t border-thumb-line pt-3">
+                          <h4 className="text-xs font-semibold text-thumb-sub mb-2">Quick Tips</h4>
+                          <ul className="text-xs text-thumb-sub space-y-1">
                               <li>• Use Image Mode for editing uploaded photos</li>
                               <li>• Higher resolution = Pro model (better quality)</li>
                               <li>• Drag & drop images to upload</li>

@@ -22,24 +22,18 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
 
   return (
     <section className="pt-10 pb-16">
-      <div className="text-center">
-        <p className="text-thumb-red font-black tracking-widest text-sm uppercase">Pricing</p>
-        <h1 className="text-3xl sm:text-5xl font-black tracking-[-0.03em] mt-3">Simple plans that scale with you</h1>
-        <p className="text-thumb-sub mt-3 max-w-xl mx-auto">Start with 5 free thumbnails. Upgrade any time — cancel whenever.</p>
-      </div>
-
       {/* Billing cycle toggle */}
-      <div className="mt-7 flex items-center justify-center">
-        <div className="flex items-center gap-1 p-1 bg-black/25 border border-white/[0.06] rounded-2xl">
+      <div className="flex items-center justify-center">
+        <div className="flex items-center gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
           <button
             onClick={() => setCycle('monthly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${cycle === 'monthly' ? 'thumb-nav-active text-thumb-red' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Monthly
           </button>
           <button
             onClick={() => setCycle('yearly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${cycle === 'yearly' ? 'thumb-nav-active text-thumb-red' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Yearly
             <span className="text-[10px] font-black uppercase tracking-wide text-thumb-green bg-thumb-greenSoft border border-thumb-green/30 rounded-full px-1.5 py-0.5">2 months free</span>
@@ -48,7 +42,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
       </div>
 
       {/* Plan cards */}
-      <div className="grid sm:grid-cols-2 gap-5 max-w-3xl mx-auto mt-9 px-1">
+      <div className="grid sm:grid-cols-2 gap-5 lg:gap-6 max-w-3xl mx-auto mt-9 px-1">
         {PLANS.map(plan => {
           const isCurrent = profile?.plan === plan.id;
           const opt = priceFor(plan, cycle);

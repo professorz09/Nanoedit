@@ -48,7 +48,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose, reason }) => {
         )}
 
         <p className="mt-5 text-[11px] text-thumb-sub leading-relaxed">
-          By continuing you agree to our Terms & Privacy Policy. New accounts get 5 free thumbnails.
+          By continuing you agree to our Terms & Privacy Policy.
         </p>
 
         <button onClick={onClose} className="mt-4 text-xs font-semibold text-thumb-sub hover:text-thumb-ink">Maybe later</button>

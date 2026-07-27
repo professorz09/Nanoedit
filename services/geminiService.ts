@@ -1,6 +1,6 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { EditorSettings } from "../types";
+import { supabase } from "./supabase";
 
 // Helper to resize base64 image to avoid payload limits (500 errors) and improve speed
 export const resizeBase64Image = (base64Str: string, maxWidth = 1024): Promise<string> => {
@@ -211,55 +211,45 @@ export const editImageWithGemini = async (
     }
   }
 
-  // ── PRODUCTION: Vertex AI Express mode (scoped image-gen key only) ──────────
-  const ai = new GoogleGenAI({ vertexai: true, apiKey: process.env.VERTEX_API_KEY });
+  // ── PRODUCTION: secure Supabase Edge Function ──────────────────────────────
+  // The function verifies the user, reserves a credit (spend_credit), calls the
+  // model with the API key held server-side, saves the image to Storage, and
+  // returns public URLs. The image-gen key is NEVER shipped to the browser.
+  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (!supaUrl || !supabase) throw new Error("Sign-in is required to generate. Please log in.");
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("Please log in to generate.");
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: {
-        parts: parts,
+    const resp = await fetch(`${supaUrl}/functions/v1/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: supaAnon ?? '',
       },
-      config: config,
+      body: JSON.stringify({
+        prompt: finalPrompt,
+        sources,
+        aspectRatio: settings.aspectRatio,
+        resolution: settings.resolution,
+      }),
     });
+    const data = await resp.json().catch(() => ({}));
 
-    const images: string[] = [];
-    let textOutput = "";
-
-    if (response.candidates && response.candidates[0].content.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData && part.inlineData.data) {
-          const imgUrl = `data:image/png;base64,${part.inlineData.data}`;
-          images.push(imgUrl);
-        } else if (part.text) {
-          textOutput += part.text;
-        }
-      }
-    }
-
-    if (images.length === 0 && !textOutput) {
-       throw new Error("No image generated.");
-    }
-
-    return { images, text: textOutput };
-
+    if (resp.status === 402) throw new Error(data?.error || 'No credits left. Please upgrade your plan.');
+    if (!resp.ok) throw new Error(data?.error || `Server error ${resp.status}`);
+    if ((!data.images || !data.images.length) && !data.text) throw new Error('No image generated.');
+    return { images: data.images || [], text: data.text || '' };
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    const errMsg = error.message || String(error);
-    
-    // Handle common errors with user-friendly messages
-    if (errMsg.includes("500")) {
-        throw new Error("Server Error (500). The image might be too complex or the server is busy. Try again.");
+    const errMsg = error?.message || String(error);
+    if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+      throw new Error('Could not reach the server. Please try again.');
     }
-    if (errMsg.includes("Load failed") || errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError")) {
-        throw new Error("Network error. Check your internet connection and try again.");
-    }
-    if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("API key")) {
-        throw new Error("API key invalid or expired. Please reconnect your API key.");
-    }
-    if (errMsg.includes("429") || errMsg.includes("quota")) {
-        throw new Error("Rate limit exceeded. Wait a moment and try again.");
-    }
-    throw new Error(errMsg || "Failed to generate image");
+    // Pass through clean, human messages (credits / model) but never raw JSON.
+    throw new Error(errMsg.length > 140 || errMsg.includes('{') ? 'Something went wrong. Please try again.' : errMsg);
   }
 };

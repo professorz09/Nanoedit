@@ -6,6 +6,9 @@ import { Plan, BillingCycle, priceFor } from '../services/plans';
 import AuthModal from './AuthModal';
 import Pricing from './Pricing';
 import Account from './Account';
+import TitleGenerator from './TitleGenerator';
+import ChapterMaker from './ChapterMaker';
+import { getFromLocalStorage, saveToLocalStorage } from '../services/storageService';
 
 // Auto-load any real thumbnails dropped into attached_assets/showcase/ (16:9 jpg/png/webp).
 // No code changes needed — just add image files and they appear in the showcase gallery.
@@ -61,6 +64,7 @@ const I = {
   Check: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z" /></svg>),
   Play: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M8 5v14l11-7z" /></svg>),
   Bolt2: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>),
+  List: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>),
 };
 
 // ── Prompt composition ────────────────────────────────────────────
@@ -149,7 +153,7 @@ const fetchYouTubeThumb = async (id: string): Promise<string | null> => {
 };
 
 interface Props {
-  onGenerate: (prompt: string, sources: string[]) => void;
+  onGenerate: (prompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro' }) => void;
   generatedImages: GeneratedImage[];
   queue: QueueItem[];
   isProcessing: boolean;
@@ -164,10 +168,10 @@ interface Props {
 }
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
-  { id: 'youtube', label: 'YouTube Link', icon: I.Youtube },
-  { id: 'templates', label: 'Templates', icon: I.Grid },
+  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
+  { id: 'templates', label: 'Styles', icon: I.Grid },
   { id: 'prompt', label: 'Prompt', icon: I.Text },
-  { id: 'reference', label: 'Reference', icon: I.Image },
+  { id: 'reference', label: 'Image', icon: I.Image },
 ];
 
 const TESTIMONIALS = [
@@ -206,6 +210,9 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [promptText, setPromptText] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>(THUMBNAIL_TEMPLATES[0].id);
   const [uploads, setUploads] = useState<string[]>([]);
+  const [ytAdvanced, setYtAdvanced] = useState(false);
+  const [genCount, setGenCount] = useState(1);
+  const [genModel, setGenModel] = useState<'fast' | 'pro'>('fast');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -217,9 +224,10 @@ const ThumbnailStudio: React.FC<Props> = ({
     if (sidebarOpen) document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, [sidebarOpen]);
-  const [theme, setTheme] = useState<'dark' | 'light'>('light');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => getFromLocalStorage('nano_theme', 'light'));
+  useEffect(() => { saveToLocalStorage('nano_theme', theme); }, [theme]);
   // Landing ('home') vs generator ('generate') vs feed preview ('preview') vs pricing
-  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'pricing' | 'account'>('home');
+  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account'>('home');
 
   // Auth + billing
   const { user, profile, totalCredits, signOut, configured } = useAuth();
@@ -315,6 +323,18 @@ const ThumbnailStudio: React.FC<Props> = ({
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
 
+  const goTitle = () => {
+    setSection('title');
+    setSidebarOpen(false);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
+  };
+
+  const goChapters = () => {
+    setSection('chapters');
+    setSidebarOpen(false);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
+  };
+
   const goPreview = () => {
     setSection('preview');
     setSidebarOpen(false);
@@ -341,7 +361,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     if (configured && user && totalCredits <= 0) { goPricing(); return; }
     if (promptText.trim()) {
       const prompt = `${promptText.trim()}. ${textDirective(titleText)} ${BASE_THUMB}`;
-      onGenerate(prompt, [...uploads]);
+      onGenerate(prompt, [...uploads], { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash' });
       scrollToResults();
     } else {
       setTimeout(() => document.getElementById('thumb-tool')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
@@ -395,13 +415,17 @@ const ThumbnailStudio: React.FC<Props> = ({
       setBusy(true);
       const thumb = await fetchYouTubeThumb(id);
       setBusy(false);
+      // Optional "Advanced" inputs: extra direction + a person's photo.
+      const dir = promptText.trim() ? `Extra direction: ${promptText.trim()}. ` : '';
+      const hasFace = uploads.length > 0;
+      const faceDir = hasFace ? 'Feature the person from the uploaded photo as the main subject and preserve their likeness. ' : '';
       if (thumb) {
         sources = [thumb, ...sources];
-        prompt = `Using the uploaded YouTube thumbnail as reference for the subject and topic, create a fresh, more click-worthy version that keeps the same theme but is far more eye-catching. ${topicDirective(titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
+        prompt = `Using the uploaded YouTube thumbnail as reference for the subject and topic, create a fresh, more click-worthy version that keeps the same theme but is far more eye-catching. ${faceDir}${dir}${topicDirective(promptText)}${textDirective(promptText)} ${BASE_THUMB}`;
       } else {
-        setNote('Could not fetch that video\'s thumbnail (private/unavailable). Generating from your title instead — add a title below for best results.');
-        if (!titleText.trim()) { return; }
-        prompt = `Create a viral YouTube thumbnail about "${titleText.trim()}". ${topicDirective(titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
+        setNote('Could not fetch that video\'s thumbnail (private/unavailable). Open Advanced and describe what you want for best results.');
+        if (!promptText.trim()) { return; }
+        prompt = `Create a viral, click-worthy YouTube thumbnail. ${faceDir}${dir}${topicDirective(promptText)}${textDirective(promptText)} ${BASE_THUMB}`;
       }
     } else if (mode === 'templates') {
       const tpl = THUMBNAIL_TEMPLATES.find(t => t.id === selectedTemplate)!;
@@ -420,16 +444,17 @@ const ThumbnailStudio: React.FC<Props> = ({
       // Templates get extra care: match the template's look AND adapt it to the topic.
       prompt = `${tpl.style} ${usingTplRef ? 'Use the first reference image as the exact style, layout, composition and color template — closely match its framing, lighting and color grade while creating an original thumbnail for this topic (do not copy its subject verbatim). ' : ''}The video is about "${topic}". ${topicDirective(topic)}${hasFace ? 'Feature the person/photo from the uploaded reference as the main subject and preserve their likeness, blending them naturally into the template style. ' : ''}${textDirective(titleText)} ${BASE_THUMB}`;
     } else if (mode === 'prompt') {
-      prompt = `${promptText.trim()}. ${topicDirective(promptText || titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
+      const faceDir = uploads.length > 0 ? 'Feature the person(s) from the uploaded photo(s) as the main subject and preserve their face and likeness accurately. ' : '';
+      prompt = `${promptText.trim()}. ${faceDir}${topicDirective(promptText)} ${BASE_THUMB}`;
     } else {
       // reference
       const extra = promptText.trim() ? `Additional direction: ${promptText.trim()}. ` : '';
       prompt = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${uploads.length ? 'If a person appears, preserve their likeness. ' : ''}${extra}${topicDirective(promptText || titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
     }
 
-    onGenerate(prompt, sources);
+    onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, onGenerate, configured, user, totalCredits]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, genCount, genModel, onGenerate, configured, user, totalCredits]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -461,15 +486,17 @@ const ThumbnailStudio: React.FC<Props> = ({
             {/* Desktop nav */}
             <nav className="hidden lg:flex items-center gap-1">
               {[
-                { label: 'Generate', on: goGenerate, active: section === 'generate' && mode !== 'templates' },
-                { label: 'Templates', on: () => goToMode('templates'), active: section === 'generate' && mode === 'templates' },
+                { label: 'Thumbnail', on: goGenerate, active: section === 'generate' },
+                { label: 'Nano Editor', on: () => onOpenEditor(), active: false },
+                { label: 'Titles', on: goTitle, active: section === 'title' },
+                { label: 'Chapters', on: goChapters, active: section === 'chapters' },
                 { label: 'Feed test', on: goPreview, active: section === 'preview' },
                 { label: 'Pricing', on: goPricing, active: section === 'pricing' },
               ].map(item => (
                 <button
                   key={item.label}
                   onClick={item.on}
-                  className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-colors ${item.active ? 'text-thumb-red bg-thumb-redSoft' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-soft'}`}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-colors ${item.active ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-soft'}`}
                 >
                   {item.label}
                 </button>
@@ -538,10 +565,11 @@ const ThumbnailStudio: React.FC<Props> = ({
             <p className="px-2 pt-1 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Menu</p>
             {([
               { key: 'home', label: 'Home', tag: 'Landing', icon: I.Wand, active: section === 'home', onClick: goHome },
-              { key: 'generate', label: 'Generate', tag: 'Create', icon: I.Bolt, active: section === 'generate' && mode !== 'templates', onClick: goGenerate },
+              { key: 'generate', label: 'Generate', tag: 'Create', icon: I.Bolt, active: section === 'generate', onClick: goGenerate },
+              { key: 'title', label: 'Title Generator', tag: 'Titles', icon: I.Text, active: section === 'title', onClick: goTitle },
+              { key: 'chapters', label: 'Chapter Maker', tag: 'Timestamps', icon: I.List, active: section === 'chapters', onClick: goChapters },
               { key: 'preview', label: 'Preview', tag: 'Feed test', icon: I.Tv, active: section === 'preview', onClick: goPreview },
               { key: 'editor', label: 'Nano Editor', tag: 'Canvas', icon: I.Edit, active: false, onClick: () => { setSidebarOpen(false); onOpenEditor(); } },
-              { key: 'templates', label: 'Templates', tag: 'Styles', icon: I.Grid, active: section === 'generate' && mode === 'templates', onClick: () => goToMode('templates') },
               { key: 'pricing', label: 'Pricing', tag: 'Plans', icon: I.Star, active: section === 'pricing', onClick: goPricing },
               { key: 'account', label: 'Account', tag: 'Profile', icon: I.Check, active: section === 'account', onClick: goAccount },
             ] as { key: string; label: string; tag: string; icon: (p: any) => React.ReactElement; active: boolean; onClick: () => void }[]).map(item => (
@@ -594,26 +622,29 @@ const ThumbnailStudio: React.FC<Props> = ({
         {/* ── Hero (clean landing) ── */}
         {section === 'home' && (
         <section className="pt-14 sm:pt-20 lg:pt-24 pb-12 text-center">
-          {/* Eyebrow */}
-          <div className="inline-flex items-center gap-2 rounded-full bg-thumb-redSoft border border-thumb-red/20 pl-2 pr-3.5 py-1.5 text-[13px] font-bold text-thumb-red">
-            <span className="w-5 h-5 rounded-full bg-thumb-red text-white flex items-center justify-center"><I.Bolt className="w-3 h-3" /></span>
-            AI YouTube thumbnails
-          </div>
-
-          <h1 className="mt-6 text-[2.9rem] sm:text-[4.5rem] lg:text-[5.5rem] font-black leading-[0.95] tracking-[-0.04em] text-thumb-ink max-w-4xl mx-auto">
-            Viral thumbnails, <span className="text-thumb-red">in seconds</span>
+          {/* 3-word heading — plain ink words + one glowing liquid-glass PREMIUM */}
+          <h1 className="text-[2rem] sm:text-[3rem] lg:text-[3.6rem] font-black uppercase leading-[1.05] tracking-[-0.02em]">
+            <span className="text-thumb-ink">Generate</span>{' '}
+            <span
+              className="liquid-text"
+              style={{
+                backgroundImage: 'linear-gradient(180deg, #ffffff 0%, #ffc7d1 18%, #ff3b5c 50%, #a30d28 100%)',
+                filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.18)) drop-shadow(0 0 16px rgba(255,59,92,0.6)) drop-shadow(0 0 38px rgba(255,59,92,0.4))',
+              }}
+            >Premium</span>{' '}
+            <span className="text-thumb-ink">Thumbnails</span>
           </h1>
 
           {/* One clean prompt box — click sends you into the generator and starts */}
-          <div className="mt-10 max-w-3xl mx-auto text-left">
+          <div className="mt-9 max-w-3xl mx-auto text-left">
             <div className="thumb-glass thumb-float-red rounded-[28px] p-3.5 sm:p-4">
               <textarea
                 value={promptText}
                 onChange={e => setPromptText(e.target.value)}
                 onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') startFromHome(); }}
                 rows={3}
-                placeholder="Describe your video — e.g. How history's dumbest man accidentally became the richest"
-                className="w-full bg-transparent px-3 pt-3 pb-3 outline-none text-[16px] sm:text-[17px] placeholder-thumb-sub/60 resize-none"
+                placeholder="Describe your video…"
+                className="w-full bg-transparent px-3 pt-3 pb-3 outline-none text-[16px] sm:text-[17px] placeholder-thumb-sub/40 resize-none"
               />
               <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
                 <button
@@ -632,9 +663,9 @@ const ThumbnailStudio: React.FC<Props> = ({
             </div>
             {/* Trust row */}
             <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-thumb-sub">
-              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> 5 free thumbnails</span>
-              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> No credit card</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Pro-grade AI models</span>
               <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> 4K · 16:9 exports</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Cancel anytime</span>
             </div>
           </div>
         </section>
@@ -642,8 +673,10 @@ const ThumbnailStudio: React.FC<Props> = ({
 
         {/* ── Generator tool (Generate section) ── */}
         {section === 'generate' && (
-        <section id="thumb-tool" className="scroll-mt-24 pt-10">
-          <div className="thumb-glass thumb-float-red rounded-[28px] p-5 sm:p-8 max-w-3xl mx-auto">
+        <section id="thumb-tool" className="scroll-mt-24 pt-10 pb-12">
+          <div className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 lg:gap-8 items-start max-w-6xl mx-auto">
+          {/* LEFT: generator controls */}
+          <div className="thumb-glass thumb-float-red rounded-[28px] p-5 sm:p-8 lg:sticky lg:top-24">
             {/* Card header */}
             <div className="flex items-center gap-3 mb-6">
               <div className="thumb-btn w-11 h-11 rounded-2xl flex items-center justify-center text-white shrink-0"><I.Wand className="w-5 h-5" /></div>
@@ -653,19 +686,19 @@ const ThumbnailStudio: React.FC<Props> = ({
             </div>
 
             {/* Tabs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-black/30 border border-white/[0.06] rounded-2xl">
+            <div className="grid grid-cols-4 gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
               {TABS.map(t => {
                 const active = mode === t.id;
                 return (
                   <button
                     key={t.id}
                     onClick={() => { setMode(t.id); setNote(null); }}
-                    className={`flex items-center justify-center gap-2 py-2.5 px-2 rounded-xl text-[13px] font-bold transition-all ${
-                      active ? 'thumb-nav-active text-thumb-red' : 'text-thumb-sub hover:text-thumb-ink hover:bg-white/5'
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-1 rounded-xl text-[12px] font-bold transition-colors ${
+                      active ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-line/50'
                     }`}
                   >
-                    <t.icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{t.label}</span>
+                    <t.icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t.label}</span>
                   </button>
                 );
               })}
@@ -674,27 +707,77 @@ const ThumbnailStudio: React.FC<Props> = ({
             {/* Panels */}
             <div className="mt-6 space-y-5">
               {mode === 'youtube' && (
-                <div className="space-y-2.5 animate-fade-in-up">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">YouTube video link</label>
-                  <div className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-2xl px-4 transition-all focus-within:border-thumb-red/50 focus-within:ring-4 focus-within:ring-thumb-red/10">
-                    <I.Youtube className="w-5 h-5 text-thumb-red shrink-0" />
-                    <input
-                      value={youtubeUrl}
-                      onChange={e => setYoutubeUrl(e.target.value)}
-                      placeholder="youtu.be/gO0bvT_smdM"
-                      className="w-full bg-transparent py-4 outline-none text-[15px] placeholder-thumb-sub/50"
-                    />
+                <div className="space-y-4 animate-fade-in-up">
+                  <div className="space-y-2.5">
+                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">YouTube video link</label>
+                    <div className="flex items-center gap-3 bg-thumb-soft border border-thumb-line rounded-2xl px-4 transition-all focus-within:border-thumb-red/50 focus-within:ring-4 focus-within:ring-thumb-red/10">
+                      <I.Youtube className="w-5 h-5 text-thumb-red shrink-0" />
+                      <input
+                        value={youtubeUrl}
+                        onChange={e => setYoutubeUrl(e.target.value)}
+                        placeholder="youtu.be/gO0bvT_smdM"
+                        className="w-full bg-transparent py-4 outline-none text-[15px] placeholder-thumb-sub/50"
+                      />
+                    </div>
+                    <p className="text-[12px] text-thumb-sub leading-relaxed">Just paste the link — we analyse the video and craft the perfect thumbnail for you.</p>
+                  </div>
+
+                  {/* Advanced (optional) */}
+                  <div className="border-t border-white/10 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setYtAdvanced(v => !v)}
+                      className="flex items-center gap-2 text-[13px] font-bold text-thumb-sub hover:text-thumb-ink transition-colors"
+                    >
+                      <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      Advanced
+                    </button>
+
+                    {ytAdvanced && (
+                      <div className="mt-3 space-y-3 animate-fade-in-up">
+                        <div className="space-y-2">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe what you want</label>
+                          <textarea
+                            value={promptText}
+                            onChange={e => setPromptText(e.target.value)}
+                            rows={3}
+                            placeholder="e.g. Keep it bold and cinematic, red/black colors, show a shocked face and the text 'GONE WRONG'…"
+                            className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Add a person's photo</label>
+                          {uploads.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {uploads.map((u, i) => (
+                                <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
+                                  <img src={u} alt="" className="w-full h-full object-cover" />
+                                  <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => fileRef.current?.click()}
+                              className="w-full border-2 border-dashed border-white/12 rounded-2xl p-4 flex items-center justify-center gap-2.5 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
+                            >
+                              <I.Upload className="w-4 h-4" />
+                              <span className="text-sm font-bold">Upload a face/photo</span>
+                            </button>
+                          )}
+                          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {mode === 'templates' && (
                 <div className="space-y-3 animate-fade-in-up">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-bold text-thumb-ink">Pick a style</label>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub bg-thumb-soft border border-thumb-line rounded-full px-2.5 py-1">{THUMBNAIL_TEMPLATES.length} styles</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-[440px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
+                  <label className="text-sm font-bold text-thumb-ink block">Pick a style</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[228px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
                     {THUMBNAIL_TEMPLATES.map(tpl => {
                       const active = selectedTemplate === tpl.id;
                       const preview = TEMPLATE_PREVIEWS[tpl.id] || SHOWCASE_TEMPLATE_PREVIEWS[tpl.id];
@@ -714,10 +797,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                           ) : (
                             <div className={`aspect-video bg-gradient-to-br ${tpl.swatch} flex items-center justify-center text-2xl`}>{tpl.emoji}</div>
                           )}
-                          <div className="px-2.5 py-2 bg-thumb-card">
-                            <div className="text-xs font-bold leading-tight">{tpl.label}</div>
-                            <div className="text-[10px] text-thumb-sub leading-tight mt-0.5 line-clamp-1">{tpl.desc}</div>
-                          </div>
                           {active && <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-thumb-red text-white flex items-center justify-center text-[11px] font-bold">✓</div>}
                         </button>
                       );
@@ -728,14 +807,15 @@ const ThumbnailStudio: React.FC<Props> = ({
 
               {mode === 'prompt' && (
                 <div className="space-y-2.5 animate-fade-in-up">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe your thumbnail</label>
+                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe your thumbnail idea</label>
                   <textarea
                     value={promptText}
                     onChange={e => setPromptText(e.target.value)}
-                    rows={3}
-                    placeholder="e.g. A shocked gamer with glowing headset, explosion behind, neon RGB lighting..."
-                    className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                    rows={4}
+                    placeholder="Tell us about your video and the thumbnail you want — e.g. A gaming video about a crazy comeback; I want a shocked gamer with a glowing headset, explosion behind, neon RGB lighting, and the text 'INSANE COMEBACK'."
+                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
                   />
+                  <p className="text-[12px] text-thumb-sub leading-relaxed">Just describe your video and the look you want — we turn it into a full thumbnail prompt for you.</p>
                 </div>
               )}
 
@@ -758,13 +838,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                     onChange={e => setPromptText(e.target.value)}
                     rows={2}
                     placeholder="Optional: extra direction (colors, mood, subject...)"
-                    className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
                   />
                 </div>
               )}
 
-              {/* Uploaded thumbnails preview (shared for templates + reference) */}
-              {(mode === 'reference' || mode === 'templates') && uploads.length > 0 && (
+              {/* Uploaded thumbnails preview (shared for templates + reference + prompt) */}
+              {(mode === 'reference' || mode === 'templates' || mode === 'prompt') && uploads.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {uploads.map((u, i) => (
                     <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
@@ -775,16 +855,16 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Optional add-photo for templates */}
-              {mode === 'templates' && uploads.length === 0 && (
+              {/* Optional add-photo for templates + prompt */}
+              {(mode === 'templates' || mode === 'prompt') && uploads.length === 0 && (
                 <button onClick={() => fileRef.current?.click()} className="text-xs font-semibold text-thumb-red hover:underline flex items-center gap-1.5">
                   <I.Upload className="w-3.5 h-3.5" /> Add your face/photo (optional)
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
                 </button>
               )}
 
-              {/* Title / overlay text (all modes except pure prompt where it's optional) */}
-              {mode !== 'prompt' && (
+              {/* Title / overlay text — templates (required topic) and reference (optional) */}
+              {(mode === 'templates' || mode === 'reference') && (
                 <div className="space-y-2.5">
                   <label className="flex items-center justify-between">
                     <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'templates' ? 'Video topic / title' : 'Title text on thumbnail'}</span>
@@ -794,24 +874,36 @@ const ThumbnailStudio: React.FC<Props> = ({
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
                     placeholder="e.g. THIS CHANGED EVERYTHING"
-                    className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
+                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
                   />
                 </div>
               )}
-              {mode === 'prompt' && (
-                <div className="space-y-2.5">
-                  <label className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Title text on thumbnail</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-thumb-sub bg-white/5 border border-white/10">optional</span>
-                  </label>
-                  <input
-                    value={titleText}
-                    onChange={e => setTitleText(e.target.value)}
-                    placeholder="e.g. THIS CHANGED EVERYTHING"
-                    className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
-                  />
+
+              {/* Output options */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
+                  <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
+                    {[1, 2, 3, 4].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setGenCount(n)}
+                        className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genCount === n ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              )}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                  <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
+                    <button type="button" onClick={() => setGenModel('fast')} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genModel === 'fast' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>Fast</button>
+                    <button type="button" onClick={() => setGenModel('pro')} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genModel === 'pro' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>Pro</button>
+                  </div>
+                </div>
+              </div>
 
               {note && (
                 <div className="text-xs bg-thumb-redSoft text-red-300 border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>
@@ -831,27 +923,113 @@ const ThumbnailStudio: React.FC<Props> = ({
               </button>
             </div>
           </div>
+
+          {/* RIGHT: generated thumbnails */}
+          <div ref={resultsRef} className="scroll-mt-24 min-w-0">
+            {(generatedImages.length > 0 || queue.length > 0) ? (
+              <>
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-2xl font-black flex items-center gap-2">
+                    {isProcessing ? <><span className="w-4 h-4 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" /> Generating…</> : 'Your thumbnails'}
+                  </h2>
+                  {generatedImages.length > 0 && (
+                    <button onClick={onDownloadAll} className="text-sm font-bold text-thumb-red flex items-center gap-1.5 hover:underline">
+                      <I.Download className="w-4 h-4" /> Download all
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {sortedQueue.map(item => (
+                    <div key={item.id} className="aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
+                      {item.status === 'processing' ? (
+                        (() => {
+                          const t = itemTimers[item.id] || 0;
+                          const stepIndex = Math.min(GEN_STEPS.length - 1, Math.floor(t / 4));
+                          return (
+                            <div className="w-full px-2">
+                              <div className="flex items-center justify-center gap-2 mb-3">
+                                <span className="w-5 h-5 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
+                                <span className="text-thumb-red font-mono text-sm">{t.toFixed(1)}s</span>
+                              </div>
+                              <div className="space-y-1.5 text-left max-w-[210px] mx-auto">
+                                {GEN_STEPS.map((s, i) => {
+                                  const done = i < stepIndex;
+                                  const active = i === stepIndex;
+                                  return (
+                                    <div key={i} className={`flex items-center gap-2 text-[11px] transition-colors ${done ? 'text-thumb-sub' : active ? 'text-thumb-ink font-semibold' : 'text-thumb-sub/40'}`}>
+                                      <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+                                        {done
+                                          ? <I.Check className="w-4 h-4 text-thumb-red" />
+                                          : active
+                                            ? <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
+                                            : <span className="w-2 h-2 bg-thumb-sub/30 rounded-full" />}
+                                      </span>
+                                      {s}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : item.status === 'failed' ? (
+                        <>
+                          <div className="w-10 h-10 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center text-xl">!</div>
+                          <span className="text-sm font-bold">Generation failed</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <button onClick={() => onRetry(item)} className="thumb-btn px-4 py-2 rounded-xl text-white text-xs font-bold inline-flex items-center gap-1.5">
+                              <I.Wand className="w-3.5 h-3.5" /> Retry
+                            </button>
+                            <button onClick={() => onCancel(item.id)} className="px-4 py-2 rounded-xl text-xs font-bold text-thumb-sub bg-white/5 border border-white/10 hover:text-thumb-ink transition-colors">
+                              Dismiss
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-7 h-7 border-2 border-thumb-sub/40 border-dotted rounded-full animate-pulse" />
+                          <span className="text-xs font-bold text-thumb-sub uppercase tracking-widest">Queued</span>
+                        </>
+                      )}
+                    </div>
+                  ))}
+
+                  {generatedImages.map(img => (
+                    <div key={img.id} className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
+                      <div className="relative aspect-video overflow-hidden">
+                        <img src={img.url} alt={img.prompt} loading="lazy" className="w-full h-full object-cover cursor-pointer" onClick={() => onView(img.url)} />
+                      </div>
+                      {/* Clean action bar (always visible, works on touch) — single delete */}
+                      <div className="flex gap-1.5 p-2 bg-thumb-card">
+                        <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 py-2 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-line/60 transition-colors"><I.Download className="w-4 h-4" /> Save</button>
+                        <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas (Nano Editor)" className="flex-1 py-2 rounded-lg thumb-btn text-white text-xs font-bold flex items-center justify-center gap-1.5"><I.Edit className="w-4 h-4" /> Edit</button>
+                        <button onClick={() => openPreview(img.url)} title="YouTube feed preview" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center transition-colors"><I.Tv className="w-4 h-4" /></button>
+                        <button onClick={() => onDelete(img.id)} title="Delete" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 flex items-center justify-center transition-colors"><I.Trash className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="hidden lg:flex flex-col items-center justify-center text-center rounded-[28px] border-2 border-dashed border-thumb-line bg-thumb-soft min-h-[440px] px-8">
+                <div className="w-14 h-14 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center mb-4"><I.Image className="w-7 h-7" /></div>
+                <h3 className="text-lg font-black">Your thumbnails will appear here</h3>
+                <p className="text-sm text-thumb-sub mt-2 max-w-xs">Fill in the details on the left and hit <span className="font-bold text-thumb-ink">Generate</span> — your results show up right here.</p>
+              </div>
+            )}
+          </div>
+          </div>
         </section>
         )}
 
         {/* ── Feed preview tester (Preview section) ── */}
         {section === 'preview' && (
         <section className="pt-6 pb-16">
-          <button
-            onClick={goGenerate}
-            className="group inline-flex items-center gap-1.5 text-sm font-bold text-thumb-sub hover:text-thumb-ink bg-thumb-soft border border-thumb-line rounded-full pl-2 pr-3.5 py-1.5 transition-colors mb-6"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-            Back to generate
-          </button>
-          <div className="text-center mb-8">
-            <h1 className="text-3xl sm:text-5xl font-black tracking-[-0.03em]">Test your thumbnail</h1>
-            <p className="text-thumb-sub mt-3 max-w-xl mx-auto">See exactly how your thumbnail &amp; title compete in the YouTube feed — on desktop, tablet and mobile.</p>
-          </div>
-
-          {/* Controls */}
-          <div className="thumb-glass thumb-float-red rounded-3xl p-5 sm:p-6 max-w-3xl mx-auto overflow-hidden">
-            <div className="grid sm:grid-cols-2 gap-5">
+          <div className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 lg:gap-8 items-start max-w-6xl mx-auto">
+          {/* LEFT: controls */}
+          <div className="thumb-glass thumb-float-red rounded-3xl p-5 sm:p-6 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto no-scrollbar">
+            <div className="grid gap-5">
               {/* Thumbnail */}
               <div className="min-w-0">
                 <label className="text-sm font-bold text-thumb-ink mb-2 block">Thumbnail</label>
@@ -939,10 +1117,10 @@ const ThumbnailStudio: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Feed preview */}
-          <div className={`mt-10 -mx-5 sm:mx-0 px-5 sm:px-8 py-8 sm:rounded-[32px] transition-colors duration-300 ${previewImage ? (previewDark ? 'bg-[#0f0f0f] sm:shadow-[0_40px_90px_-50px_rgba(0,0,0,0.9)]' : 'bg-white sm:shadow-[0_40px_90px_-50px_rgba(0,0,0,0.35)]') : ''}`}>
+          {/* RIGHT: feed preview */}
+          <div className="min-w-0">
             {previewImage ? (
-              <div className={`mx-auto ${deviceConf.frame} transition-all duration-300`}>
+              <div className={`mx-auto ${deviceConf.frame} px-5 sm:px-8 py-8 rounded-[32px] transition-all duration-300 ${previewDark ? 'bg-[#0f0f0f] shadow-[0_40px_90px_-50px_rgba(0,0,0,0.9)]' : 'bg-white shadow-[0_40px_90px_-50px_rgba(0,0,0,0.35)]'}`}>
                 {/* Realistic YouTube top bar */}
                 <div className={`flex items-center justify-between gap-2 mb-5 pb-3 border-b ${previewDark ? 'border-white/[0.08]' : 'border-black/[0.08]'}`}>
                   <div className="flex items-center gap-1.5">
@@ -995,13 +1173,14 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               </div>
             ) : (
-              <div className="max-w-md mx-auto text-center rounded-2xl border border-dashed border-thumb-line bg-thumb-soft/60 px-6 py-12">
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center mb-4"><I.Tv className="w-6 h-6" /></div>
-                <p className="font-bold text-thumb-ink">Upload a thumbnail to preview</p>
-                <p className="text-sm text-thumb-sub mt-1.5">Drop in your thumbnail above (or pick a generated one) to see how it looks in the feed.</p>
+              <div className="flex flex-col items-center justify-center text-center rounded-[28px] border-2 border-dashed border-thumb-line bg-thumb-soft min-h-[440px] px-8">
+                <div className="w-14 h-14 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center mb-4"><I.Tv className="w-7 h-7" /></div>
+                <h3 className="text-lg font-black">Preview your thumbnail in the feed</h3>
+                <p className="text-sm text-thumb-sub mt-2 max-w-xs">Upload a thumbnail on the left (or pick a generated one) to see how it looks next to real videos.</p>
                 <button onClick={goGenerate} className="thumb-btn mt-5 px-5 py-2.5 rounded-xl text-white font-bold text-sm inline-flex items-center gap-2"><I.Wand className="w-4 h-4" /> Generate one</button>
               </div>
             )}
+          </div>
           </div>
         </section>
         )}
@@ -1009,6 +1188,16 @@ const ThumbnailStudio: React.FC<Props> = ({
         {/* ── Pricing ── */}
         {section === 'pricing' && (
           <Pricing onCheckout={startCheckout} onBuyAddon={buyAddon} onRequireLogin={() => requireLogin('Log in to upgrade.')} />
+        )}
+
+        {/* ── Title Generator tool ── */}
+        {section === 'title' && (
+          <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16"><TitleGenerator /></div>
+        )}
+
+        {/* ── YouTube Chapter Maker tool ── */}
+        {section === 'chapters' && (
+          <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16"><ChapterMaker /></div>
         )}
 
         {/* ── Account / profile ── */}
@@ -1056,98 +1245,6 @@ const ThumbnailStudio: React.FC<Props> = ({
             </div>
           </section>
         ))}
-
-        {/* ── Results (Generate section) ── */}
-        {section === 'generate' && (
-        <section ref={resultsRef} className="scroll-mt-24 pt-12">
-          {(generatedImages.length > 0 || queue.length > 0) && (
-            <>
-              <div className="flex items-center justify-between mb-5 max-w-5xl mx-auto">
-                <h2 className="text-2xl font-black flex items-center gap-2">
-                  {isProcessing ? <><span className="w-4 h-4 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" /> Generating…</> : 'Your thumbnails'}
-                </h2>
-                {generatedImages.length > 0 && (
-                  <button onClick={onDownloadAll} className="text-sm font-bold text-thumb-red flex items-center gap-1.5 hover:underline">
-                    <I.Download className="w-4 h-4" /> Download all
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
-                {sortedQueue.map(item => (
-                  <div key={item.id} className="aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
-                    {item.status === 'processing' ? (
-                      (() => {
-                        const t = itemTimers[item.id] || 0;
-                        const stepIndex = Math.min(GEN_STEPS.length - 1, Math.floor(t / 4));
-                        return (
-                          <div className="w-full px-2">
-                            <div className="flex items-center justify-center gap-2 mb-3">
-                              <span className="w-5 h-5 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
-                              <span className="text-thumb-red font-mono text-sm">{t.toFixed(1)}s</span>
-                            </div>
-                            <div className="space-y-1.5 text-left max-w-[210px] mx-auto">
-                              {GEN_STEPS.map((s, i) => {
-                                const done = i < stepIndex;
-                                const active = i === stepIndex;
-                                return (
-                                  <div key={i} className={`flex items-center gap-2 text-[11px] transition-colors ${done ? 'text-thumb-sub' : active ? 'text-thumb-ink font-semibold' : 'text-thumb-sub/40'}`}>
-                                    <span className="w-4 h-4 shrink-0 flex items-center justify-center">
-                                      {done
-                                        ? <I.Check className="w-4 h-4 text-thumb-red" />
-                                        : active
-                                          ? <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
-                                          : <span className="w-2 h-2 bg-thumb-sub/30 rounded-full" />}
-                                    </span>
-                                    {s}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })()
-                    ) : item.status === 'failed' ? (
-                      <>
-                        <div className="w-10 h-10 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center text-xl">!</div>
-                        <span className="text-sm font-bold">Generation failed</span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <button onClick={() => onRetry(item)} className="thumb-btn px-4 py-2 rounded-xl text-white text-xs font-bold inline-flex items-center gap-1.5">
-                            <I.Wand className="w-3.5 h-3.5" /> Retry
-                          </button>
-                          <button onClick={() => onCancel(item.id)} className="px-4 py-2 rounded-xl text-xs font-bold text-thumb-sub bg-white/5 border border-white/10 hover:text-thumb-ink transition-colors">
-                            Dismiss
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <span className="w-7 h-7 border-2 border-thumb-sub/40 border-dotted rounded-full animate-pulse" />
-                        <span className="text-xs font-bold text-thumb-sub uppercase tracking-widest">Queued</span>
-                      </>
-                    )}
-                  </div>
-                ))}
-
-                {generatedImages.map(img => (
-                  <div key={img.id} className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
-                    <div className="relative aspect-video overflow-hidden">
-                      <img src={img.url} alt={img.prompt} loading="lazy" className="w-full h-full object-cover cursor-pointer" onClick={() => onView(img.url)} />
-                    </div>
-                    {/* Clean action bar (always visible, works on touch) — single delete */}
-                    <div className="flex gap-1.5 p-2 bg-thumb-card">
-                      <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 py-2 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-line/60 transition-colors"><I.Download className="w-4 h-4" /> Save</button>
-                      <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas (Nano Editor)" className="flex-1 py-2 rounded-lg thumb-btn text-white text-xs font-bold flex items-center justify-center gap-1.5"><I.Edit className="w-4 h-4" /> Edit</button>
-                      <button onClick={() => openPreview(img.url)} title="YouTube feed preview" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center transition-colors"><I.Tv className="w-4 h-4" /></button>
-                      <button onClick={() => onDelete(img.id)} title="Delete" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 flex items-center justify-center transition-colors"><I.Trash className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-        )}
 
         {/* ── Marketing (home only) ── */}
         {section === 'home' && (

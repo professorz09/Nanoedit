@@ -18,28 +18,28 @@ export interface Plan {
   highlight?: boolean;
 }
 
-// New users start on a small trial (5 credits) so they can try before buying.
-// The trial is an internal state, NOT a purchasable card.
-export const TRIAL_CREDITS = 5;
+// New (free) users get ZERO credits — they must buy a plan before generating.
+// Kept as a named constant so the signup trigger + UI stay in sync.
+export const TRIAL_CREDITS = 0;
 
 // The two purchasable plans. Yearly = 10× the monthly price (2 months free).
 export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    credits: 400,
+    credits: 200,
     monthly: { priceUsd: 39, priceEnv: 'STRIPE_PRICE_PRO_MONTHLY' },
     yearly:  { priceUsd: 390, priceEnv: 'STRIPE_PRICE_PRO_YEARLY' },
     highlight: true,
-    features: ['400 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
+    features: ['200 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
   },
   {
     id: 'studio',
     name: 'Studio',
-    credits: 1500,
+    credits: 750,
     monthly: { priceUsd: 79, priceEnv: 'STRIPE_PRICE_STUDIO_MONTHLY' },
     yearly:  { priceUsd: 790, priceEnv: 'STRIPE_PRICE_STUDIO_YEARLY' },
-    features: ['1500 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
+    features: ['750 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
   },
 ];
 
