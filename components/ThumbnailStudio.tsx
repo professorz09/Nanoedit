@@ -603,9 +603,6 @@ const ThumbnailStudio: React.FC<Props> = ({
           <h1 className="mt-6 text-[2.9rem] sm:text-[4.5rem] lg:text-[5.5rem] font-black leading-[0.95] tracking-[-0.04em] text-thumb-ink max-w-4xl mx-auto">
             Viral thumbnails, <span className="text-thumb-red">in seconds</span>
           </h1>
-          <p className="mt-5 text-lg sm:text-xl text-thumb-sub max-w-2xl mx-auto leading-relaxed">
-            From ignored to clicked. Describe your video and get scroll-stopping, click-worthy thumbnails — no design skills needed.
-          </p>
 
           {/* One clean prompt box — click sends you into the generator and starts */}
           <div className="mt-10 max-w-3xl mx-auto text-left">
