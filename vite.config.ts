@@ -12,8 +12,11 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
+        // Only the Gemini key is exposed to the client (image generation runs in-browser).
+        // Microsoft Foundry / Anthropic keys are intentionally NOT bundled here — they are
+        // used only for Claude Code configuration and must never ship in the web app.
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       },
       resolve: {
         alias: {

@@ -17,6 +17,17 @@
                 accentHover: '#b3e600',
                 text: '#f4f4f5',
                 muted: '#71717a'
+              },
+              // Thumbnail Studio (clean red / white) theme
+              thumb: {
+                bg: '#ffffff',
+                soft: '#f7f7f8',
+                ink: '#0b0b0f',
+                sub: '#5c5c66',
+                line: '#ececf0',
+                red: '#f5334c',
+                redDark: '#e11d3c',
+                redSoft: '#ffe4e9'
               }
             },
             fontFamily: {
@@ -96,6 +107,25 @@
 
       /* ── Active press feedback ── */
       button:active:not(:disabled) { transform: scale(0.97); }
+
+      /* ── Thumbnail Studio: glossy red CTA glow ── */
+      @keyframes thumb-glow {
+        0%, 100% { box-shadow: 0 10px 30px -6px rgba(245, 51, 76, 0.55), 0 0 0 rgba(245,51,76,0); }
+        50%      { box-shadow: 0 14px 40px -6px rgba(245, 51, 76, 0.75), 0 0 24px rgba(245,51,76,0.35); }
+      }
+      .thumb-cta-glow { animation: thumb-glow 3.2s ease-in-out infinite; }
+
+      /* Marquee for template showcase */
+      @keyframes thumb-marquee {
+        from { transform: translateX(0); }
+        to   { transform: translateX(-50%); }
+      }
+      .thumb-marquee { animation: thumb-marquee 32s linear infinite; }
+      .thumb-marquee:hover { animation-play-state: paused; }
+
+      /* Light scrollbar override when studio is active */
+      .thumb-scope ::-webkit-scrollbar-track { background: #f1f1f4; }
+      .thumb-scope ::-webkit-scrollbar-thumb { background: #d4d4dc; }
     </style>
   <script type="importmap">
 {

@@ -96,6 +96,90 @@ export const PRESET_PROMPTS = [
   },
 ];
 
+// ── Thumbnail Studio ──────────────────────────────────────────────
+// Input mode drives which composer the studio uses.
+export type ThumbInputMode = 'youtube' | 'templates' | 'prompt' | 'reference';
+
+export interface ThumbnailTemplate {
+  id: string;
+  label: string;
+  emoji: string;
+  // Tailwind gradient classes used for the preview swatch
+  swatch: string;
+  // Short description shown under the label
+  desc: string;
+  // Style directive injected into the generation prompt. {TEXT} is replaced
+  // with the creator's title text (or removed when empty).
+  style: string;
+}
+
+export const THUMBNAIL_TEMPLATES: ThumbnailTemplate[] = [
+  {
+    id: 'mrbeast',
+    label: 'MrBeast Hype',
+    emoji: '🤯',
+    swatch: 'from-red-500 to-orange-500',
+    desc: 'Shocked face, ultra-bright, high energy',
+    style: 'Explosive high-energy MrBeast style: a person with an exaggerated shocked/excited facial expression, hyper-saturated punchy colors, bright rim lighting, glowing accents and money/fire/explosion energy in the background, extreme contrast.',
+  },
+  {
+    id: 'mystery',
+    label: 'Dark Mystery',
+    emoji: '🕵️',
+    swatch: 'from-zinc-800 to-zinc-950',
+    desc: 'Moody, cinematic, "secret inside" vibe',
+    style: 'Dark cinematic mystery style: moody low-key lighting, deep shadows, a single dramatic light source on the subject, teal-and-orange cinematic grade, suspenseful atmosphere.',
+  },
+  {
+    id: 'transformation',
+    label: 'Transformation',
+    emoji: '🔥',
+    swatch: 'from-emerald-500 to-cyan-500',
+    desc: 'Before/after glow-up energy',
+    style: 'Bold transformation / glow-up style: dynamic split or radiant composition, aspirational bright lighting, confident subject, motivational energy, crisp and clean.',
+  },
+  {
+    id: 'finance',
+    label: 'Money & Growth',
+    emoji: '📈',
+    swatch: 'from-lime-500 to-emerald-600',
+    desc: 'Charts, arrows, green growth',
+    style: 'Finance / business growth style: upward green arrows and chart graphics, clean infographic elements, professional confident subject, wealth and success cues, sharp readable data visuals.',
+  },
+  {
+    id: 'adventure',
+    label: 'Epic Adventure',
+    emoji: '🏔️',
+    swatch: 'from-blue-500 to-indigo-600',
+    desc: 'Big landscapes, wow factor',
+    style: 'Epic adventure / travel style: breathtaking wide landscape, dramatic natural lighting, sense of scale and awe, vivid HDR outdoor colors, adventurous subject.',
+  },
+  {
+    id: 'gaming',
+    label: 'Gaming',
+    emoji: '🎮',
+    swatch: 'from-fuchsia-500 to-purple-600',
+    desc: 'Neon, energetic, game art',
+    style: 'High-energy gaming style: vibrant neon glow, dynamic action composition, stylized game-art background, RGB lighting, intense and playful mood.',
+  },
+  {
+    id: 'podcast',
+    label: 'Podcast / Talk',
+    emoji: '🎙️',
+    swatch: 'from-amber-500 to-rose-500',
+    desc: 'Clean portrait + bold quote',
+    style: 'Clean podcast / interview style: well-lit confident portrait, simple bold background, professional studio look, space reserved for a strong quote or title.',
+  },
+  {
+    id: 'tutorial',
+    label: 'Tutorial / How-To',
+    emoji: '💡',
+    swatch: 'from-sky-500 to-blue-600',
+    desc: 'Clear, friendly, informative',
+    style: 'Friendly tutorial / how-to style: clear bright lighting, approachable subject, simple uncluttered background, helpful iconography, trustworthy and readable.',
+  },
+];
+
 export const CAMERA_ANGLES = [
   { label: 'None', value: 'None' },
   { label: 'Eye Level', value: 'Eye Level' },
