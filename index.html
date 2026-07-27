@@ -11,23 +11,27 @@
           extend: {
             colors: {
               nano: {
-                bg: '#0f0f11',
-                card: '#18181b',
-                accent: '#ccff00', // The lime green from the screenshot
-                accentHover: '#b3e600',
-                text: '#f4f4f5',
-                muted: '#71717a'
+                bg: '#0c0c12',        // matches studio charcoal (was flat #0f0f11)
+                card: '#1a1a24',
+                accent: '#ff3355',    // Thumbmagic red — unified brand accent
+                accentHover: '#e01840',
+                text: '#f5f5f8',
+                muted: '#8a8a99'
               },
-              // Thumbnail Studio (clean red / white) theme
+              // Thumbnail Studio (premium dark / red) theme — richer, cooler charcoal
               thumb: {
-                bg: '#ffffff',
-                soft: '#f7f7f8',
-                ink: '#0b0b0f',
-                sub: '#5c5c66',
-                line: '#ececf0',
-                red: '#f5334c',
-                redDark: '#e11d3c',
-                redSoft: '#ffe4e9'
+                bg: '#0c0c12',      // page (deep cool charcoal, not muddy black)
+                soft: '#16161f',    // inset areas: tab track, inputs
+                card: '#1d1d29',    // raised cards, active pills (lightest surface)
+                ink: '#f5f5f8',     // primary text
+                sub: '#a2a2b4',     // muted text (a touch brighter)
+                line: '#2e2e3c',    // hairline borders
+                red: '#ff3355',     // accent — juicier, pops on dark
+                redDark: '#e01840',
+                redSoft: '#2c1320', // dark maroon chip background
+                green: '#2ee6a6',   // secondary accent (success / verified)
+                greenDark: '#12b981',
+                greenSoft: '#0d2a22' // dark mint chip background
               }
             },
             fontFamily: {
@@ -108,12 +112,114 @@
       /* ── Active press feedback ── */
       button:active:not(:disabled) { transform: scale(0.97); }
 
-      /* ── Thumbnail Studio: glossy red CTA glow ── */
-      @keyframes thumb-glow {
-        0%, 100% { box-shadow: 0 10px 30px -6px rgba(245, 51, 76, 0.55), 0 0 0 rgba(245,51,76,0); }
-        50%      { box-shadow: 0 14px 40px -6px rgba(245, 51, 76, 0.75), 0 0 24px rgba(245,51,76,0.35); }
+      /* ── Thumbnail Studio: premium deep-red button ── */
+      .thumb-btn {
+        background: linear-gradient(180deg, #f5324a 0%, #d81232 52%, #ab0c26 100%);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.24),
+          inset 0 -3px 8px rgba(80,0,10,0.45),
+          0 12px 24px -10px rgba(120,8,28,0.6);
+        transition: box-shadow .3s ease, filter .2s ease, transform .12s ease;
       }
-      .thumb-cta-glow { animation: thumb-glow 3.2s ease-in-out infinite; }
+      .thumb-btn:hover:not(:disabled) {
+        filter: brightness(1.05);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.3),
+          inset 0 -3px 8px rgba(80,0,10,0.45),
+          0 18px 36px -10px rgba(120,8,28,0.7);
+      }
+      .thumb-btn:disabled {
+        background: #26262c;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+        cursor: not-allowed;
+      }
+
+      /* Premium card shadow + hairline for dark surfaces */
+      .thumb-card {
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 30px 70px -30px rgba(0,0,0,0.75);
+      }
+
+      /* ── Living background glow (kills the flat "dull dark" look) ── */
+      .thumb-scope {
+        background:
+          radial-gradient(1100px 480px at 50% -8%, rgba(255,51,85,0.11), transparent 60%),
+          radial-gradient(900px 520px at 92% 6%, rgba(140,70,255,0.07), transparent 58%),
+          radial-gradient(760px 480px at 4% 22%, rgba(0,120,255,0.05), transparent 60%),
+          #0c0c12;
+        background-attachment: fixed;
+      }
+
+      /* ── Liquid-glass surface (frosted, translucent, luminous edge) ── */
+      .thumb-glass {
+        background: linear-gradient(180deg, rgba(38,38,52,0.72), rgba(20,20,30,0.66));
+        backdrop-filter: blur(22px) saturate(1.4);
+        -webkit-backdrop-filter: blur(22px) saturate(1.4);
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.10),
+          inset 0 -1px 0 rgba(0,0,0,0.30),
+          0 24px 60px -28px rgba(0,0,0,0.85);
+      }
+
+      /* ── Sidebar nav item: idle glass, hover lift, active red glow ── */
+      .thumb-nav {
+        position: relative;
+        border: 1px solid transparent;
+        background: rgba(255,255,255,0.02);
+        transition: background .25s ease, border-color .25s ease,
+                    box-shadow .3s ease, transform .12s ease;
+      }
+      .thumb-nav:hover {
+        background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+        border-color: rgba(255,255,255,0.10);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+      }
+      .thumb-nav-active {
+        background: linear-gradient(180deg, rgba(255,51,85,0.22) 0%, rgba(255,51,85,0.06) 100%);
+        border-color: rgba(255,51,85,0.45);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.18),
+          0 0 0 1px rgba(255,51,85,0.12),
+          0 10px 26px -10px rgba(255,45,80,0.55);
+      }
+      .thumb-nav-active:hover {
+        background: linear-gradient(180deg, rgba(255,51,85,0.28) 0%, rgba(255,51,85,0.08) 100%);
+        border-color: rgba(255,51,85,0.55);
+      }
+      /* Glass icon chip inside nav items */
+      .thumb-nav-chip {
+        background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03));
+        border: 1px solid rgba(255,255,255,0.10);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+      }
+      .thumb-nav-active .thumb-nav-chip {
+        background: linear-gradient(180deg, #ff3355, #d81232);
+        border-color: rgba(255,255,255,0.25);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(255,45,80,0.8);
+      }
+
+      /* ── Balanced float shadow — casts on the SIDES too, not just below ── */
+      .thumb-float {
+        box-shadow:
+          0 0 0 1px rgba(255,255,255,0.05),
+          -22px 26px 55px -34px rgba(0,0,0,0.9),
+           22px 26px 55px -34px rgba(0,0,0,0.9),
+           0 40px 80px -50px rgba(0,0,0,0.85);
+      }
+      /* Red-tinted float (hero generator card) */
+      .thumb-float-red {
+        box-shadow:
+          0 0 0 1px rgba(255,51,85,0.12),
+          0 30px 60px -34px rgba(120,8,28,0.55),
+          0 44px 90px -55px rgba(0,0,0,0.85);
+      }
+      /* Green-tinted float (review cards) */
+      .thumb-float-green {
+        box-shadow:
+          0 0 0 1px rgba(46,230,166,0.10),
+          0 28px 55px -36px rgba(6,90,66,0.55),
+          0 40px 80px -52px rgba(0,0,0,0.82);
+      }
 
       /* Marquee for template showcase */
       @keyframes thumb-marquee {
@@ -123,9 +229,97 @@
       .thumb-marquee { animation: thumb-marquee 32s linear infinite; }
       .thumb-marquee:hover { animation-play-state: paused; }
 
-      /* Light scrollbar override when studio is active */
-      .thumb-scope ::-webkit-scrollbar-track { background: #f1f1f4; }
-      .thumb-scope ::-webkit-scrollbar-thumb { background: #d4d4dc; }
+      /* Dark scrollbar when studio is active */
+      .thumb-scope ::-webkit-scrollbar-track { background: #141419; }
+      .thumb-scope ::-webkit-scrollbar-thumb { background: #33333c; border-radius: 99px; }
+      .thumb-scope ::-webkit-scrollbar-thumb:hover { background: #44444f; }
+
+      /* ══════════ LIGHT THEME (studio) ══════════ */
+      /* Activated by adding .thumb-light to the .thumb-scope root. Colored buttons
+         (.thumb-btn, red chips) keep white text — only surfaces & tokens flip. */
+      .thumb-light.thumb-scope {
+        background:
+          radial-gradient(1100px 480px at 50% -8%, rgba(255,51,85,0.08), transparent 60%),
+          radial-gradient(900px 520px at 92% 6%, rgba(140,70,255,0.05), transparent 58%),
+          radial-gradient(760px 480px at 4% 22%, rgba(0,120,255,0.04), transparent 60%),
+          #f3f4f8;
+      }
+      .thumb-light { color: #16161f; }
+
+      /* Liquid-glass → frosted white */
+      .thumb-light .thumb-glass {
+        background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(247,247,251,0.86));
+        border: 1px solid rgba(12,12,24,0.08);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.8),
+          0 24px 60px -30px rgba(24,24,45,0.22);
+      }
+
+      /* Color tokens — compound selectors (.thumb-light.x) cover the root element
+         which carries thumb-light AND the utility on the SAME node, so inherited
+         text doesn't stay white/invisible. */
+      .thumb-light.text-thumb-ink,
+      .thumb-light .text-thumb-ink { color: #15151d; }
+      .thumb-light.text-thumb-sub,
+      .thumb-light .text-thumb-sub { color: #5c5c6e; }
+      .thumb-light .text-thumb-ink\/70 { color: rgba(21,21,29,0.7); }
+      /* Marquee / feed edge fades that fade to the page bg */
+      .thumb-light .from-thumb-bg { --tw-gradient-from: #f3f4f8 var(--tw-gradient-from-position); }
+      .thumb-light .to-thumb-bg { --tw-gradient-to: #f3f4f8 var(--tw-gradient-to-position); }
+      .thumb-light .bg-thumb-bg,
+      .thumb-light .bg-thumb-bg\/90 { background-color: #f3f4f8; }
+      .thumb-light .bg-thumb-soft { background-color: #ececef; }
+      .thumb-light .bg-thumb-card { background-color: #ffffff; }
+      .thumb-light .border-thumb-line { border-color: #e3e3ea; }
+
+      /* Dark surface fills → light (inputs, tracks). Overlays ≥40% stay dark. */
+      .thumb-light .bg-black\/20,
+      .thumb-light .bg-black\/25,
+      .thumb-light .bg-black\/30 { background-color: rgba(16,16,32,0.04); }
+      .thumb-light .bg-white\/5,
+      .thumb-light .bg-white\/10 { background-color: rgba(16,16,32,0.05); }
+
+      /* Hairline borders */
+      .thumb-light .border-white\/5,
+      .thumb-light .border-white\/10,
+      .thumb-light .border-white\/12,
+      .thumb-light .border-white\/15,
+      .thumb-light .border-white\/20,
+      .thumb-light .border-white\/\[0\.06\] { border-color: rgba(16,16,32,0.10); }
+
+      /* Sidebar nav idle + icon chip */
+      .thumb-light .thumb-nav { background: rgba(16,16,32,0.03); }
+      .thumb-light .thumb-nav:hover {
+        background: rgba(16,16,32,0.06);
+        border-color: rgba(16,16,32,0.10);
+      }
+      .thumb-light .thumb-nav-chip {
+        background: linear-gradient(180deg, rgba(16,16,32,0.07), rgba(16,16,32,0.02));
+        border-color: rgba(16,16,32,0.10);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+      }
+      /* Active nav pill — clean light red instead of the dark-theme glow */
+      .thumb-light .thumb-nav-active {
+        background: linear-gradient(180deg, rgba(255,51,85,0.14), rgba(255,51,85,0.05));
+        border-color: rgba(255,51,85,0.35);
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.7),
+          0 10px 24px -14px rgba(255,45,80,0.4);
+      }
+      .thumb-light .thumb-nav-active:hover {
+        background: linear-gradient(180deg, rgba(255,51,85,0.20), rgba(255,51,85,0.08));
+        border-color: rgba(255,51,85,0.45);
+      }
+      /* Active icon chip stays red with a white glyph (readable on light) */
+      .thumb-light .thumb-nav-active .thumb-nav-chip {
+        background: linear-gradient(180deg, #ff3355, #d81232);
+        border-color: rgba(255,51,85,0.5);
+      }
+
+      /* Light scrollbar */
+      .thumb-light ::-webkit-scrollbar-track { background: #e7e7ee; }
+      .thumb-light ::-webkit-scrollbar-thumb { background: #c3c3ce; }
+      .thumb-light ::-webkit-scrollbar-thumb:hover { background: #a9a9b6; }
     </style>
   <script type="importmap">
 {

@@ -76,10 +76,6 @@ export const editImageWithGemini = async (
   settings: EditorSettings
 ): Promise<{ images: string[], text: string }> => {
   
-  // Initialize the client inside the function to ensure it captures the 
-  // latest injected process.env.API_KEY after user selection.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   // Determine model based on resolution/settings
   // Default to Flash for speed and general editing/generation
   let modelName = 'gemini-2.5-flash-image';
@@ -106,6 +102,8 @@ export const editImageWithGemini = async (
 
   // Prepare content parts
   const parts: any[] = [];
+  // Full data-URL sources — used by the DEV proxy (keeps the service-account key server-side)
+  const sources: string[] = [];
 
   // If we have images, add them (Edit/Merge Mode)
   // We process them to ensure they aren't too large for the API payload
@@ -119,11 +117,12 @@ export const editImageWithGemini = async (
         processedImages.forEach((base64Image) => {
             // Strip header if present to get raw base64 data for inlineData
             const base64Data = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
-            
+
             // Extract mime type or default to jpeg (since we convert to jpeg in resize)
             const mimeTypeMatch = base64Image.match(/^data:(image\/[a-zA-Z]+);base64,/);
             const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
 
+            sources.push(base64Image.startsWith('data:') ? base64Image : `data:${mimeType};base64,${base64Data}`);
             parts.push({
               inlineData: {
                 data: base64Data,
@@ -170,6 +169,50 @@ export const editImageWithGemini = async (
 
   // Always add the text prompt
   parts.push({ text: finalPrompt });
+
+  // ── DEV: route through the local Vertex proxy ──────────────────────────────
+  // In dev the Vite middleware (/api/generate) authenticates to Vertex with the
+  // service-account JSON server-side, so the key never reaches the browser.
+  if (import.meta.env?.DEV) {
+    try {
+      const resp = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: finalPrompt,
+          sources,
+          aspectRatio: settings.aspectRatio,
+          resolution: settings.resolution,
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || `Proxy error ${resp.status}`);
+      if ((!data.images || !data.images.length) && !data.text) {
+        throw new Error('No image generated.');
+      }
+      return { images: data.images || [], text: data.text || '' };
+    } catch (error: any) {
+      console.error('Vertex proxy error:', error);
+      const errMsg = error?.message || String(error);
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+        throw new Error('Could not reach the server. Please try again.');
+      }
+      if (errMsg.includes('404') || errMsg.includes('not found') || errMsg.includes('Publisher model')) {
+        throw new Error('That model is unavailable right now. Please try again.');
+      }
+      if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+        throw new Error('Too many requests. Wait a moment and try again.');
+      }
+      if (errMsg.includes('No image')) {
+        throw new Error('No image was generated. Try tweaking your prompt.');
+      }
+      // Keep the message short & human — never surface raw JSON to the UI.
+      throw new Error(errMsg.length > 120 || errMsg.includes('{') ? 'Something went wrong. Please try again.' : errMsg);
+    }
+  }
+
+  // ── PRODUCTION: Vertex AI Express mode (scoped image-gen key only) ──────────
+  const ai = new GoogleGenAI({ vertexai: true, apiKey: process.env.VERTEX_API_KEY });
 
   try {
     const response = await ai.models.generateContent({

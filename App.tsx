@@ -397,8 +397,8 @@ function App() {
       const effectiveSettings: EditorSettings = {
           ...settings,
           aspectRatio: '16:9',
-          modelType: 'pro',
-          resolution: '4K',
+          modelType: 'flash',
+          resolution: '1K',
       };
       const newItem: QueueItem = {
           id: crypto.randomUUID(),
@@ -868,12 +868,12 @@ function App() {
     return (
         <div className="min-h-screen bg-nano-bg text-nano-text flex items-center justify-center p-4 font-sans">
             <div className="max-w-md w-full bg-nano-card border border-zinc-800 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
-                <div className="w-16 h-16 bg-nano-accent rounded-full flex items-center justify-center text-nano-bg font-bold text-3xl mx-auto mb-4 shadow-[0_0_20px_rgba(204,255,0,0.3)]">N</div>
+                <div className="w-16 h-16 bg-nano-accent rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4 shadow-[0_0_20px_rgba(255,51,85,0.3)]">N</div>
                 <h1 className="text-2xl font-bold text-white">Nano Edit</h1>
                 <p className="text-zinc-400">Connect your Google Cloud project to start.</p>
                 <button 
                     onClick={handleConnectKey}
-                    className="w-full py-3 bg-nano-accent hover:bg-nano-accentHover text-nano-bg font-bold rounded-xl transition-all shadow-lg"
+                    className="w-full py-3 bg-nano-accent hover:bg-nano-accentHover text-white font-bold rounded-xl transition-all shadow-lg"
                 >
                     Connect API Key
                 </button>
@@ -898,15 +898,17 @@ function App() {
                   onDownloadAll={handleDownloadAll}
                   onDelete={deleteGeneratedImage}
                   onOpenEditor={handleOpenEditor}
+                  onRetry={retryQueueItem}
+                  onCancel={cancelQueueItem}
               />
               {/* Lightweight lightbox for the studio (advanced zoom/brush lives in the editor) */}
               {viewedImage && (
                   <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setViewedImage(null)}>
                       <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setViewedImage(null)}><IconX /></button>
                       <img src={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
-                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => handleOpenEditor(viewedImage)} className="px-5 py-2.5 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-100 transition-colors flex items-center gap-2"><IconLayerPlus /> Edit in Nano Edit</button>
-                          <button onClick={() => downloadImage(viewedImage!)} className="px-5 py-2.5 bg-[#f5334c] text-white text-sm font-bold rounded-full hover:brightness-110 transition-all flex items-center gap-2"><IconDownload /> Download</button>
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
+                          <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-full hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
                       </div>
                   </div>
               )}
@@ -915,13 +917,26 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-nano-bg text-nano-text selection:bg-nano-accent selection:text-nano-bg flex flex-col font-sans">
+    <div className="min-h-screen bg-nano-bg text-nano-text selection:bg-nano-accent selection:text-white flex flex-col font-sans">
 
-      <header className={`p-6 flex justify-between items-center z-10 transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <div className="flex items-center gap-2">
-            <button onClick={() => setView('studio')} className="mr-1 text-xs font-semibold text-zinc-400 hover:text-nano-accent border border-zinc-800 hover:border-nano-accent/50 rounded-full px-3 py-1.5 transition-colors" title="Back to Thumbnail Studio">← Thumbnails</button>
-            <div className="w-8 h-8 bg-nano-accent rounded-full flex items-center justify-center text-nano-bg font-bold">N</div>
-            <span className="font-semibold text-lg tracking-tight">Nano Edit</span>
+      <header className={`sticky top-0 px-4 sm:px-6 h-16 flex justify-between items-center z-30 thumb-glass border-b border-white/10 transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className="flex items-center gap-3">
+            <button
+              onClick={() => setView('studio')}
+              title="Back to Thumbmagic"
+              className="group flex items-center gap-1.5 text-sm font-bold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full pl-2 pr-3.5 py-1.5 transition-all"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+              Back
+            </button>
+            <span className="w-px h-6 bg-white/10" />
+            <div className="flex items-center gap-2.5">
+              <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white"><IconSparkles /></div>
+              <div className="leading-tight">
+                <div className="font-extrabold tracking-tight text-[15px]">Nano Edit</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Canvas Editor</div>
+              </div>
+            </div>
         </div>
       </header>
 
@@ -954,7 +969,7 @@ function App() {
                         {sourceImages.map((img, idx) => (
                             <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-zinc-800 animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
                                 <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
-                                <div className="absolute top-1 left-1 bg-nano-accent text-nano-bg text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                <div className="absolute top-1 left-1 bg-nano-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                                     {idx + 1}
                                 </div>
                                 <button 
@@ -1025,7 +1040,7 @@ function App() {
                             if (a.status !== 'failed' && b.status === 'failed') return -1;
                             return 0;
                         }).map((item, idx) => (
-                             <div key={item.id} className="relative aspect-square rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center gap-3 shadow-[0_0_15px_rgba(204,255,0,0.05)] overflow-hidden">
+                             <div key={item.id} className="relative aspect-square rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center gap-3 shadow-[0_0_15px_rgba(255,51,85,0.05)] overflow-hidden">
                                 {item.status === 'processing' ? (
                                     <>
                                         <div className="w-10 h-10 border-2 border-nano-accent border-t-transparent rounded-full animate-spin"></div>
@@ -1054,7 +1069,7 @@ function App() {
                                             <div className="flex gap-2.5 w-full px-2">
                                                 <button 
                                                     onClick={() => retryQueueItem(item)} 
-                                                    className="flex-1 px-4 py-3 bg-gradient-to-r from-nano-accent via-nano-accent to-nano-accentHover text-nano-bg text-sm font-bold rounded-xl hover:shadow-xl hover:shadow-nano-accent/30 transition-all hover:scale-105 active:scale-95"
+                                                    className="flex-1 px-4 py-3 bg-gradient-to-r from-nano-accent via-nano-accent to-nano-accentHover text-white text-sm font-bold rounded-xl hover:shadow-xl hover:shadow-nano-accent/30 transition-all hover:scale-105 active:scale-95"
                                                 >
                                                     <div className="flex items-center justify-center gap-2">
                                                         <span className="text-base">🔄</span>
@@ -1114,7 +1129,7 @@ function App() {
                                     <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                                          <button onClick={() => setViewedImage(img.url)} className="px-2 py-2.5 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="View Fullscreen"><IconEye /></button>
                                         <button onClick={() => handleBrushSelect(img.url)} className="px-2 py-2.5 bg-purple-900/50 text-purple-200 text-xs font-bold rounded-lg hover:bg-purple-900 flex items-center justify-center transition-colors" title="Brush Edit">🖌️</button>
-                                        <button onClick={() => addToLayers(img.url)} className="px-2 py-2.5 bg-nano-accent text-nano-bg text-xs font-bold rounded-lg hover:bg-nano-accentHover flex items-center justify-center transition-colors" title="Add Layer"><IconLayerPlus /></button>
+                                        <button onClick={() => addToLayers(img.url)} className="px-2 py-2.5 bg-nano-accent text-white text-xs font-bold rounded-lg hover:bg-nano-accentHover flex items-center justify-center transition-colors" title="Add Layer"><IconLayerPlus /></button>
                                         <button onClick={() => downloadImage(img.url)} className="px-2 py-2.5 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 flex items-center justify-center transition-colors" title="Download"><IconDownload /></button>
                                         <button onClick={() => deleteGeneratedImage(img.id)} className="px-2 py-2.5 bg-red-900/50 text-red-200 text-xs font-bold rounded-lg hover:bg-red-900 flex items-center justify-center transition-colors" title="Delete"><IconTrash /></button>
                                     </div>
@@ -1147,19 +1162,21 @@ function App() {
               <button
                   onClick={handleGenerate}
                   disabled={!prompt.trim()}
-                  className={`h-11 sm:h-12 px-5 sm:px-6 w-full sm:w-auto bg-nano-accent hover:bg-nano-accentHover disabled:opacity-40 disabled:cursor-not-allowed text-nano-bg font-bold rounded-lg sm:rounded-xl flex items-center justify-center gap-2 transition-all text-sm whitespace-nowrap ${isProcessing ? 'shadow-[0_0_20px_rgba(204,255,0,0.35)]' : 'shadow-[0_0_12px_rgba(204,255,0,0.15)]'}`}
+                  className={`h-11 sm:h-12 px-5 sm:px-6 w-full sm:w-auto bg-nano-accent hover:bg-nano-accentHover disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-lg sm:rounded-xl flex items-center justify-center gap-2 transition-all text-sm whitespace-nowrap ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : 'shadow-[0_0_12px_rgba(255,51,85,0.15)]'}`}
               >
                   {isProcessing ? 'Queue' : 'Generate'}
                   <IconSparkles />
               </button>
           </div>
 
-          <div className="sm:hidden px-2 pb-1">
+          <div className="sm:hidden px-2 pb-1.5">
               <button
                   onClick={() => setShowMobileTools(prev => !prev)}
-                  className="w-full py-2 rounded-lg border border-zinc-800 bg-zinc-900/60 text-zinc-300 text-xs font-semibold"
+                  className="w-full py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/70 text-zinc-200 text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
               >
-                  {showMobileTools ? 'Hide Tools' : 'More Tools'}
+                  <IconSettings />
+                  {showMobileTools ? 'Hide tools' : 'Show tools'}
+                  <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform duration-300 ${showMobileTools ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
               </button>
           </div>
 
@@ -1216,98 +1233,110 @@ function App() {
                </div>
           </div>
 
-          {/* Advanced Features Row */}
+          {/* Advanced Features Panel */}
           {showAdvanced && (
-              <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-t border-zinc-800/50 pt-3 mt-1 bg-zinc-900/30 rounded-xl">
-                   <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
-                      <IconPalette />
-                      <select value={settings.style} onChange={(e) => setSettings(prev => ({...prev, style: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-20">
-                          {STYLES.map(style => (<option key={style.value} value={style.value} className="bg-zinc-900 text-white">{style.label}</option>))}
-                      </select>
+              <div className="px-2 pb-2 pt-3 mt-1 border-t border-zinc-800/60 animate-fade-in-up">
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 sm:p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                          <span className="w-6 h-6 rounded-lg bg-nano-accent/15 text-nano-accent flex items-center justify-center"><IconSettings /></span>
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Advanced options</span>
+                          <button
+                              onClick={() => setShowAdvanced(false)}
+                              className="ml-auto w-7 h-7 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 flex items-center justify-center transition-colors"
+                              title="Close advanced options"
+                              aria-label="Close advanced options"
+                          >
+                              <IconX />
+                          </button>
+                      </div>
+
+                      {/* Labeled selects — 2 cols on mobile, 4 on desktop */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                          <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Style</span>
+                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
+                                  <IconPalette />
+                                  <select value={settings.style} onChange={(e) => setSettings(prev => ({...prev, style: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full">
+                                      {STYLES.map(style => (<option key={style.value} value={style.value} className="bg-zinc-900 text-white">{style.label}</option>))}
+                                  </select>
+                              </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Camera</span>
+                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
+                                  <IconCamera />
+                                  <select value={settings.cameraAngle} onChange={(e) => setSettings(prev => ({...prev, cameraAngle: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full">
+                                      {CAMERA_ANGLES.map(angle => (<option key={angle.value} value={angle.value} className="bg-zinc-900 text-white">{angle.label}</option>))}
+                                  </select>
+                              </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Quick action</span>
+                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
+                                  <IconSparkles />
+                                  <select
+                                      value=""
+                                      onChange={(e) => {
+                                          if (e.target.value) {
+                                              const preset = PRESET_PROMPTS.find(p => p.label === e.target.value);
+                                              if (preset) {
+                                                  setPrompt(preset.prompt);
+                                                  if (preset.label.includes('BG') && sourceImages.length === 0) {
+                                                      setGlobalError("Upload an image first to change background.");
+                                                      setIsImageMode(true);
+                                                  }
+                                              }
+                                          }
+                                      }}
+                                      className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full"
+                                  >
+                                      <option value="" className="bg-zinc-900 text-white">Choose…</option>
+                                      {PRESET_PROMPTS.map(preset => (
+                                          <option key={preset.label} value={preset.label} className="bg-zinc-900 text-white">{preset.icon} {preset.label}</option>
+                                      ))}
+                                  </select>
+                              </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Variations</span>
+                              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-2.5 border border-zinc-800 focus-within:border-nano-accent/50 transition-colors">
+                                  <IconLayers />
+                                  <select value={batchCount} onChange={(e) => setBatchCount(parseInt(e.target.value))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-full">
+                                      <option value="1" className="bg-zinc-900 text-white">1× generation</option>
+                                      <option value="2" className="bg-zinc-900 text-white">2× generations</option>
+                                      <option value="3" className="bg-zinc-900 text-white">3× generations</option>
+                                      <option value="4" className="bg-zinc-900 text-white">4× generations</option>
+                                  </select>
+                              </div>
+                          </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      {((isImageMode && sourceImages.length > 0) || generatedImages.length > 0) && (
+                      <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-zinc-800/60">
+                          {isImageMode && sourceImages.length > 0 && (
+                              <button onClick={handleRemoveBackground} className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-800 text-xs font-semibold text-zinc-300 transition-colors" title="Remove Background">
+                                  <IconEraser /> Remove BG
+                              </button>
+                          )}
+
+                          {generatedImages.length > 0 && (
+                              <button onClick={handleDownloadAll} className="flex items-center gap-1.5 bg-nano-accent/15 hover:bg-nano-accent/25 rounded-xl px-3 py-2 border border-nano-accent/30 text-xs font-bold text-nano-accent transition-colors" title="Download all as ZIP">
+                                  <IconZip /> Download all
+                              </button>
+                          )}
+
+                          {generatedImages.length > 0 && (
+                              <button onClick={clearAllGeneratedImages} className="flex items-center gap-1.5 bg-zinc-900 hover:bg-red-900/60 rounded-xl px-3 py-2 border border-zinc-800 hover:border-red-800 text-xs font-semibold text-zinc-400 hover:text-red-400 transition-colors ml-auto" title="Clear Canvas">
+                                  <IconTrash /> Clear canvas
+                              </button>
+                          )}
+                      </div>
+                      )}
                   </div>
-
-                   <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
-                      <IconCamera />
-                      <select value={settings.cameraAngle} onChange={(e) => setSettings(prev => ({...prev, cameraAngle: e.target.value}))} className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-24">
-                          {CAMERA_ANGLES.map(angle => (<option key={angle.value} value={angle.value} className="bg-zinc-900 text-white">{angle.label}</option>))}
-                      </select>
-                  </div>
-
-                  {/* Quick Actions & More Features */}
-                  <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
-                      <IconSparkles />
-                      <select 
-                          value="" 
-                          onChange={(e) => {
-                              if (e.target.value) {
-                                  const preset = PRESET_PROMPTS.find(p => p.label === e.target.value);
-                                  if (preset) {
-                                      setPrompt(preset.prompt);
-                                      if (preset.label.includes('BG') && sourceImages.length === 0) {
-                                          setGlobalError("Upload an image first to change background.");
-                                          setIsImageMode(true);
-                                      }
-                                  }
-                              }
-                          }} 
-                          className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-24"
-                      >
-                          <option value="" className="bg-zinc-900 text-white">Quick Actions</option>
-                          {PRESET_PROMPTS.map(preset => (
-                              <option key={preset.label} value={preset.label} className="bg-zinc-900 text-white">
-                                  {preset.icon} {preset.label}
-                              </option>
-                          ))}
-                      </select>
-                  </div>
-
-                  {/* Batch Generation Toggle */}
-                  <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0">
-                      <IconLayers />
-                      <select 
-                          value={batchCount}
-                          onChange={(e) => setBatchCount(parseInt(e.target.value))}
-                          className="bg-transparent text-xs font-medium text-white outline-none cursor-pointer w-16"
-                      >
-                          <option value="1" className="bg-zinc-900 text-white">1x Gen</option>
-                          <option value="2" className="bg-zinc-900 text-white">2x Gen</option>
-                          <option value="3" className="bg-zinc-900 text-white">3x Gen</option>
-                          <option value="4" className="bg-zinc-900 text-white">4x Gen</option>
-                      </select>
-                  </div>
-
-                  {/* Random Seed */}
-                  <button 
-                      onClick={() => setPrompt(prev => prev + (prev ? ', ' : '') + 'random seed variation')}
-                      className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0 text-xs font-medium text-zinc-300 transition-colors"
-                      title="Add Random Variation"
-                  >
-                      🎲 <span className="hidden sm:inline">Random</span>
-                  </button>
-
-                  {/* Remove Background Button */}
-                  {isImageMode && sourceImages.length > 0 && (
-                      <button 
-                          onClick={handleRemoveBackground}
-                          className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0 text-xs font-medium text-zinc-300 transition-colors"
-                          title="Remove Background"
-                      >
-                          <IconEraser />
-                          <span className="hidden sm:inline">Remove BG</span>
-                      </button>
-                  )}
-
-                  {generatedImages.length > 0 && (
-                      <button onClick={handleDownloadAll} className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg px-3 py-1.5 border border-zinc-800 shrink-0 text-xs font-bold text-nano-accent transition-colors" title="Download all as ZIP">
-                          <IconZip /> <span className="hidden sm:inline">Download All</span>
-                      </button>
-                  )}
-
-                  {generatedImages.length > 0 && (
-                      <button onClick={clearAllGeneratedImages} className="flex items-center gap-2 bg-zinc-900 hover:bg-red-900 rounded-lg px-3 py-1.5 border border-zinc-800 hover:border-red-800 shrink-0 text-xs font-medium text-zinc-400 hover:text-red-400 transition-colors" title="Clear Canvas">
-                          <IconTrash /> <span className="hidden sm:inline">Clear Canvas</span>
-                      </button>
-                  )}
               </div>
           )}
         </div>
