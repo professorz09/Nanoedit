@@ -276,6 +276,22 @@ export default defineConfig(({ mode }) => {
         allowedHosts: true,
       },
       plugins: [react(), vertexProxyPlugin(env)],
+      build: {
+        // Split rarely-changing vendor code into its own long-cached, hashed
+        // chunks so repeat visits and re-deploys only re-download changed app
+        // code (less bandwidth = cheaper) and the browser fetches them in
+        // parallel. jszip is loaded on demand, so it lands in its own chunk too.
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (!id.includes('node_modules')) return;
+              if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'vendor-react';
+              if (id.includes('@supabase')) return 'vendor-supabase';
+              if (id.includes('jszip')) return 'vendor-jszip';
+            },
+          },
+        },
+      },
       define: {
         // In a DEPLOYED build, BOTH image generation and transcript fetching go
         // through secure Supabase Edge Functions (services/geminiService.ts,

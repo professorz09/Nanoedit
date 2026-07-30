@@ -1,13 +1,22 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { GeneratedImage, QueueItem, ThumbInputMode, THUMBNAIL_TEMPLATES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { Plan, BillingCycle, priceFor } from '../services/plans';
 import AuthModal from './AuthModal';
-import Pricing from './Pricing';
-import Account from './Account';
-import TitleGenerator from './TitleGenerator';
-import ChapterMaker from './ChapterMaker';
+// Secondary tabs load on demand — each becomes its own chunk, fetched only when
+// the user opens that tab, so the initial studio view stays lean.
+const Pricing = React.lazy(() => import('./Pricing'));
+const Account = React.lazy(() => import('./Account'));
+const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
+const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
+
+// Lightweight loader shown while a lazy tab chunk arrives (usually a few ms).
+const PanelFallback = () => (
+  <div className="flex items-center justify-center py-24">
+    <div className="w-8 h-8 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 import { getFromLocalStorage, saveToLocalStorage } from '../services/storageService';
 import { fetchTranscript, segmentsToText, generateText } from '../services/textService';
 import { useStyleImages } from '../services/stylesService';
@@ -527,6 +536,24 @@ const ThumbnailStudio: React.FC<Props> = ({
   }, [sidebarOpen]);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getFromLocalStorage('nano_theme', 'light'));
   useEffect(() => { saveToLocalStorage('nano_theme', theme); }, [theme]);
+
+  // Warm the lazy tab chunks during browser idle time. The initial view paints
+  // with only its critical JS; these prefetch quietly in the background so that
+  // switching to a tab resolves instantly from cache — the user never waits.
+  useEffect(() => {
+    const prefetch = () => {
+      import('./Pricing');
+      import('./Account');
+      import('./TitleGenerator');
+      import('./ChapterMaker');
+    };
+    const ric = (window as any).requestIdleCallback as
+      | ((cb: () => void, opts?: { timeout: number }) => number)
+      | undefined;
+    const cancel = (window as any).cancelIdleCallback as ((id: number) => void) | undefined;
+    const id = ric ? ric(prefetch, { timeout: 4000 }) : window.setTimeout(prefetch, 2500);
+    return () => { if (ric && cancel) cancel(id); else clearTimeout(id); };
+  }, []);
   // Landing ('home') vs generator ('generate') vs feed preview ('preview') vs pricing
   const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account'>('home');
 
@@ -1745,22 +1772,30 @@ const ThumbnailStudio: React.FC<Props> = ({
 
         {/* ── Pricing ── */}
         {section === 'pricing' && (
-          <Pricing onCheckout={startCheckout} onBuyAddon={buyAddon} onRequireLogin={() => requireLogin('Log in to upgrade.')} />
+          <Suspense fallback={<PanelFallback />}>
+            <Pricing onCheckout={startCheckout} onBuyAddon={buyAddon} onRequireLogin={() => requireLogin('Log in to upgrade.')} />
+          </Suspense>
         )}
 
         {/* ── Title Generator tool ── */}
         {section === 'title' && (
-          <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16"><TitleGenerator /></div>
+          <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16">
+            <Suspense fallback={<PanelFallback />}><TitleGenerator /></Suspense>
+          </div>
         )}
 
         {/* ── YouTube Chapter Maker tool ── */}
         {section === 'chapters' && (
-          <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16"><ChapterMaker /></div>
+          <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16">
+            <Suspense fallback={<PanelFallback />}><ChapterMaker /></Suspense>
+          </div>
         )}
 
         {/* ── Account / profile ── */}
         {section === 'account' && (
-          <Account onUpgrade={goPricing} onLogin={() => requireLogin('Log in to see your account.')} />
+          <Suspense fallback={<PanelFallback />}>
+            <Account onUpgrade={goPricing} onLogin={() => requireLogin('Log in to see your account.')} />
+          </Suspense>
         )}
 
         {/* ── Showcase gallery (real thumbnails) — home only ── */}

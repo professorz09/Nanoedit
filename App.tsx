@@ -9,8 +9,7 @@ import { useImageQueue } from './hooks/useImageQueue';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
-// @ts-ignore
-import JSZip from 'jszip';
+// jszip (~95 KB) is loaded on demand in handleDownloadAll — kept out of the initial bundle.
 
 function App() {
   // Lightweight state persisted to LocalStorage (loads synchronously, no flash).
@@ -602,7 +601,9 @@ function App() {
 
   const handleDownloadAll = async () => {
       if (generatedImages.length === 0) return;
-      
+
+      // Load the zip library only when the user actually exports a batch.
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       
       generatedImages.forEach((img, index) => {
