@@ -176,11 +176,10 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
         }
       });
 
-      // ── Text generation (titles / chapters) ──────────────────────────────
-      // Works with WHICHEVER key is present, in priority order:
+      // ── Text generation (titles / chapters / transcript analysis) ─────────
+      // Vertex ONLY (Gemini 3 Flash → gemini-2.5-flash degrade), via either:
       //   1. Google service-account (GOOGLE_APPLICATION_CREDENTIALS) → Vertex
       //   2. VERTEX_API_KEY (Vertex Express key) → Vertex, no service account
-      //   3. OPENROUTER_API_KEY → OpenRouter chat model (fallback)
       // The transcript itself comes from /api/transcript (Supadata) separately.
       server.middlewares.use('/api/text', async (req, res) => {
         const send = (status: number, obj: unknown) => {
@@ -194,50 +193,33 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
         if (!prompt) return send(400, { error: 'Missing prompt' });
 
         const vertexKey = env.VERTEX_API_KEY || process.env.VERTEX_API_KEY;
-        const orKey = env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
         const errs: string[] = [];
 
-        // 1 & 2) Google / Vertex (service account OR Vertex Express key)
-        if (credPath || vertexKey) {
+        if (!credPath && !vertexKey) {
+          return send(500, { error: 'No text model configured. Add GOOGLE_APPLICATION_CREDENTIALS or VERTEX_API_KEY to .env.local and restart the dev server.' });
+        }
+
+        // Vertex ONLY (mirrors the `text` Edge Function): Gemini 3 Flash first,
+        // then degrade to GA gemini-2.5-flash — no OpenRouter.
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = credPath
+          ? new GoogleGenAI({ vertexai: true, project, location })
+          : new GoogleGenAI({ vertexai: true, apiKey: vertexKey });
+        const textModel = env.VERTEX_TEXT_MODEL || process.env.VERTEX_TEXT_MODEL || 'gemini-3-flash';
+        const models = textModel === 'gemini-2.5-flash' ? [textModel] : [textModel, 'gemini-2.5-flash'];
+        for (const model of models) {
           try {
-            const { GoogleGenAI } = await import('@google/genai');
-            const ai = credPath
-              ? new GoogleGenAI({ vertexai: true, project, location })
-              : new GoogleGenAI({ vertexai: true, apiKey: vertexKey });
             const result: any = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
+              model,
               contents: [{ role: 'user', parts: [{ text: prompt }] }],
             });
             let text = '';
             for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
             if (text.trim()) return send(200, { text });
-            errs.push('vertex: empty');
-          } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
+            errs.push(`vertex:${model} empty`);
+          } catch (e: any) { errs.push(`vertex:${model} ` + (e?.message || String(e))); }
         }
 
-        // 3) OpenRouter fallback
-        if (orKey) {
-          try {
-            const model = env.OPENROUTER_TEXT_MODEL || process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-2.5-flash';
-            const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json', 'X-Title': 'PodcastFlux' },
-              body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
-            });
-            const data: any = await r.json().catch(() => ({}));
-            if (r.ok) {
-              const text = data?.choices?.[0]?.message?.content || '';
-              if (typeof text === 'string' && text.trim()) return send(200, { text });
-              errs.push('openrouter: empty');
-            } else {
-              errs.push('openrouter: ' + (data?.error?.message || r.status));
-            }
-          } catch (e: any) { errs.push('openrouter: ' + (e?.message || String(e))); }
-        }
-
-        if (!credPath && !vertexKey && !orKey) {
-          return send(500, { error: 'No text model configured. Add VERTEX_API_KEY or OPENROUTER_API_KEY to .env.local and restart the dev server.' });
-        }
         return send(502, { error: 'Text generation failed. ' + errs.join(' | ') });
       });
 

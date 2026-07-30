@@ -278,6 +278,9 @@ export const editImageWithGemini = async (
     return { images: data.images || [], text: data.text || '' };
   } catch (error: any) {
     const errMsg = error?.message || String(error);
+    // Surface the REAL failure to the console so a genuine network reject can be
+    // told apart from an HTTP error (401/402/502 already carry a clear message).
+    console.error('generate failed →', `${supaUrl}/functions/v1/generate`, error?.name || '', errMsg);
     if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('Load failed')) {
       throw new Error('Could not reach the server. Please try again.');
     }

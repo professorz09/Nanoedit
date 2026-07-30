@@ -2,6 +2,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { saveToIndexedDB, getFromIndexedDB, saveToLocalStorage, getFromLocalStorage, STORAGE_KEYS } from './services/storageService';
 import ThumbnailStudio, { REFERENCE_IMAGES } from './components/ThumbnailStudio';
+import SafeImage from './components/SafeImage';
+import { supabase } from './services/supabase';
+import { fetchUserGenerations } from './services/historyService';
 import { useStyleImages } from './services/stylesService';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useZoomPan } from './hooks/useZoomPan';
@@ -122,6 +125,31 @@ function App() {
       };
       restoreState();
   }, []);
+
+  // Cross-device history: local IndexedDB is per-device, so a fresh device/browser
+  // showed no past work. Pull the account's saved thumbnails from Supabase and
+  // merge with the local cache (dedup by URL). Runs after the local restore and
+  // again on auth changes (sign-in on a new device). Logged-out users get [].
+  useEffect(() => {
+      if (isRestoring) return;
+      let cancelled = false;
+      const sync = async () => {
+          const remote = await fetchUserGenerations(60);
+          if (cancelled || !remote.length) return;
+          setGeneratedImages(prev => {
+              const seen = new Set(prev.map(i => i.url));
+              const merged = [...prev, ...remote.filter(r => !seen.has(r.url))];
+              merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+              return merged;
+          });
+      };
+      sync();
+      const sub = supabase?.auth.onAuthStateChange(() => { sync(); });
+      return () => {
+          cancelled = true;
+          sub?.data?.subscription?.unsubscribe?.();
+      };
+  }, [isRestoring]);
 
   // Persistence Effects
   useEffect(() => {
@@ -546,58 +574,81 @@ function App() {
       );
     }
     const editPrompt = segs.length ? segs.join(' ') : 'Edit the image: ';
+
+    // Snapshot the source + mask NOW, before we tear the editor down. The moment
+    // brushMode flips off the <canvas> unmounts and canvasRef goes null, so we
+    // must read its pixels synchronously and re-load them as an image later.
+    const src = selectedArea;
+    const maskUrl = (canvasRef.current && maskHasContent()) ? canvasRef.current.toDataURL('image/png') : null;
+    const markers = notes.map((a, i) => ({ nx: a.nx, ny: a.ny, n: i + 1 }));
+
+    // Close the brush editor immediately on Apply — no waiting for the merge.
     setPrompt(editPrompt);
     setIsImageMode(true);
+    setBrushMode(false);
+    setViewedImage(null);
+    setSelectedArea(null);
+    setAnnotations([]);
 
-    const merge = () => {
-      if (!selectedArea) { setBrushMode(false); setViewedImage(null); return; }
-      const img = new Image();
-      img.onload = () => {
-        let merged = selectedArea;
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = img.width;
-        tempCanvas.height = img.height;
-        const tctx = tempCanvas.getContext('2d');
-        if (tctx) {
-          tctx.drawImage(img, 0, 0);
-          if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
-          // Burn numbered markers so the model can see WHERE each note applies.
-          notes.forEach((a, i) => {
-            const x = a.nx * img.width;
-            const y = a.ny * img.height;
-            const r = Math.max(14, img.width * 0.02);
-            tctx.beginPath();
-            tctx.arc(x, y, r, 0, Math.PI * 2);
-            tctx.fillStyle = 'rgba(255,0,60,0.92)';
-            tctx.fill();
-            tctx.lineWidth = Math.max(2, r * 0.18);
-            tctx.strokeStyle = '#ffffff';
-            tctx.stroke();
-            tctx.fillStyle = '#ffffff';
-            tctx.font = `bold ${Math.round(r * 1.15)}px sans-serif`;
-            tctx.textAlign = 'center';
-            tctx.textBaseline = 'middle';
-            tctx.fillText(String(i + 1), x, y);
-          });
-          merged = tempCanvas.toDataURL('image/png');
-          setSourceImages([merged]);
-        }
-        // Apply == generate: enqueue right away using LOCAL values (state updates
-        // above won't have flushed yet, so we don't rely on them here).
-        setQueue(prev => [...prev, {
-          id: crypto.randomUUID(),
-          prompt: editPrompt,
-          settings: { ...settings },
-          sourceImages: [merged],
-          status: 'pending',
-          timestamp: Date.now(),
-        }]);
-        setBrushMode(false);
-        setViewedImage(null);
-      };
-      img.src = selectedArea;
+    // Attach ONLY the marked-up image (mask outline + numbered position markers
+    // burned in) as the sole source, then generate.
+    const commit = (merged: string) => {
+      setSourceImages([merged]);
+      setQueue(prev => [...prev, {
+        id: crypto.randomUUID(),
+        prompt: editPrompt,
+        settings: { ...settings },
+        sourceImages: [merged],
+        status: 'pending',
+        timestamp: Date.now(),
+      }]);
     };
-    merge();
+
+    if (!src) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const tctx = tempCanvas.getContext('2d');
+      if (!tctx) { commit(src); return; }
+
+      const finish = () => {
+        // Burn numbered markers at their positions so the model sees WHERE each
+        // note applies (they're annotations only — the prompt says to remove them).
+        markers.forEach(({ nx, ny, n }) => {
+          const x = nx * img.width;
+          const y = ny * img.height;
+          const r = Math.max(14, img.width * 0.02);
+          tctx.beginPath();
+          tctx.arc(x, y, r, 0, Math.PI * 2);
+          tctx.fillStyle = 'rgba(255,0,60,0.92)';
+          tctx.fill();
+          tctx.lineWidth = Math.max(2, r * 0.18);
+          tctx.strokeStyle = '#ffffff';
+          tctx.stroke();
+          tctx.fillStyle = '#ffffff';
+          tctx.font = `bold ${Math.round(r * 1.15)}px sans-serif`;
+          tctx.textAlign = 'center';
+          tctx.textBaseline = 'middle';
+          tctx.fillText(String(n), x, y);
+        });
+        commit(tempCanvas.toDataURL('image/png'));
+      };
+
+      tctx.drawImage(img, 0, 0);
+      if (maskUrl) {
+        const m = new Image();
+        m.onload = () => { tctx.drawImage(m, 0, 0); finish(); };
+        m.onerror = finish;
+        m.src = maskUrl;
+      } else {
+        finish();
+      }
+    };
+    img.onerror = () => commit(src);
+    img.src = src;
   };
   
   // Short filename generator
@@ -768,7 +819,7 @@ function App() {
               {viewedImage && (
                   <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setViewedImage(null)}>
                       <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setViewedImage(null)}><IconX /></button>
-                      <img src={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+                      <SafeImage src={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" fallbackClassName="w-72 h-44 rounded-2xl" onClick={e => e.stopPropagation()} />
                       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
                           <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
                           <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-full hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>

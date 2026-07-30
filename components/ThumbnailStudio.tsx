@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { Plan, BillingCycle, priceFor } from '../services/plans';
 import AuthModal from './AuthModal';
+import SafeImage from './SafeImage';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
 // the user opens that tab, so the initial studio view stays lean.
 const Pricing = React.lazy(() => import('./Pricing'));
@@ -219,11 +220,11 @@ interface Props {
 }
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
-  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
   { id: 'templates', label: 'Styles', icon: I.Grid },
+  { id: 'sketch', label: 'Sketch', icon: I.Brush },
   { id: 'prompt', label: 'Prompt', icon: I.Text },
   { id: 'reference', label: 'Image', icon: I.Image },
-  { id: 'sketch', label: 'Sketch', icon: I.Brush },
+  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
 ];
 
 const TESTIMONIALS = [
@@ -291,12 +292,13 @@ const ResultThumb: React.FC<{
           />
         )}
       </div>
-      {/* Clean action bar (always visible, works on touch) — single delete */}
-      <div className="flex gap-1.5 p-2 bg-thumb-card">
-        <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 py-2 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-line/60 transition-colors"><I.Download className="w-4 h-4" /> Save</button>
-        <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas" className="flex-1 py-2 rounded-lg thumb-btn text-white text-xs font-bold flex items-center justify-center gap-1.5"><I.Edit className="w-4 h-4" /> Edit</button>
-        <button onClick={() => onPreview(img.url)} title="YouTube feed preview" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center transition-colors"><I.Tv className="w-4 h-4" /></button>
-        <button onClick={() => onDelete(img.id)} title="Delete" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 flex items-center justify-center transition-colors"><I.Trash className="w-4 h-4" /></button>
+      {/* Compact liquid-glass action bar — translucent pills, works on touch
+          (mobile) and hover (desktop). Save + Edit are the primary actions. */}
+      <div className="flex items-center gap-1.5 p-1.5 bg-thumb-card">
+        <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 h-8 rounded-full bg-thumb-soft/50 backdrop-blur-md border border-thumb-line/50 text-thumb-ink text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-soft/80 active:scale-95 transition-all"><I.Download className="w-3.5 h-3.5" /> Save</button>
+        <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas" className="flex-1 h-8 rounded-full bg-thumb-red/85 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-sm hover:bg-thumb-red active:scale-95 transition-all"><I.Edit className="w-3.5 h-3.5" /> Edit</button>
+        <button onClick={() => onPreview(img.url)} title="YouTube feed preview" className="w-8 h-8 shrink-0 rounded-full bg-thumb-soft/50 backdrop-blur-md border border-thumb-line/50 text-thumb-sub hover:text-thumb-ink hover:bg-thumb-soft/80 active:scale-95 flex items-center justify-center transition-all"><I.Tv className="w-3.5 h-3.5" /></button>
+        <button onClick={() => onDelete(img.id)} title="Delete" className="w-8 h-8 shrink-0 rounded-full bg-thumb-soft/50 backdrop-blur-md border border-thumb-line/50 text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 hover:bg-thumb-soft/80 active:scale-95 flex items-center justify-center transition-all"><I.Trash className="w-3.5 h-3.5" /></button>
       </div>
     </div>
   );
@@ -333,6 +335,13 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     if (!c || !ctx) return;
     fillWhite(ctx);
     blankRef.current = c.toDataURL('image/png');
+  }, []);
+
+  // Failsafe: if we unmount mid-stroke (e.g. switching tabs while drawing),
+  // never leave the page's text-selection locked off.
+  useEffect(() => () => {
+    document.body.style.userSelect = '';
+    (document.body.style as any).webkitUserSelect = '';
   }, []);
 
   // Report the drawing to the parent — null while it's still an empty page.
@@ -372,6 +381,12 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     const p = pos(e);
     last.current = p;
     canvasRef.current?.setPointerCapture(e.pointerId);
+    // Kill page text-selection for the whole drag: pointerdown's preventDefault
+    // doesn't stop the compat mousedown, so a fast drag still selects surrounding
+    // text. Lock userSelect on <body> and drop any range that already got picked.
+    document.body.style.userSelect = 'none';
+    (document.body.style as any).webkitUserSelect = 'none';
+    window.getSelection?.()?.removeAllRanges?.();
     strokeStyle(ctx);
     ctx.beginPath();
     ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2); // dot on a single tap
@@ -382,6 +397,7 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     if (!drawing.current) return;
     e.preventDefault();
     const ctx = ctxOf(); if (!ctx || !last.current) return;
+    window.getSelection?.()?.removeAllRanges?.();
     const p = pos(e);
     strokeStyle(ctx);
     ctx.beginPath();
@@ -395,6 +411,8 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     if (!drawing.current) return;
     drawing.current = false;
     last.current = null;
+    document.body.style.userSelect = '';
+    (document.body.style as any).webkitUserSelect = '';
     emit();
   };
 
@@ -494,7 +512,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   onGenerate, generatedImages, queue, isProcessing, itemTimers,
   onView, onDownload, onDownloadAll, onDelete, onOpenEditor, onRetry, onCancel,
 }) => {
-  const [mode, setMode] = useState<ThumbInputMode>('youtube');
+  const [mode, setMode] = useState<ThumbInputMode>('templates');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -523,7 +541,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   // Per-video-id cache of the analysed YouTube inputs (thumbnail, title, AI concept).
   // Once a link is analysed, regenerating from the SAME link reuses this — the
   // transcript is never re-fetched and no second analysis call is made.
-  const ytCache = useRef<Record<string, { thumb: string | null; title: string | null; concept: string }>>({});
+  const ytCache = useRef<Record<string, { thumb: string | null; title: string | null; transcriptText: string }>>({});
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [legal, setLegal] = useState<null | 'about' | 'privacy' | 'terms'>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -772,8 +790,10 @@ const ThumbnailStudio: React.FC<Props> = ({
       // Analyse the video ONCE per link: thumbnail + title + transcript → an AI concept.
       // Result is cached by video id, so re-generating from the SAME link is instant and
       // NEVER re-fetches the transcript or re-runs the analysis.
-      let analysis = ytCache.current[id];
-      if (!analysis) {
+      // Fetch the expensive bits (thumbnail, title, transcript) ONCE per link and
+      // cache them — the SAME link never re-fetches the transcript again.
+      let base = ytCache.current[id];
+      if (!base) {
         setBusy(true);
         setNote('Analysing the video — thumbnail, title and transcript…');
         const [thumb, title, segments] = await Promise.all([
@@ -781,51 +801,96 @@ const ThumbnailStudio: React.FC<Props> = ({
           fetchYouTubeTitle(id),
           fetchTranscript(id),
         ]);
-        // Turn the title + transcript into a concrete visual thumbnail concept.
-        // Best-effort — if the text model is unavailable we still generate from the
-        // title and the original thumbnail.
-        let concept = '';
-        try {
-          const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
-          if (title || transcriptText) {
-            concept = (await generateText(
-              `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`
-            )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
-          }
-        } catch { /* concept stays empty — fall back to title + thumbnail */ }
-        analysis = { thumb, title, concept };
-        ytCache.current[id] = analysis;
+        const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
+        base = { thumb, title, transcriptText };
+        ytCache.current[id] = base;
         setBusy(false);
         setNote(null);
       }
 
-      const { thumb, title, concept } = analysis;
+      const { thumb, title, transcriptText } = base;
+
+      // Design FRESH concepts on EVERY generate (this is NOT cached) so the same
+      // link keeps producing new, differently-designed thumbnails each time.
+      let conceptA = '';
+      let conceptB = '';
+      let headline = '';
+      try {
+        if (title || transcriptText) {
+          setBusy(true);
+          setNote('Designing two fresh thumbnail concepts…');
+          const raw = await generateText(
+            `You are a world-class YouTube thumbnail art director. Analyse the video below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
+            `Rules:\n` +
+            `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
+            `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
+            `- Give a FRESH, original take each time — deliberately vary the angle, setting, emotion and framing away from the most obvious idea, so repeated attempts on the same video keep producing NEW designs.\n` +
+            `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+            `- HEADLINE: a punchy 2-4 word uppercase hook that captures the video's core topic (viewers must instantly get what it's about).\n\n` +
+            `Reply in EXACTLY this format, nothing else:\n` +
+            `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+            `TITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`
+          );
+          const grab = (label: string) => {
+            const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
+            return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+          };
+          conceptA = grab('CONCEPT_A').slice(0, 400);
+          conceptB = grab('CONCEPT_B').slice(0, 400);
+          headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+          // If the model ignored the format, treat the whole reply as one concept.
+          if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
+          setBusy(false);
+          setNote(null);
+        }
+      } catch { setBusy(false); setNote(null); /* concepts empty — fall back to title + thumbnail */ }
+      // Nothing usable at all → tell the user instead of generating noise.
+      if (!thumb && !title && !conceptA && !conceptB && !promptText.trim()) {
+        setNote('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
+        return;
+      }
+
       // Optional "Advanced" inputs: extra direction + a person's photo.
       const dir = promptText.trim() ? `Extra direction: ${promptText.trim().slice(0, 400)}. ` : '';
       const hasFace = uploads.length > 0;
       const faceDir = hasFace ? 'Feature the person from the uploaded photo as the main subject and preserve their likeness. ' : '';
       const titleLine = title ? `The video is titled "${title}". ` : '';
-      const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
       const topicSeed = [title, promptText].filter(v => v && v.trim()).join('. ');
       // Premium + instantly-legible direction so the result matches the reference-style thumbnails.
       const ytPremium = "The thumbnail should communicate the video's topic at a glance — a viewer should quickly grasp what it's about — using a clear, expressive focal subject and topic-relevant visual cues. Make it look genuinely premium and high-end, on par with the best top-creator thumbnails: bold, polished, richly detailed and click-worthy. ";
+      // Real-footage look, tied to the actual topic (per request).
+      const realFootage = "Render it as authentic real-footage-style photography — like a genuine photo/still captured on a professional camera for THIS exact topic, with real depth of field and natural lighting; not an illustration, cartoon or generic stock art. ";
+      // Text is allowed now: use the user's direction if given, else the AI-derived
+      // headline drawn from the video's content.
+      const textSeed = promptText.trim() || headline;
+      const personDir = hasFace
+        ? ''
+        : 'If the original thumbnail features a real person, keep that SAME person as the main subject and faithfully preserve their face and likeness. If it has no person, build the scene from the concept and do not invent a person. ';
 
-      if (thumb) {
-        sources = [thumb, ...sources];
-        // If the original thumbnail already shows a real person, keep THAT person (unless the
-        // user uploaded their own photo). If it has no person, build the scene from the concept
-        // without inventing one.
-        const personDir = hasFace
-          ? ''
-          : 'If the original thumbnail features a real person, keep that SAME person as the main subject and faithfully preserve their face and likeness. If it has no person, build the scene from the concept and do not invent a person. ';
-        prompt = `Using the uploaded original YouTube thumbnail (FIRST image) as reference for the subject and topic, create a FRESH, far more click-worthy thumbnail for this video that captures its core hook. ${titleLine}${conceptLine}${ytPremium}${personDir}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
-      } else {
-        if (!title && !concept && !promptText.trim()) {
-          setNote('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
-          return;
-        }
-        prompt = `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
-      }
+      if (thumb) sources = [thumb, ...sources];
+
+      // Build one thumbnail prompt for a given concept string.
+      const buildYt = (concept: string) => {
+        const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
+        return thumb
+          ? `Using the uploaded original YouTube thumbnail (FIRST image) as reference for the subject and topic, create a FRESH, far more click-worthy thumbnail for this video that captures its core hook. ${titleLine}${conceptLine}${ytPremium}${realFootage}${personDir}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`
+          : `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
+      };
+
+      // Two DISTINCT variants (per request). If the model only gave one concept,
+      // the second variant is a free-composition take so the two still differ.
+      const variants = (conceptA && conceptB)
+        ? [buildYt(conceptA), buildYt(conceptB)]
+        : [buildYt(conceptA || conceptB), buildYt('')];
+
+      const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
+      variants.forEach(v => onGenerate(finalize(v), sources, {
+        count: 1,
+        modelType: genModel === 'pro' ? 'pro' : 'flash',
+        aspect: format === 'short' ? '9:16' : '16:9',
+      }));
+      scrollToResults();
+      return;
     } else if (mode === 'templates') {
       const topic = titleText.trim();
       const hasFace = uploads.length > 0;
@@ -1221,7 +1286,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <label className="text-sm font-bold text-thumb-ink flex items-center gap-2">
                     <I.Image className="w-4 h-4 text-thumb-red" /> Pick a style to recreate
                   </label>
-                  <p className="text-[12px] text-thumb-sub -mt-1 leading-relaxed">Tap a thumbnail, then upload your photo or describe the change below. We keep it exactly as-is and only change what you ask (like swapping the face) — no text is added.</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
                     {styleImages.map(src => {
                       const active = selectedRef === src;
@@ -1513,7 +1577,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <label className="text-sm font-bold text-thumb-ink mb-2 block">Thumbnail</label>
                 {previewImage ? (
                   <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 group">
-                    <img src={previewImage} alt="Your thumbnail" className="w-full h-full object-cover" />
+                    <SafeImage src={previewImage} alt="Your thumbnail" className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <button onClick={() => previewFileRef.current?.click()} className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold">Change</button>
                       <button onClick={() => setPreviewImage(null)} className="px-3 py-1.5 rounded-lg bg-thumb-red text-white text-xs font-bold">Remove</button>
@@ -1536,7 +1600,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                       {generatedImages.slice(0, 8).map(g => (
                         <button key={g.id} onClick={() => setPreviewImage(g.url)} className={`shrink-0 w-20 aspect-video rounded-lg overflow-hidden border-2 transition-all ${previewImage === g.url ? 'border-thumb-red' : 'border-transparent hover:border-white/20'}`}>
-                          <img src={g.url} alt="" className="w-full h-full object-cover" />
+                          <SafeImage src={g.url} alt="" className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
                         </button>
                       ))}
                     </div>
@@ -1552,7 +1616,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   </label>
                   {previewImageB ? (
                     <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 group">
-                      <img src={previewImageB} alt="Thumbnail B" className="w-full h-full object-cover" />
+                      <SafeImage src={previewImageB} alt="Thumbnail B" className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <button onClick={() => previewFileRefB.current?.click()} className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold">Change</button>
                         <button onClick={() => setPreviewImageB(null)} className="px-3 py-1.5 rounded-lg bg-thumb-red text-white text-xs font-bold">Remove</button>
@@ -1574,7 +1638,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                         {generatedImages.slice(0, 8).map(g => (
                           <button key={g.id} onClick={() => setPreviewImageB(g.url)} className={`shrink-0 w-20 aspect-video rounded-lg overflow-hidden border-2 transition-all ${previewImageB === g.url ? 'border-thumb-red' : 'border-transparent hover:border-white/20'}`}>
-                            <img src={g.url} alt="" className="w-full h-full object-cover" />
+                            <SafeImage src={g.url} alt="" className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
                           </button>
                         ))}
                       </div>
@@ -1664,7 +1728,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         <div key={v.key} className={`rounded-2xl p-2.5 transition-all ${winner === v.key ? 'ring-2 ring-thumb-red bg-thumb-red/[0.06]' : 'ring-1 ring-transparent'}`}>
                           <div className="relative aspect-video rounded-xl overflow-hidden bg-black/20">
                             {v.img ? (
-                              <img src={v.img} alt={`Thumbnail ${v.key}`} className="w-full h-full object-cover" />
+                              <SafeImage src={v.img} alt={`Thumbnail ${v.key}`} className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
                             ) : (
                               <button onClick={() => (v.key === 'A' ? previewFileRef : previewFileRefB).current?.click()} className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-thumb-sub hover:text-thumb-red transition-colors">
                                 <I.Upload className="w-6 h-6" /><span className="text-xs font-semibold">Add variant {v.key}</span>
@@ -1721,7 +1785,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       {i === 2 && (
                         <div>
                           <div className="relative aspect-video rounded-xl overflow-hidden">
-                            <img src={previewImage} alt="Your thumbnail" className="w-full h-full object-cover" />
+                            <SafeImage src={previewImage} alt="Your thumbnail" className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
                             <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-white text-[11px] font-medium px-1 py-0.5 rounded leading-none">14:57</span>
                           </div>
                           <div className="flex gap-3 mt-3">

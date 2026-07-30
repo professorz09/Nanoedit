@@ -7,10 +7,15 @@
 // logged-in user (JWT) and caps the prompt size. It does NOT spend credits —
 // these are free helper tools, just gated behind sign-in to stop abuse.
 //
-// Providers, in order:  Vertex (Gemini)  →  OpenRouter (fallback)
+// Model: Vertex Gemini 3 Flash (gemini-3-flash) — Pro-grade reasoning at Flash
+// speed/cost, used for transcript analysis (chapters, titles, thumbnail concepts).
+// Vertex ONLY — no OpenRouter fallback (OpenRouter is intentionally disabled).
+// If the primary ID isn't accessible on the project, it degrades to the GA
+// gemini-2.5-flash — still on Vertex, so the LLM never routes through OpenRouter.
 //
 // Deploy:  supabase functions deploy text --project-ref vowgdlbvundorxwjdntu --use-api
-// Secrets: reuses VERTEX_API_KEY / OPENROUTER_API_KEY (+ optional OPENROUTER_TEXT_MODEL).
+// Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY.
+//   VERTEX_TEXT_MODEL = gemini-3-flash   (optional override, e.g. gemini-3.6-flash)
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -82,44 +87,28 @@ Deno.serve(async (req) => {
 
   const errs: string[] = [];
 
-  // 1) Vertex (Gemini) — service-account JSON or Vertex Express key
+  // Vertex (Gemini) ONLY — no OpenRouter. Try Gemini 3 Flash first, then degrade
+  // to the GA gemini-2.5-flash if the project can't reach the primary ID. Both
+  // run on Vertex, so text analysis never leaves Vertex.
   const ai = makeVertex();
-  if (ai) {
+  if (!ai) { await refundAll(); return json(500, { error: 'Text service is not configured.' }); }
+
+  const textModel = Deno.env.get('VERTEX_TEXT_MODEL') || 'gemini-3-flash';
+  const models = textModel === 'gemini-2.5-flash' ? [textModel] : [textModel, 'gemini-2.5-flash'];
+  for (const model of models) {
     try {
       const result: any = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
       });
       let text = '';
       for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
       if (text.trim()) return json(200, { text });
-      errs.push('vertex: empty');
-    } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
+      errs.push(`vertex:${model} empty`);
+    } catch (e: any) { errs.push(`vertex:${model} ` + (e?.message || String(e))); }
   }
 
-  // 2) OpenRouter fallback
-  const orKey = Deno.env.get('OPENROUTER_API_KEY');
-  if (orKey) {
-    try {
-      const model = Deno.env.get('OPENROUTER_TEXT_MODEL') || 'google/gemini-2.5-flash';
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json', 'X-Title': 'PodcastFlux' },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
-      });
-      const data: any = await r.json().catch(() => ({}));
-      if (r.ok) {
-        const text = data?.choices?.[0]?.message?.content || '';
-        if (typeof text === 'string' && text.trim()) return json(200, { text });
-        errs.push('openrouter: empty');
-      } else {
-        errs.push('openrouter: ' + (data?.error?.message || r.status));
-      }
-    } catch (e: any) { errs.push('openrouter: ' + (e?.message || String(e))); }
-  }
-
-  if (!ai && !orKey) { await refundAll(); return json(500, { error: 'Text service is not configured.' }); }
-  await refundAll(); // every provider failed — a failed run is free
+  await refundAll(); // every Vertex model failed — a failed run is free
   console.error('text_failed', errs.join(' | '));
   return json(502, { error: 'Could not generate text right now. Please try again.' });
 });
