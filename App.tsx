@@ -1,23 +1,26 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { editImageWithGemini } from './services/geminiService';
 import { saveToIndexedDB, getFromIndexedDB, saveToLocalStorage, getFromLocalStorage, STORAGE_KEYS } from './services/storageService';
-import ThumbnailStudio from './components/ThumbnailStudio';
+import ThumbnailStudio, { REFERENCE_IMAGES } from './components/ThumbnailStudio';
+import { useStyleImages } from './services/stylesService';
+import { usePersistentState } from './hooks/usePersistentState';
+import { useZoomPan } from './hooks/useZoomPan';
+import { useImageQueue } from './hooks/useImageQueue';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
 // @ts-ignore
 import JSZip from 'jszip';
 
 function App() {
-  // Initialize lightweight state from LocalStorage to avoid flash
-  const [prompt, setPrompt] = useState(() => getFromLocalStorage('nano_prompt', ''));
-  const [isImageMode, setIsImageMode] = useState(() => getFromLocalStorage('nano_is_image_mode', false));
-  const [uiVisible, setUiVisible] = useState(() => getFromLocalStorage('nano_ui_visible', true));
-  // Which screen is shown: the thumbnail studio (landing/generator) or the Nano Edit editor
-  const [view, setView] = useState<'studio' | 'editor'>(() => getFromLocalStorage('nano_view', 'studio'));
+  // Lightweight state persisted to LocalStorage (loads synchronously, no flash).
+  const [prompt, setPrompt] = usePersistentState('nano_prompt', '');
+  const [isImageMode, setIsImageMode] = usePersistentState('nano_is_image_mode', false);
+  const [uiVisible, setUiVisible] = usePersistentState('nano_ui_visible', true);
+  // Which screen is shown: the thumbnail studio (landing/generator) or the PodcastFlux editor
+  const [view, setView] = usePersistentState<'studio' | 'editor'>('nano_view', 'studio');
   // App-wide light/dark theme, shared with the studio via localStorage (views are mutually exclusive)
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => getFromLocalStorage('nano_theme', 'light'));
-  useEffect(() => { saveToLocalStorage('nano_theme', theme); }, [theme]);
+  const [theme, setTheme] = usePersistentState<'dark' | 'light'>('nano_theme', 'light');
   
   // Settings initialization - Defaulting to 4K/Pro as requested, ensuring all fields exist
   const [settings, setSettings] = useState<EditorSettings>(() => {
@@ -35,16 +38,19 @@ function App() {
   // Heavy state (images) initialized empty, loaded async
   const [sourceImages, setSourceImages] = useState<string[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
-  
-  // Queue System State
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
 
   const [isRestoring, setIsRestoring] = useState(true);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [textResponse, setTextResponse] = useState<string | null>(null);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isCheckingKey, setIsCheckingKey] = useState(true);
+
+  // Generation queue — parallel processing, per-item timers, cancel/retry.
+  const { queue, setQueue, isProcessing, itemTimers, cancelQueueItem, retryQueueItem } = useImageQueue({
+    onGenerated: (newImages) => setGeneratedImages(prev => [...newImages, ...prev]),
+    onText: (text) => setTextResponse(text),
+    onError: (message) => setGlobalError(message),
+  });
 
   // State for Full Screen Image Viewer
   const [viewedImage, setViewedImage] = useState<string | null>(null);
@@ -58,23 +64,33 @@ function App() {
   const [brushSize, setBrushSize] = useState(20);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [brushTool, setBrushTool] = useState<'brush' | 'circle' | 'rectangle'>('brush');
-  const [shapeStart, setShapeStart] = useState<{x: number, y: number} | null>(null);
+  const [brushTool, setBrushTool] = useState<'brush' | 'pin'>('brush');
+  // Right-side tool panel can be minimized so the full image is visible while editing.
+  const [brushPanelMin, setBrushPanelMin] = useState(false);
+  // "From styles" picker — pick a ready-made style thumbnail to add as a source layer.
+  const [showStylePicker, setShowStylePicker] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // State for individual item timers
-  const [itemTimers, setItemTimers] = useState<Record<string, number>>({});
-  
-  // State for Zoom & Pan
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
+  // Annotation pins (Pin tool): click the image to drop a numbered marker + a note
+  // describing the change you want there. Positions are normalized (0..1) to the image.
+  const [annotations, setAnnotations] = useState<{ id: string; nx: number; ny: number; note: string }[]>([]);
 
-  // Refs for Pinch Zoom
-  const initialPinchDistanceRef = useRef<number | null>(null);
-  const initialZoomRef = useRef<number>(1);
-  
+  // Tracks which image srcs have finished loading, so the shimmer skeleton is
+  // removed once the real image paints (otherwise it keeps animating behind
+  // transparent PNGs like remove-bg cut-outs).
+  const [loadedSrcs, setLoadedSrcs] = useState<Record<string, boolean>>({});
+  const markLoaded = (src: string) => setLoadedSrcs(prev => (prev[src] ? prev : { ...prev, [src]: true }));
+
+  // Style pool for the "From styles" picker — DB-backed, bundled fallback.
+  const styleImages = useStyleImages(REFERENCE_IMAGES);
+
+  // Fullscreen-viewer zoom & pan (wheel/drag/pinch). Resets when the viewed image changes.
+  const {
+    zoom, setZoom, pan, setPan, isDragging,
+    handleZoomIn, handleZoomOut, handleWheel,
+    handleMouseDown, handleMouseMove, handleMouseUp,
+    handleTouchStart, handleTouchMove, handleTouchEnd,
+  } = useZoomPan(brushMode, viewedImage);
+
   // Restore heavy state from IndexedDB on mount
   useEffect(() => {
       const restoreState = async () => {
@@ -133,28 +149,6 @@ function App() {
       }
   }, [generatedImages, isRestoring]);
 
-  // Timer Effect for individual processing items
-  useEffect(() => {
-      const processingItems = queue.filter(item => item.status === 'processing');
-      
-      if (processingItems.length > 0) {
-          const interval = setInterval(() => {
-              setItemTimers(prev => {
-                  const updated = { ...prev };
-                  processingItems.forEach(item => {
-                      updated[item.id] = (updated[item.id] || 0) + 0.1;
-                  });
-                  return updated;
-              });
-          }, 100);
-          return () => clearInterval(interval);
-      } else {
-          // Clear timers when no items are processing
-          setItemTimers({});
-      }
-  }, [queue]);
-
-  
   // Check for API Key on mount
   useEffect(() => {
     const checkKey = async () => {
@@ -174,75 +168,6 @@ function App() {
     };
     checkKey();
   }, []);
-
-  // Queue Processing Logic - Allow parallel processing
-  useEffect(() => {
-      const processNextItems = async () => {
-          // Find pending items (allow up to 2 parallel generations)
-          const processingCount = queue.filter(item => item.status === 'processing').length;
-          const maxParallel = 2;
-          
-          if (processingCount >= maxParallel) return;
-
-          const pendingItems = queue.filter(item => item.status === 'pending').slice(0, maxParallel - processingCount);
-          if (pendingItems.length === 0) return;
-
-          // Process each pending item
-          pendingItems.forEach(async (nextItem) => {
-              setGlobalError(null);
-              
-              // Update status to processing
-              setQueue(prev => prev.map(i => i.id === nextItem.id ? { ...i, status: 'processing' } : i));
-
-              try {
-                  const { images, text } = await editImageWithGemini(
-                      nextItem.sourceImages, 
-                      nextItem.prompt, 
-                      nextItem.settings
-                  );
-
-                  if (images.length > 0) {
-                      const newImages: GeneratedImage[] = images.map(url => ({
-                          id: crypto.randomUUID(),
-                          url,
-                          prompt: nextItem.prompt,
-                          timestamp: Date.now()
-                      }));
-                      setGeneratedImages(prev => [...newImages, ...prev]);
-                  }
-
-                  if (text) {
-                      setTextResponse(text);
-                  }
-
-                  // Remove from queue on success
-                  setQueue(prev => prev.filter(i => i.id !== nextItem.id));
-                  
-                  // Clear timer for this item
-                  setItemTimers(prev => {
-                      const updated = { ...prev };
-                      delete updated[nextItem.id];
-                      return updated;
-                  });
-
-              } catch (err: any) {
-                  const errorMessage = err.message || "Failed to generate image.";
-                  setGlobalError(errorMessage);
-                  
-                  // Update queue item to failed
-                  setQueue(prev => prev.map(i => i.id === nextItem.id ? { ...i, status: 'failed', error: errorMessage } : i));
-              }
-          });
-      };
-
-      processNextItems();
-  }, [queue]);
-
-  // Update isProcessing state based on queue
-  useEffect(() => {
-      const processing = queue.some(item => item.status === 'processing');
-      setIsProcessing(processing);
-  }, [queue]);
 
   // Auto-dismiss error after 6 seconds
   useEffect(() => {
@@ -395,13 +320,13 @@ function App() {
 
   // ── Thumbnail Studio bridge ──────────────────────────────────────
   // Generate straight into the shared queue, forcing 16:9 HD (Pro) output.
-  const handleStudioGenerate = useCallback((studioPrompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro' }) => {
+  const handleStudioGenerate = useCallback((studioPrompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; aspect?: string }) => {
       if (!studioPrompt.trim()) return;
       const modelType = opts?.modelType ?? 'flash';
       const count = Math.max(1, Math.min(4, opts?.count ?? 1));
       const effectiveSettings: EditorSettings = {
           ...settings,
-          aspectRatio: '16:9',
+          aspectRatio: opts?.aspect === '9:16' ? '9:16' : '16:9',
           modelType,
           resolution: modelType === 'pro' ? '2K' : '1K',
       };
@@ -420,7 +345,7 @@ function App() {
       }
   }, [settings]);
 
-  // Send a finished thumbnail into the Nano Edit editor for fine-tuning.
+  // Send a finished thumbnail into the PodcastFlux editor for fine-tuning.
   const handleOpenEditor = useCallback((url?: string) => {
       if (url) {
           setSourceImages([url]);
@@ -491,12 +416,28 @@ function App() {
 
   const handleBrushSelect = (imageUrl: string) => {
     setBrushMode(true);
+    setBrushTool('brush');
+    setBrushPanelMin(false);
+    setAnnotations([]);
     setSelectedArea(imageUrl);
     setViewedImage(imageUrl);
   };
 
+  // Drop an annotation pin at the clicked spot (normalized 0..1 to the image box).
+  const addAnnotation = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (brushTool !== 'pin') return;
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+    setAnnotations(prev => [...prev, { id: getShortName('pin'), nx, ny, note: '' }]);
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!brushMode || !canvasRef.current) return;
+    if (!brushMode || brushTool === 'pin' || !canvasRef.current) return;
+    // Stop the browser from turning the drag into a text/page selection.
+    if ('preventDefault' in e) e.preventDefault();
     setIsDrawing(true);
     
     const canvas = canvasRef.current;
@@ -513,25 +454,22 @@ function App() {
     
     const x = (clientX - rect.left) * (canvas.width / rect.width);
     const y = (clientY - rect.top) * (canvas.height / rect.height);
-    
-    if (brushTool === 'brush') {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.lineWidth = brushSize;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-      }
-    } else {
-      setShapeStart({ x, y });
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
     }
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !brushMode || !canvasRef.current) return;
-    
+    if (!isDrawing || !brushMode || brushTool === 'pin' || !canvasRef.current) return;
+    if ('preventDefault' in e) e.preventDefault();
+
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
@@ -550,29 +488,12 @@ function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    if (brushTool === 'brush') {
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else if (shapeStart) {
-      // Clear and redraw for shape preview
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.lineWidth = 3;
-      
-      if (brushTool === 'circle') {
-        const radius = Math.sqrt(Math.pow(x - shapeStart.x, 2) + Math.pow(y - shapeStart.y, 2));
-        ctx.beginPath();
-        ctx.arc(shapeStart.x, shapeStart.y, radius, 0, 2 * Math.PI);
-        ctx.stroke();
-      } else if (brushTool === 'rectangle') {
-        ctx.strokeRect(shapeStart.x, shapeStart.y, x - shapeStart.x, y - shapeStart.y);
-      }
-    }
+    ctx.lineTo(x, y);
+    ctx.stroke();
   };
 
   const stopDrawing = () => {
     setIsDrawing(false);
-    setShapeStart(null);
   };
 
   const clearBrushSelection = () => {
@@ -582,16 +503,89 @@ function App() {
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       }
     }
+    setAnnotations([]);
+  };
+
+  // Does the mask canvas actually have any drawn selection? (sampled alpha scan)
+  const maskHasContent = (): boolean => {
+    const c = canvasRef.current;
+    if (!c) return false;
+    const ctx = c.getContext('2d');
+    if (!ctx) return false;
+    try {
+      const { data } = ctx.getImageData(0, 0, c.width, c.height);
+      for (let i = 3; i < data.length; i += 40) if (data[i] > 10) return true;
+    } catch { /* tainted canvas — assume drawn */ return true; }
+    return false;
+  };
+
+  // Merge the source image with the drawn mask + numbered annotation markers, build a
+  // matching edit instruction, and hand it to the main generator.
+  const applyEditorSelection = () => {
+    const notes = annotations.filter(a => a.note.trim());
+    const segs: string[] = [];
+    if (maskHasContent()) segs.push('Edit ONLY the white outlined region(s) of the image and leave everything else untouched.');
+    if (notes.length) {
+      segs.push(
+        'The image has numbered red circular markers that are annotations ONLY — do NOT render or keep them in the output. Apply the requested change at each marked location, blending seamlessly and keeping the rest of the image unchanged: ' +
+        notes.map((a, i) => `(${i + 1}) ${a.note.trim()}`).join('; ') + '.'
+      );
+    }
+    const editPrompt = segs.length ? segs.join(' ') : 'Edit the image: ';
+    setPrompt(editPrompt);
+    setIsImageMode(true);
+
+    const merge = () => {
+      if (!selectedArea) { setBrushMode(false); setViewedImage(null); return; }
+      const img = new Image();
+      img.onload = () => {
+        let merged = selectedArea;
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const tctx = tempCanvas.getContext('2d');
+        if (tctx) {
+          tctx.drawImage(img, 0, 0);
+          if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
+          // Burn numbered markers so the model can see WHERE each note applies.
+          notes.forEach((a, i) => {
+            const x = a.nx * img.width;
+            const y = a.ny * img.height;
+            const r = Math.max(14, img.width * 0.02);
+            tctx.beginPath();
+            tctx.arc(x, y, r, 0, Math.PI * 2);
+            tctx.fillStyle = 'rgba(255,0,60,0.92)';
+            tctx.fill();
+            tctx.lineWidth = Math.max(2, r * 0.18);
+            tctx.strokeStyle = '#ffffff';
+            tctx.stroke();
+            tctx.fillStyle = '#ffffff';
+            tctx.font = `bold ${Math.round(r * 1.15)}px sans-serif`;
+            tctx.textAlign = 'center';
+            tctx.textBaseline = 'middle';
+            tctx.fillText(String(i + 1), x, y);
+          });
+          merged = tempCanvas.toDataURL('image/png');
+          setSourceImages([merged]);
+        }
+        // Apply == generate: enqueue right away using LOCAL values (state updates
+        // above won't have flushed yet, so we don't rely on them here).
+        setQueue(prev => [...prev, {
+          id: crypto.randomUUID(),
+          prompt: editPrompt,
+          settings: { ...settings },
+          sourceImages: [merged],
+          status: 'pending',
+          timestamp: Date.now(),
+        }]);
+        setBrushMode(false);
+        setViewedImage(null);
+      };
+      img.src = selectedArea;
+    };
+    merge();
   };
   
-  const cancelQueueItem = (id: string) => {
-      setQueue(prev => prev.filter(item => item.id !== id));
-  };
-
-  const retryQueueItem = (item: QueueItem) => {
-      setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'pending', error: undefined } : i));
-  };
-
   // Short filename generator
   const getShortName = (prefix = "img") => {
       return `${prefix}-${Math.floor(Math.random() * 0xFFFFF).toString(16)}`;
@@ -659,168 +653,29 @@ function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
-  // Zoom & Pan Controls
-  const handleZoomIn = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setZoom(prev => Math.min(prev + 0.5, 5));
-  };
-  
-  const handleZoomOut = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setZoom(prev => Math.max(prev - 0.5, 0.5));
-  };
-
-  // Wheel Zoom with Zoom-To-Cursor Logic
-  const handleWheel = (e: React.WheelEvent) => {
-      if (brushMode) return; // Disable zoom when brush is active
-      
-      e.stopPropagation();
-      e.preventDefault();
-
-      // Determine zoom direction and factor
-      const factor = e.deltaY < 0 ? 1.1 : 0.9;
-      let newZoom = zoom * factor;
-      newZoom = Math.max(0.5, Math.min(newZoom, 5));
-      
-      if (Math.abs(newZoom - zoom) < 0.01) return;
-
-      const containerRect = e.currentTarget.getBoundingClientRect();
-      const centerX = containerRect.width / 2;
-      const centerY = containerRect.height / 2;
-      
-      // Mouse position relative to center
-      const mouseX = e.clientX - containerRect.left - centerX;
-      const mouseY = e.clientY - containerRect.top - centerY;
-      
-      // Math: NewPan = Mouse * (1 - NewZoom/OldZoom) + OldPan * (NewZoom/OldZoom)
-      const effectiveFactor = newZoom / zoom;
-      
-      setPan(prev => ({
-          x: mouseX * (1 - effectiveFactor) + prev.x * effectiveFactor,
-          y: mouseY * (1 - effectiveFactor) + prev.y * effectiveFactor
-      }));
-      setZoom(newZoom);
-  };
-
-  // Mouse Pan Handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
-      // Allow drag if zoomed in and not in brush mode
-      if (zoom > 1 && !brushMode) {
-          e.preventDefault(); 
-          setIsDragging(true);
-          dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-      }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-      if (isDragging && zoom > 1 && !brushMode) {
-          e.preventDefault();
-          setPan({
-              x: e.clientX - dragStartRef.current.x,
-              y: e.clientY - dragStartRef.current.y
-          });
-      }
-  };
-
-  const handleMouseUp = () => {
-      setIsDragging(false);
-  };
-
-  // Touch Handlers for Mobile (Pan & Pinch)
-  const getPinchDistance = (touches: React.TouchList) => {
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-      e.stopPropagation(); // Stop propagation to prevent closing viewer
-      
-      if (e.touches.length === 1) {
-          if (brushMode) {
-              // Single touch for brush in brush mode
-              return; // Let brush handler take over
-          } else if (zoom > 1) {
-              // Single touch pan when not in brush mode
-              setIsDragging(true);
-              const touch = e.touches[0];
-              dragStartRef.current = { x: touch.clientX - pan.x, y: touch.clientY - pan.y };
-          }
-      } else if (e.touches.length === 2) {
-          // Two-finger pinch zoom (works in brush mode too)
-          const dist = getPinchDistance(e.touches);
-          initialPinchDistanceRef.current = dist;
-          initialZoomRef.current = zoom;
-      }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-      e.stopPropagation();
-      // e.preventDefault(); // Removed to allow potential browser gestures if needed, but relying on touch-action: none CSS
-
-      if (e.touches.length === 1) {
-          if (brushMode) {
-              // Single touch for brush - let brush handler take over
-              return;
-          } else if (isDragging && zoom > 1) {
-              // Single touch pan when not in brush mode
-              const touch = e.touches[0];
-              setPan({
-                  x: touch.clientX - dragStartRef.current.x,
-                  y: touch.clientY - dragStartRef.current.y
-              });
-          }
-      } else if (e.touches.length === 2 && initialPinchDistanceRef.current) {
-           // Pinch Zoom Move
-           const dist = getPinchDistance(e.touches);
-           const scaleFactor = dist / initialPinchDistanceRef.current;
-           let newZoom = initialZoomRef.current * scaleFactor;
-           newZoom = Math.max(0.5, Math.min(newZoom, 5));
-           setZoom(newZoom);
-      }
-  };
-
-  const handleTouchEnd = () => {
-      setIsDragging(false);
-      initialPinchDistanceRef.current = null;
-  };
-
-  // Keyboard Shortcuts — Cmd/Ctrl based
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-        const target = e.target as HTMLElement | null;
-        const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
-        const mod = e.metaKey || e.ctrlKey;   // ⌘ on Mac, Ctrl elsewhere
-        const k = e.key.toLowerCase();
-
-        // Escape: close viewer or clear source images (works everywhere)
-        if (e.key === 'Escape') {
-            if (viewedImage) { setViewedImage(null); } else { clearAllSourceImages(); }
-            return;
-        }
-
-        // All shortcuts require Cmd/Ctrl and must never fire while typing
-        // (so ⌘C / ⌘A / ⌘V keep working inside the prompt field).
-        if (!mod || typing) return;
-
-        switch (k) {
-            case 'enter': e.preventDefault(); if (prompt.trim()) handleGenerate(); break;
-            case 's': e.preventDefault(); if (generatedImages.length > 0) downloadImage(generatedImages[0].url); break;
-            case 'h': e.preventDefault(); setUiVisible(prev => !prev); break;
-            case 'u': e.preventDefault(); triggerFileUpload(); break;
-            case 'i': e.preventDefault(); setIsImageMode(prev => !prev); break;
-            case 'a': e.preventDefault(); if (generatedImages.length > 0) handleDownloadAll(); break;
-            case 'b': e.preventDefault(); if (isImageMode && sourceImages.length > 0) handleRemoveBackground(); break;
-            case 'k': e.preventDefault(); setPrompt(''); break;
-            case 'd': e.preventDefault(); if (generatedImages.length > 0) addToLayers(generatedImages[0].url); break;
-            case 'backspace': e.preventDefault(); if (generatedImages.length > 0) clearAllGeneratedImages(); break;
-            case '/': e.preventDefault(); setShowHelp(prev => !prev); break;
-        }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleGenerate, prompt, generatedImages, viewedImage, isImageMode, sourceImages]);
+  // Global Cmd/Ctrl keyboard shortcuts + fullscreen-viewer zoom keys.
+  useKeyboardShortcuts({
+    prompt,
+    generatedImages,
+    viewedImage,
+    isImageMode,
+    sourceImages,
+    handleGenerate,
+    setViewedImage,
+    clearAllSourceImages,
+    setZoom,
+    setPan,
+    downloadImage,
+    setUiVisible,
+    triggerFileUpload,
+    setIsImageMode,
+    handleDownloadAll,
+    handleRemoveBackground,
+    setPrompt,
+    addToLayers,
+    clearAllGeneratedImages,
+    setShowHelp,
+  });
 
 
   if (isCheckingKey || isRestoring) {
@@ -832,7 +687,7 @@ function App() {
         <div className="min-h-screen bg-nano-bg text-nano-text flex items-center justify-center p-4 font-sans">
             <div className="max-w-md w-full bg-nano-card border border-zinc-800 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
                 <div className="w-16 h-16 bg-nano-accent rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4 shadow-[0_0_20px_rgba(255,51,85,0.3)]">N</div>
-                <h1 className="text-2xl font-bold text-white">Nano Edit</h1>
+                <h1 className="text-2xl font-bold text-white">PodcastFlux Editor</h1>
                 <p className="text-zinc-400">Connect your Google Cloud project to start.</p>
                 <button 
                     onClick={handleConnectKey}
@@ -882,7 +737,23 @@ function App() {
   return (
     <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans ${theme === 'light' ? 'thumb-light' : ''}`}>
 
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 pt-4 sm:pt-6 pb-16">
+      {/* Mobile header — back + brand. */}
+      <header className={`lg:hidden sticky top-0 z-30 px-4 h-14 flex items-center gap-2.5 thumb-glass border-b border-thumb-line transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <button
+            onClick={() => setView('studio')}
+            title="Back to PodcastFlux"
+            className="group w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink hover:border-thumb-red/40 transition-all"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          </button>
+          <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
+          <div className="leading-tight">
+            <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink">PodcastFlux Editor</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Canvas Editor</div>
+          </div>
+      </header>
+
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 pt-4 sm:pt-6 pb-44 lg:pb-16">
         <div className="grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] gap-6 items-start">
         <div className="min-w-0 order-2">
         <div className="thumb-glass rounded-3xl p-4 sm:p-5 flex flex-col gap-5 min-h-[60vh] lg:min-h-[calc(100vh-3rem)]">
@@ -916,6 +787,17 @@ function App() {
                             <IconUpload />
                             <span className="text-[10px] font-medium">Add</span>
                         </div>
+                        {styleImages.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setShowStylePicker(true)}
+                                className="shrink-0 w-24 h-24 border-2 border-dashed border-thumb-line rounded-xl flex flex-col items-center justify-center gap-1 text-thumb-sub hover:border-nano-accent hover:text-nano-accent transition-all cursor-pointer bg-thumb-soft"
+                                title="Add from styles"
+                            >
+                                <IconPalette />
+                                <span className="text-[10px] font-medium">Styles</span>
+                            </button>
+                        )}
                         {sourceImages.map((img, idx) => (
                             <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-thumb-line animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
                                 <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
@@ -975,7 +857,7 @@ function App() {
 
             {(generatedImages.length > 0 || queue.length > 0) && (
                 <div className="w-full">
-                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 w-full animate-fade-in-up">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 w-full animate-fade-in-up">
                         
                         {/* Queue Items Rendering - Sort to show failed items last */}
                         {[...queue].sort((a, b) => {
@@ -1053,7 +935,9 @@ function App() {
                                 className="relative group rounded-xl overflow-hidden bg-thumb-card border border-thumb-line aspect-square flex items-center justify-center animate-fade-in-up"
                                 style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
                             >
-                                <img src={img.url} alt={img.prompt} loading="lazy" className="w-full h-full object-cover cursor-pointer img-fade" onClick={() => setViewedImage(img.url)} />
+                                {/* Shimmer placeholder — sits behind the image so there's no white flash while it loads. Removed once loaded so it never shimmers through transparent PNGs. */}
+                                {!loadedSrcs[img.url] && <div className="thumb-skeleton absolute inset-0" aria-hidden />}
+                                <img src={img.url} alt={img.prompt} loading="lazy" className="relative w-full h-full object-cover cursor-pointer img-fade" onClick={() => setViewedImage(img.url)} onLoad={() => markLoaded(img.url)} onError={() => markLoaded(img.url)} />
                                 <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-3 sm:p-4 transition-all duration-300 ${uiVisible ? 'opacity-100 md:opacity-0 md:group-hover:opacity-100' : 'opacity-0 pointer-events-none'}`}>
                                     <p 
                                         onClick={(e) => {
@@ -1085,21 +969,21 @@ function App() {
         </div>
         </div>
 
-      <div className={`order-1 lg:sticky lg:top-6 transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`hidden lg:block order-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto no-scrollbar transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="thumb-glass p-4 sm:p-5 rounded-3xl flex flex-col gap-4">
 
-          {/* Floating brand + back — replaces the top header */}
+          {/* Brand + back — desktop keeps this inside the sidebar (no top header). */}
           <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setView('studio')}
-                title="Back to Thumbmagic"
+                title="Back to PodcastFlux"
                 className="group w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink hover:border-thumb-red/40 transition-all"
               >
                 <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
               </button>
               <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
               <div className="leading-tight">
-                <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink">Nano Edit</div>
+                <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink">PodcastFlux Editor</div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Canvas Editor</div>
               </div>
           </div>
@@ -1216,6 +1100,118 @@ function App() {
         </div>
       </main>
 
+      {/* ── Mobile command bar (bottom-docked) — desktop keeps the sidebar above ── */}
+      <div className={`lg:hidden fixed bottom-2 left-1/2 -translate-x-1/2 w-full max-w-2xl px-2 z-50 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${uiVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+          <div className="thumb-glass border border-thumb-line p-1.5 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.25)] flex flex-col gap-1.5 max-h-[72vh] overflow-y-auto no-scrollbar">
+
+              {/* Prompt + Generate — always visible */}
+              <div className="flex items-center gap-2 p-0.5">
+                  <input
+                      type="text"
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image..."}
+                      className="flex-1 min-w-0 bg-thumb-soft text-thumb-ink placeholder-thumb-sub/60 rounded-xl px-4 py-3 outline-none border border-thumb-line focus:border-nano-accent/50 transition-all text-sm"
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); handleGenerate(); } }}
+                  />
+                  <button
+                      onClick={handleGenerate}
+                      disabled={!prompt.trim()}
+                      className={`thumb-btn h-12 px-5 shrink-0 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed text-sm whitespace-nowrap ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : ''}`}
+                  >
+                      {isProcessing ? 'Queue' : 'Generate'}
+                      <IconSparkles />
+                  </button>
+              </div>
+
+              {/* Show / Hide tools toggle (mobile only; tablet shows tools always) */}
+              <button
+                  onClick={() => setShowMobileTools(prev => !prev)}
+                  className="sm:hidden w-full py-2.5 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-ink text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
+              >
+                  <IconSettings />
+                  {showMobileTools ? 'Hide tools' : 'Show tools'}
+                  <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform duration-300 ${showMobileTools ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+              </button>
+
+              {/* Tools — full current feature set */}
+              <div className={`tools-reveal flex-col gap-2.5 px-1 pb-1 ${showMobileTools ? 'expanded' : 'collapsed'}`}>
+                  {/* Image toggle + Quality + Ratio */}
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full">
+                      <button
+                        onClick={() => setIsImageMode(!isImageMode)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border transition-all whitespace-nowrap shrink-0 ${isImageMode ? 'thumb-liquid' : 'bg-thumb-soft border-thumb-line text-thumb-sub'}`}
+                      >
+                         Image {isImageMode ? <IconToggleRight /> : <IconToggleLeft />}
+                      </button>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line shrink-0">
+                          <IconSettings />
+                          <select value={settings.resolution} onChange={(e) => setSettings(prev => ({...prev, resolution: e.target.value as any, modelType: (e.target.value === '1K' ? 'flash' : 'pro')}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer">
+                              <option value="1K" className="bg-thumb-card text-thumb-ink">Fast</option>
+                              <option value="2K" className="bg-thumb-card text-thumb-ink">HD</option>
+                              <option value="4K" className="bg-thumb-card text-thumb-ink">4K</option>
+                          </select>
+                      </div>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line shrink-0">
+                          <IconAspectRatio />
+                          <select value={settings.aspectRatio} onChange={(e) => setSettings(prev => ({...prev, aspectRatio: e.target.value}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer">
+                              {ASPECT_RATIOS.map(ratio => (<option key={ratio.value} value={ratio.value} className="bg-thumb-card text-thumb-ink">{ratio.label}</option>))}
+                          </select>
+                      </div>
+                  </div>
+
+                  {/* Style / Camera / Quick action / Variations */}
+                  <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line">
+                          <IconPalette />
+                          <select value={settings.style} onChange={(e) => setSettings(prev => ({...prev, style: e.target.value}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              {STYLES.map(style => (<option key={style.value} value={style.value} className="bg-thumb-card text-thumb-ink">{style.label}</option>))}
+                          </select>
+                      </div>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line">
+                          <IconCamera />
+                          <select value={settings.cameraAngle} onChange={(e) => setSettings(prev => ({...prev, cameraAngle: e.target.value}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              {CAMERA_ANGLES.map(angle => (<option key={angle.value} value={angle.value} className="bg-thumb-card text-thumb-ink">{angle.label}</option>))}
+                          </select>
+                      </div>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line">
+                          <IconSparkles />
+                          <select value="" onChange={(e) => { if (e.target.value) { const preset = PRESET_PROMPTS.find(p => p.label === e.target.value); if (preset) { setPrompt(preset.prompt); if (preset.label.includes('BG') && sourceImages.length === 0) { setGlobalError("Upload an image first to change background."); setIsImageMode(true); } } } }} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              <option value="" className="bg-thumb-card text-thumb-ink">Action…</option>
+                              {PRESET_PROMPTS.map(preset => (<option key={preset.label} value={preset.label} className="bg-thumb-card text-thumb-ink">{preset.icon} {preset.label}</option>))}
+                          </select>
+                      </div>
+                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line">
+                          <IconLayers />
+                          <select value={batchCount} onChange={(e) => setBatchCount(parseInt(e.target.value))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer w-full">
+                              <option value="1" className="bg-thumb-card text-thumb-ink">1×</option>
+                              <option value="2" className="bg-thumb-card text-thumb-ink">2×</option>
+                              <option value="3" className="bg-thumb-card text-thumb-ink">3×</option>
+                              <option value="4" className="bg-thumb-card text-thumb-ink">4×</option>
+                          </select>
+                      </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  {((isImageMode && sourceImages.length > 0) || generatedImages.length > 0) && (
+                      <div className="flex flex-wrap gap-2">
+                          {isImageMode && sourceImages.length > 0 && (
+                              <button onClick={handleRemoveBackground} className="flex items-center gap-1.5 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line text-xs font-semibold text-thumb-sub hover:text-thumb-ink transition-colors"><IconEraser /> Remove BG</button>
+                          )}
+                          {generatedImages.length > 0 && (
+                              <button onClick={handleDownloadAll} className="flex items-center gap-1.5 bg-nano-accent/15 rounded-lg px-3 py-2 border border-nano-accent/30 text-xs font-bold text-nano-accent transition-colors"><IconZip /> Download all</button>
+                          )}
+                          {generatedImages.length > 0 && (
+                              <button onClick={clearAllGeneratedImages} className="flex items-center gap-1.5 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line text-xs font-semibold text-thumb-sub hover:text-thumb-red transition-colors ml-auto"><IconTrash /> Clear</button>
+                          )}
+                      </div>
+                  )}
+
+                  <button onClick={() => setShowHelp(!showHelp)} className="self-start flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium bg-thumb-soft border-thumb-line text-thumb-sub hover:text-thumb-ink transition-all">? Shortcuts</button>
+              </div>
+          </div>
+      </div>
+
       {!uiVisible && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] opacity-80 hover:opacity-100 transition-opacity">
               <div 
@@ -1223,6 +1219,34 @@ function App() {
                   className="bg-black/80 backdrop-blur-md border border-zinc-700 rounded-full px-4 py-2 shadow-2xl cursor-pointer hover:border-nano-accent transition-colors"
               >
                   <span className="text-xs text-zinc-300 font-medium">Press ⌘ + H to show controls</span>
+              </div>
+          </div>
+      )}
+
+      {/* From-styles picker — choose a ready-made style thumbnail to add as a source layer */}
+      {showStylePicker && (
+          <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowStylePicker(false)}>
+              <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                      <div>
+                          <h3 className="text-base font-black text-thumb-ink">Add from Styles</h3>
+                          <p className="text-xs text-thumb-sub mt-0.5">Pick a style to add as a source layer</p>
+                      </div>
+                      <button onClick={() => setShowStylePicker(false)} className="w-8 h-8 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><IconX /></button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto no-scrollbar pr-1">
+                      {styleImages.map((src, i) => (
+                          <button
+                              key={i}
+                              type="button"
+                              onClick={() => { addToLayers(src); setShowStylePicker(false); }}
+                              className="relative aspect-video rounded-xl overflow-hidden border border-thumb-line hover:border-nano-accent transition-colors group"
+                          >
+                              {!loadedSrcs[src] && <div className="thumb-skeleton absolute inset-0" aria-hidden />}
+                              <img src={src} alt={`Style ${i + 1}`} loading="lazy" className="relative w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" onLoad={() => markLoaded(src)} onError={() => markLoaded(src)} />
+                          </button>
+                      ))}
+                  </div>
               </div>
           </div>
       )}
@@ -1275,102 +1299,68 @@ function App() {
           <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4" onClick={() => { setViewedImage(null); setBrushMode(false); setSelectedArea(null); }}>
               <button className="absolute top-4 right-4 z-[120] p-2 bg-zinc-800/80 hover:bg-zinc-700 rounded-full text-white transition-colors backdrop-blur-sm" onClick={() => { setViewedImage(null); setBrushMode(false); setSelectedArea(null); }}><IconX /></button>
 
-              {/* Brush Controls */}
-              {brushMode && (
-                  <div className="absolute top-6 left-6 z-[120] bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl w-64" onClick={e => e.stopPropagation()}>
-                      <h3 className="text-white text-sm font-bold mb-4">🎨 Selection Tools</h3>
-                      
-                      <div className="space-y-4">
-                          {/* Tool Selection */}
-                          <div>
-                              <label className="text-xs text-zinc-300 block mb-2">Tool</label>
-                              <div className="grid grid-cols-3 gap-2">
-                                  <button 
-                                      onClick={() => setBrushTool('brush')}
-                                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${brushTool === 'brush' ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                                  >
-                                      🖌️ Brush
-                                  </button>
-                                  <button 
-                                      onClick={() => setBrushTool('circle')}
-                                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${brushTool === 'circle' ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                                  >
-                                      ⭕ Circle
-                                  </button>
-                                  <button 
-                                      onClick={() => setBrushTool('rectangle')}
-                                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${brushTool === 'rectangle' ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                                  >
-                                      ▭ Box
-                                  </button>
-                              </div>
+              {/* Editor toolbar — docked to the RIGHT so it never covers the image, and
+                  minimizable so you can see the full frame while working. */}
+              {brushMode && brushPanelMin && (
+                  <button
+                      onClick={(e) => { e.stopPropagation(); setBrushPanelMin(false); }}
+                      title="Show edit tools"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 z-[120] w-12 h-12 rounded-full bg-black/85 backdrop-blur-xl border border-white/15 text-white text-lg shadow-2xl flex items-center justify-center hover:bg-black/95 transition-colors"
+                  >🖌️</button>
+              )}
+              {brushMode && !brushPanelMin && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 z-[120] w-[min(80vw,248px)] max-h-[80vh] flex flex-col bg-black/85 backdrop-blur-xl border border-white/15 rounded-2xl p-3 shadow-2xl" onClick={e => e.stopPropagation()}>
+                      {/* Header: title + minimize + close */}
+                      <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-black text-white/90 tracking-wide">EDIT TOOLS</span>
+                          <div className="flex items-center gap-1.5">
+                              <button onClick={() => setBrushPanelMin(true)} title="Minimize" className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1">–</button>
+                              <button onClick={() => { setBrushMode(false); setViewedImage(null); }} title="Close editor" className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs">✕</button>
                           </div>
+                      </div>
 
-                          {/* Brush Size */}
+                      {/* Tool selection — Brush + Pin only */}
+                      <div className="grid grid-cols-2 gap-2">
+                          <button onClick={() => setBrushTool('brush')} className={`px-2 py-2.5 rounded-xl text-xs font-bold transition-all ${brushTool === 'brush' ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}>🖌️ Brush</button>
+                          <button onClick={() => setBrushTool('pin')} className={`px-2 py-2.5 rounded-xl text-xs font-bold transition-all ${brushTool === 'pin' ? 'bg-nano-accent text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>📍 Pin</button>
+                      </div>
+
+                      {/* Tool-specific controls (scrolls if the pin list grows) */}
+                      <div className="mt-3 flex-1 overflow-y-auto no-scrollbar">
                           {brushTool === 'brush' && (
-                              <div>
-                                  <label className="text-xs text-zinc-300 block mb-2">Size: {brushSize}px</label>
-                                  <input 
-                                      type="range" 
-                                      min="5" 
-                                      max="50" 
-                                      value={brushSize}
-                                      onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                                      className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
-                                  />
+                              <div className="space-y-1.5">
+                                  <label className="text-[11px] text-zinc-300">Brush size · {brushSize}px</label>
+                                  <input type="range" min="5" max="50" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
+                                  <p className="text-[10px] text-zinc-400 leading-snug pt-1">Paint a white outline over the area you want changed.</p>
                               </div>
                           )}
 
-                          {/* Instructions */}
-                          <div className="text-[10px] text-zinc-400 bg-white/5 rounded-lg p-2 leading-relaxed">
-                              Draw white outline on the area you want to edit
-                          </div>
+                          {brushTool === 'pin' && (
+                              <div className="space-y-2">
+                                  {annotations.length === 0 ? (
+                                      <p className="text-[11px] text-zinc-400 bg-white/5 rounded-lg p-2 leading-relaxed">Tap anywhere on the image to drop a pin, then write what you want changed there. Add as many as you like.</p>
+                                  ) : (
+                                      annotations.map((a, i) => (
+                                          <div key={a.id} className="flex items-center gap-2">
+                                              <span className="w-5 h-5 shrink-0 rounded-full bg-nano-accent text-white text-[11px] font-black flex items-center justify-center">{i + 1}</span>
+                                              <input
+                                                  value={a.note}
+                                                  onChange={e => { const v = e.target.value; setAnnotations(prev => prev.map(p => p.id === a.id ? { ...p, note: v } : p)); }}
+                                                  placeholder="what to change here"
+                                                  className="flex-1 min-w-0 bg-white/10 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-nano-accent"
+                                              />
+                                              <button onClick={() => setAnnotations(prev => prev.filter(p => p.id !== a.id))} className="w-6 h-6 shrink-0 rounded-lg bg-white/10 hover:bg-white/20 text-zinc-300 text-xs flex items-center justify-center">✕</button>
+                                          </div>
+                                      ))
+                                  )}
+                              </div>
+                          )}
+                      </div>
 
-                          {/* Actions */}
-                          <div className="flex gap-2">
-                              <button 
-                                  onClick={clearBrushSelection}
-                                  className="flex-1 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-all"
-                              >
-                                  Clear
-                              </button>
-                              <button 
-                                  onClick={() => {
-                                      const prompt = "Edit only the white outlined area: ";
-                                      setPrompt(prompt);
-                                      setBrushMode(false);
-                                      setViewedImage(null);
-                                      setIsImageMode(true);
-                                      
-                                      if (canvasRef.current && selectedArea) {
-                                          const canvas = canvasRef.current;
-                                          const tempCanvas = document.createElement('canvas');
-                                          const tempCtx = tempCanvas.getContext('2d');
-                                          
-                                          if (tempCtx) {
-                                              const img = new Image();
-                                              img.onload = () => {
-                                                  tempCanvas.width = img.width;
-                                                  tempCanvas.height = img.height;
-                                                  tempCtx.drawImage(img, 0, 0);
-                                                  tempCtx.drawImage(canvas, 0, 0);
-                                                  setSourceImages([tempCanvas.toDataURL('image/png')]);
-                                              };
-                                              img.src = selectedArea;
-                                          }
-                                      }
-                                  }}
-                                  className="flex-1 px-3 py-2 bg-white hover:bg-white/90 text-black text-xs font-bold rounded-lg transition-all"
-                              >
-                                  Apply
-                              </button>
-                              <button 
-                                  onClick={() => { setBrushMode(false); setViewedImage(null); }}
-                                  className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-all"
-                              >
-                                  ✕
-                              </button>
-                          </div>
+                      {/* Actions */}
+                      <div className="mt-3 flex items-center gap-2">
+                          <button onClick={clearBrushSelection} className="px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-all">Clear</button>
+                          <button onClick={applyEditorSelection} className="flex-1 px-4 py-2.5 bg-white hover:bg-white/90 text-black text-xs font-black rounded-xl transition-all">Apply</button>
                       </div>
                   </div>
               )}
@@ -1398,8 +1388,8 @@ function App() {
                    </button>
               </div>
 
-              <div 
-                  className={`w-full h-full overflow-hidden flex items-center justify-center relative ${zoom > 1 && !brushMode ? 'cursor-move' : ''}`}
+              <div
+                  className={`w-full h-full overflow-hidden flex items-center justify-center relative select-none ${zoom > 1 && !brushMode ? 'cursor-move' : ''}`}
                   onClick={e => e.stopPropagation()}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
@@ -1444,12 +1434,15 @@ function App() {
                       {brushMode && (
                           <canvas
                               ref={canvasRef}
-                              className="absolute top-0 left-0 w-full h-full cursor-crosshair"
+                              className="absolute top-0 left-0 w-full h-full cursor-crosshair select-none"
                               style={{
                                   transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                                   transformOrigin: 'center',
                                   transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
-                                  willChange: 'transform'
+                                  willChange: 'transform',
+                                  touchAction: 'none',
+                                  userSelect: 'none',
+                                  WebkitUserSelect: 'none'
                               }}
                               onMouseDown={startDrawing}
                               onMouseMove={draw}
@@ -1459,6 +1452,40 @@ function App() {
                               onTouchMove={draw}
                               onTouchEnd={stopDrawing}
                           />
+                      )}
+                      {/* Annotation pins overlay — same transform as the image so pins
+                          stay pinned while you zoom/pan. Clickable only with the Pin tool. */}
+                      {brushMode && (
+                          <div
+                              className="absolute top-0 left-0 w-full h-full"
+                              style={{
+                                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                                  transformOrigin: 'center',
+                                  transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
+                                  pointerEvents: brushTool === 'pin' ? 'auto' : 'none',
+                                  cursor: brushTool === 'pin' ? 'crosshair' : 'default',
+                              }}
+                              onClick={addAnnotation}
+                          >
+                              {annotations.map((a, i) => (
+                                  <div
+                                      key={a.id}
+                                      className="absolute -translate-x-1/2 -translate-y-1/2"
+                                      style={{ left: `${a.nx * 100}%`, top: `${a.ny * 100}%` }}
+                                      onClick={e => e.stopPropagation()}
+                                  >
+                                      <div className="relative flex items-center justify-center w-6 h-6 rounded-full bg-nano-accent text-white text-[11px] font-black shadow-lg ring-2 ring-white/80">
+                                          {i + 1}
+                                          {brushTool === 'pin' && (
+                                              <button
+                                                  onClick={e => { e.stopPropagation(); setAnnotations(prev => prev.filter(p => p.id !== a.id)); }}
+                                                  className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center border border-white/40"
+                                              >×</button>
+                                          )}
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
                       )}
                   </div>
                  )}

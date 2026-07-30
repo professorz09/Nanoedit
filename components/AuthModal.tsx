@@ -32,7 +32,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose, reason }) => {
         <div className="thumb-btn w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-white mb-5">
           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5" /></svg>
         </div>
-        <h2 className="text-2xl font-black tracking-tight text-thumb-ink">Welcome to Thumbmagic</h2>
+        <h2 className="text-2xl font-black tracking-tight text-thumb-ink">Welcome to PodcastFlux</h2>
         <p className="text-sm text-thumb-sub mt-2">{reason || 'Log in to create and manage your thumbnails.'}</p>
 
         <button

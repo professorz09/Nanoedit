@@ -12,6 +12,7 @@ export interface GeneratedImage {
   url: string;
   prompt: string;
   timestamp: number;
+  aspect?: string; // '16:9' (thumbnail) or '9:16' (Shorts) — drives result display
 }
 
 export interface QueueItem {
@@ -99,7 +100,7 @@ export const PRESET_PROMPTS = [
 
 // ── Thumbnail Studio ──────────────────────────────────────────────
 // Input mode drives which composer the studio uses.
-export type ThumbInputMode = 'youtube' | 'templates' | 'prompt' | 'reference';
+export type ThumbInputMode = 'youtube' | 'templates' | 'prompt' | 'reference' | 'sketch';
 
 export interface ThumbnailTemplate {
   id: string;

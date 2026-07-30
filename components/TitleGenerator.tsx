@@ -1,6 +1,9 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText } from '../services/textService';
 import { extractYouTubeId } from './ThumbnailStudio';
+import { useAuth } from '../contexts/AuthContext';
+
+const TITLE_COST = 2; // credits charged per title-generation run
 
 const Ic = {
   Type: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 7V5h16v2M9 19h6M12 5v14" /></svg>),
@@ -32,6 +35,7 @@ const TitleGenerator: React.FC = () => {
   const [titles, setTitles] = useState<string[]>([]);
   const [copied, setCopied] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { user, totalCredits, configured, refreshProfile } = useAuth();
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -44,6 +48,11 @@ const TitleGenerator: React.FC = () => {
 
   const run = useCallback(async () => {
     setNote(null);
+    // Title generation is a paid tool — gate on sign-in + credits before doing any work.
+    if (configured) {
+      if (!user) { setNote('Please sign in to generate titles.'); return; }
+      if (totalCredits < TITLE_COST) { setNote(`You need ${TITLE_COST} credits to generate titles. Please top up your plan.`); return; }
+    }
     let context = '';
 
     if (tab === 'youtube') {
@@ -86,16 +95,17 @@ VIDEO CONTENT:
 ${context}`;
 
     try {
-      const out = await generateText(prompt);
+      const out = await generateText(prompt, TITLE_COST);
       const list = out.split('\n').map(cleanTitle).filter(Boolean).slice(0, count);
       if (!list.length) { setNote('Could not generate titles. Try again.'); }
       setTitles(list);
+      refreshProfile(); // credits were charged server-side — sync the header count
     } catch (e: any) {
       setNote(e?.message?.slice(0, 140) || 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
     }
-  }, [tab, url, transcript, vibe, count]);
+  }, [tab, url, transcript, vibe, count, configured, user, totalCredits, refreshProfile]);
 
   const copy = (t: string, i: number) => {
     navigator.clipboard?.writeText(t);
@@ -190,6 +200,7 @@ ${context}`;
         <button onClick={run} disabled={busy} className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70">
           {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analyzing…</> : <><Ic.Wand className="w-5 h-5" /> Generate Titles</>}
         </button>
+        <p className="text-center text-[12px] text-thumb-sub -mt-1">Uses {TITLE_COST} credits per generation</p>
       </div>
 
       {/* ── Results ── */}

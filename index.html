@@ -3,414 +3,54 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nano Edit - AI Image Editor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              nano: {
-                bg: '#0c0c12',        // matches studio charcoal (was flat #0f0f11)
-                card: '#1a1a24',
-                accent: '#ff3355',    // Thumbmagic red — unified brand accent
-                accentHover: '#e01840',
-                text: '#f5f5f8',
-                muted: '#8a8a99'
-              },
-              // Thumbnail Studio (premium dark / red) theme — richer, cooler charcoal
-              thumb: {
-                bg: '#0c0c12',      // page (deep cool charcoal, not muddy black)
-                soft: '#16161f',    // inset areas: tab track, inputs
-                card: '#1d1d29',    // raised cards, active pills (lightest surface)
-                ink: '#f5f5f8',     // primary text
-                sub: '#a2a2b4',     // muted text (a touch brighter)
-                line: '#2e2e3c',    // hairline borders
-                red: '#ff3355',     // accent — juicier, pops on dark
-                redDark: '#e01840',
-                redSoft: '#2c1320', // dark maroon chip background
-                green: '#2ee6a6',   // secondary accent (success / verified)
-                greenDark: '#12b981',
-                greenSoft: '#0d2a22' // dark mint chip background
-              }
-            },
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            }
-          }
-        }
-      }
+    <title>PodcastFlux — AI Thumbnail Maker for YouTube</title>
+
+    <!-- ── SEO ── (primary keyword: "AI thumbnail maker") -->
+    <meta name="description" content="PodcastFlux is a free AI thumbnail maker for YouTube. Turn a prompt, photo, or video link into click-worthy HD 16:9 thumbnails in seconds — no design skills needed." />
+    <meta name="keywords" content="AI thumbnail maker, YouTube thumbnail maker, AI thumbnail generator, free thumbnail maker, thumbnail creator, YouTube thumbnail AI, make thumbnails with AI" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0c0c12" />
+    <link rel="canonical" href="https://podcastflux.com/" />
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PodcastFlux" />
+    <meta property="og:title" content="PodcastFlux — AI Thumbnail Maker for YouTube" />
+    <meta property="og:description" content="Free AI thumbnail maker for YouTube. Prompt, photo, or video link → high-converting HD thumbnails in seconds." />
+    <meta property="og:url" content="https://podcastflux.com/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PodcastFlux — AI Thumbnail Maker for YouTube" />
+    <meta name="twitter:description" content="Free AI thumbnail maker for YouTube. Prompt, photo, or video link → high-converting HD thumbnails in seconds." />
+
+    <!-- Structured data: helps Google & AI answer engines surface us -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "PodcastFlux",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Web",
+      "description": "AI thumbnail maker for YouTube — generate click-worthy HD 16:9 thumbnails from a prompt, photo, or video link.",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
     </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "What is an AI thumbnail maker?", "acceptedAnswer": { "@type": "Answer", "text": "An AI thumbnail maker turns a text prompt, your photo, or a YouTube link into a finished, high-converting thumbnail — no design skills or editing software needed. PodcastFlux generates HD 16:9 thumbnails you can upload straight to YouTube." } },
+        { "@type": "Question", "name": "Is PodcastFlux free to use?", "acceptedAnswer": { "@type": "Answer", "text": "You can explore the tools free. Generating thumbnails uses credits, which come with the Pro and Studio plans; there is no watermark on any export." } },
+        { "@type": "Question", "name": "Can I make a YouTube thumbnail with my own face?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Upload your photo in Reference or Templates mode and the AI keeps your likeness while building a fresh, click-worthy thumbnail around it." } },
+        { "@type": "Question", "name": "What size are the thumbnails?", "acceptedAnswer": { "@type": "Answer", "text": "Full 16:9 HD, ready to upload to YouTube. Every result downloads at high resolution with no watermark." } }
+      ]
+    }
+    </script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-      body {
-        background-color: #0f0f11;
-        color: #f4f4f5;
-        font-family: 'Inter', sans-serif;
-      }
-
-      /* Custom scrollbar */
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
-      ::-webkit-scrollbar-track { background: #18181b; }
-      ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 99px; }
-      ::-webkit-scrollbar-thumb:hover { background: #52525b; }
-
-      /* ── Fade-in-up animation ── */
-      @keyframes fade-in-up {
-        from { opacity: 0; transform: translateY(10px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      .animate-fade-in-up {
-        animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
-      }
-
-      /* ── Shimmer / skeleton ── */
-      @keyframes shimmer {
-        0%   { background-position: -400% 0; }
-        100% { background-position:  400% 0; }
-      }
-      .animate-shimmer {
-        background: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
-        background-size: 400% 100%;
-        animation: shimmer 1.6s ease infinite;
-      }
-
-      /* ── No-scrollbar utility ── */
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-      /* ── Smooth image fade-in on load ── */
-      @keyframes img-appear {
-        from { opacity: 0; }
-        to   { opacity: 1; }
-      }
-      .img-fade { animation: img-appear 0.4s ease both; }
-
-      /* ── Mobile tools smooth reveal ── */
-      .tools-reveal {
-        display: flex;
-        overflow: hidden;
-        transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                    opacity 0.25s ease;
-      }
-      .tools-reveal.collapsed {
-        max-height: 0 !important;
-        opacity: 0;
-        pointer-events: none;
-      }
-      .tools-reveal.expanded {
-        max-height: 200px;
-        opacity: 1;
-      }
-      /* Desktop: always show the tools row regardless of the mobile collapse toggle */
-      @media (min-width: 640px) {
-        .tools-reveal.collapsed,
-        .tools-reveal.expanded {
-          max-height: none !important;
-          opacity: 1 !important;
-          pointer-events: auto !important;
-          overflow: visible;
-        }
-      }
-
-      /* ── Error auto-dismiss progress bar ── */
-      @keyframes progress-shrink {
-        from { width: 100%; }
-        to   { width: 0%; }
-      }
-
-      /* ── Active press feedback ── */
-      button:active:not(:disabled) { transform: scale(0.97); }
-
-      /* ── Thumbnail Studio: premium red button ──
-         Cleaner, brighter red — the old gradient muddied into dark maroon at
-         the bottom which read cheap. This keeps a rich vibrant red with a crisp
-         top highlight and a soft red halo for a jewel-like, premium feel. */
-      .thumb-btn {
-        background: linear-gradient(180deg, #ff4d63 0%, #f51f3e 48%, #d80f30 100%);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.38),
-          inset 0 -2px 6px rgba(120,0,20,0.35),
-          0 6px 16px -6px rgba(255,45,80,0.5),
-          0 14px 30px -12px rgba(160,10,36,0.55);
-        transition: box-shadow .3s ease, filter .2s ease, transform .12s ease;
-      }
-      .thumb-btn:hover:not(:disabled) {
-        filter: brightness(1.06) saturate(1.05);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.45),
-          inset 0 -2px 6px rgba(120,0,20,0.35),
-          0 8px 22px -6px rgba(255,45,80,0.62),
-          0 20px 42px -12px rgba(160,10,36,0.65);
-      }
-      .thumb-btn:disabled {
-        background: #26262c;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
-        cursor: not-allowed;
-      }
-
-      /* ── Liquid pill: red-into-black, glowing luminous edge ──
-         Used for the SELECTED state of option toggles (Variations / Quality /
-         tool switches). Kills the flat red/white look with a living glass feel. */
-      .thumb-liquid {
-        background:
-          linear-gradient(180deg, rgba(255,120,140,0.22) 0%, transparent 42%),
-          linear-gradient(165deg, #a01230 0%, #6e0c22 55%, #34060f 100%);
-        border: 1px solid rgba(255,110,135,0.32);
-        color: #fff1f3 !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.20),
-          inset 0 -6px 12px rgba(0,0,0,0.4),
-          0 4px 14px -6px rgba(150,16,40,0.5);
-        text-shadow: 0 1px 3px rgba(60,4,14,0.5);
-        transition: box-shadow .3s ease, filter .2s ease, transform .12s ease;
-      }
-      .thumb-liquid:hover:not(:disabled) {
-        filter: brightness(1.06);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.28),
-          inset 0 -6px 12px rgba(0,0,0,0.4),
-          0 6px 18px -6px rgba(150,16,40,0.62);
-      }
-      /* Light theme: solid readable red glass on a pale surface */
-      .thumb-light .thumb-liquid {
-        background:
-          linear-gradient(180deg, rgba(255,255,255,0.28) 0%, transparent 45%),
-          linear-gradient(165deg, #d81638 0%, #b31030 100%);
-        border-color: rgba(140,10,32,0.4);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.4),
-          0 4px 14px -6px rgba(170,14,40,0.5);
-      }
-
-      /* ── 3D liquid gloss text (per-word gradient set inline) ── */
-      .liquid-text {
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-        color: transparent;
-        background-size: 100% 200%;
-        animation: liquid-sheen 5s ease-in-out infinite;
-      }
-      @keyframes liquid-sheen {
-        0%, 100% { background-position: 50% 0%; }
-        50%      { background-position: 50% 100%; }
-      }
-
-      /* Premium card shadow + hairline for dark surfaces */
-      .thumb-card {
-        box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 30px 70px -30px rgba(0,0,0,0.75);
-      }
-
-      /* ── Living background glow (kills the flat "dull dark" look) ── */
-      .thumb-scope {
-        background:
-          radial-gradient(1100px 480px at 50% -8%, rgba(255,51,85,0.11), transparent 60%),
-          radial-gradient(900px 520px at 92% 6%, rgba(140,70,255,0.07), transparent 58%),
-          radial-gradient(760px 480px at 4% 22%, rgba(0,120,255,0.05), transparent 60%),
-          #0c0c12;
-        background-attachment: fixed;
-      }
-
-      /* ── Liquid-glass surface (frosted, translucent, luminous edge) ── */
-      .thumb-glass {
-        background: linear-gradient(180deg, rgba(38,38,52,0.72), rgba(20,20,30,0.66));
-        backdrop-filter: blur(22px) saturate(1.4);
-        -webkit-backdrop-filter: blur(22px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.08);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.10),
-          inset 0 -1px 0 rgba(0,0,0,0.30),
-          0 24px 60px -28px rgba(0,0,0,0.85);
-      }
-
-      /* ── Sidebar nav item: idle glass, hover lift, active red glow ── */
-      .thumb-nav {
-        position: relative;
-        border: 1px solid transparent;
-        background: rgba(255,255,255,0.02);
-        transition: background .25s ease, border-color .25s ease,
-                    box-shadow .3s ease, transform .12s ease;
-      }
-      .thumb-nav:hover {
-        background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
-        border-color: rgba(255,255,255,0.10);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
-      }
-      .thumb-nav-active {
-        background: linear-gradient(180deg, rgba(255,51,85,0.22) 0%, rgba(255,51,85,0.06) 100%);
-        border-color: rgba(255,51,85,0.45);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.18),
-          0 0 0 1px rgba(255,51,85,0.12),
-          0 10px 26px -10px rgba(255,45,80,0.55);
-      }
-      .thumb-nav-active:hover {
-        background: linear-gradient(180deg, rgba(255,51,85,0.28) 0%, rgba(255,51,85,0.08) 100%);
-        border-color: rgba(255,51,85,0.55);
-      }
-      /* Glass icon chip inside nav items */
-      .thumb-nav-chip {
-        background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03));
-        border: 1px solid rgba(255,255,255,0.10);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
-      }
-      .thumb-nav-active .thumb-nav-chip {
-        background: linear-gradient(180deg, #ff3355, #d81232);
-        border-color: rgba(255,255,255,0.25);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(255,45,80,0.8);
-      }
-
-      /* ── Balanced float shadow — casts on the SIDES too, not just below ── */
-      .thumb-float {
-        box-shadow:
-          0 0 0 1px rgba(255,255,255,0.05),
-          -22px 26px 55px -34px rgba(0,0,0,0.9),
-           22px 26px 55px -34px rgba(0,0,0,0.9),
-           0 40px 80px -50px rgba(0,0,0,0.85);
-      }
-      /* Red-tinted float (hero generator card) */
-      .thumb-float-red {
-        box-shadow:
-          0 0 0 1px rgba(255,51,85,0.12),
-          0 30px 60px -34px rgba(120,8,28,0.55),
-          0 44px 90px -55px rgba(0,0,0,0.85);
-      }
-      /* Green-tinted float (review cards) */
-      .thumb-float-green {
-        box-shadow:
-          0 0 0 1px rgba(46,230,166,0.10),
-          0 28px 55px -36px rgba(6,90,66,0.55),
-          0 40px 80px -52px rgba(0,0,0,0.82);
-      }
-
-      /* Marquee for template showcase */
-      @keyframes thumb-marquee {
-        from { transform: translateX(0); }
-        to   { transform: translateX(-50%); }
-      }
-      .thumb-marquee { animation: thumb-marquee 32s linear infinite; }
-      .thumb-marquee:hover { animation-play-state: paused; }
-
-      /* Dark scrollbar when studio is active */
-      .thumb-scope ::-webkit-scrollbar-track { background: #141419; }
-      .thumb-scope ::-webkit-scrollbar-thumb { background: #33333c; border-radius: 99px; }
-      .thumb-scope ::-webkit-scrollbar-thumb:hover { background: #44444f; }
-
-      /* ══════════ LIGHT THEME (studio) ══════════ */
-      /* Activated by adding .thumb-light to the .thumb-scope root. Colored buttons
-         (.thumb-btn, red chips) keep white text — only surfaces & tokens flip. */
-      .thumb-light.thumb-scope {
-        background:
-          radial-gradient(1100px 480px at 50% -8%, rgba(255,51,85,0.08), transparent 60%),
-          radial-gradient(900px 520px at 92% 6%, rgba(140,70,255,0.05), transparent 58%),
-          radial-gradient(760px 480px at 4% 22%, rgba(0,120,255,0.04), transparent 60%),
-          #f3f4f8;
-      }
-      .thumb-light { color: #16161f; }
-
-      /* Liquid-glass → frosted white */
-      .thumb-light .thumb-glass {
-        background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(247,247,251,0.86));
-        border: 1px solid rgba(12,12,24,0.08);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.8),
-          0 24px 60px -30px rgba(24,24,45,0.22);
-      }
-
-      /* Color tokens — compound selectors (.thumb-light.x) cover the root element
-         which carries thumb-light AND the utility on the SAME node, so inherited
-         text doesn't stay white/invisible. */
-      .thumb-light.text-thumb-ink,
-      .thumb-light .text-thumb-ink { color: #15151d; }
-      .thumb-light.text-thumb-sub,
-      .thumb-light .text-thumb-sub { color: #5c5c6e; }
-      .thumb-light .text-thumb-ink\/70 { color: rgba(21,21,29,0.7); }
-      /* hover:/group-hover: variants don't inherit the base override — pin them so
-         hovering a button in light theme doesn't turn its text near-white/invisible. */
-      .thumb-light .hover\:text-thumb-ink:hover,
-      .thumb-light .group:hover .group-hover\:text-thumb-ink { color: #15151d; }
-      .thumb-light .hover\:text-thumb-sub:hover { color: #5c5c6e; }
-      /* Marquee / feed edge fades that fade to the page bg */
-      .thumb-light .from-thumb-bg { --tw-gradient-from: #f3f4f8 var(--tw-gradient-from-position); }
-      .thumb-light .to-thumb-bg { --tw-gradient-to: #f3f4f8 var(--tw-gradient-to-position); }
-      .thumb-light .bg-thumb-bg,
-      .thumb-light .bg-thumb-bg\/90 { background-color: #f3f4f8; }
-      .thumb-light .bg-thumb-soft { background-color: #ececef; }
-      .thumb-light .bg-thumb-card { background-color: #ffffff; }
-      .thumb-light .border-thumb-line { border-color: #e3e3ea; }
-      /* hover:/group-hover: bg variants don't inherit the base override — pin them so
-         hovering a nav item/button in light theme keeps a light (not near-black) fill. */
-      .thumb-light .hover\:bg-thumb-soft:hover,
-      .thumb-light .group:hover .group-hover\:bg-thumb-soft { background-color: #ececef; }
-      .thumb-light .hover\:bg-thumb-card:hover { background-color: #ffffff; }
-      .thumb-light .hover\:bg-thumb-line\/50:hover { background-color: rgba(227,227,234,0.6); }
-      .thumb-light .hover\:border-thumb-line:hover { border-color: #e3e3ea; }
-
-      /* Dark surface fills → light (inputs, tracks). Overlays ≥40% stay dark. */
-      .thumb-light .bg-black\/20,
-      .thumb-light .bg-black\/25,
-      .thumb-light .bg-black\/30 { background-color: rgba(16,16,32,0.04); }
-      .thumb-light .bg-white\/5,
-      .thumb-light .bg-white\/10 { background-color: rgba(16,16,32,0.05); }
-
-      /* Hairline borders */
-      .thumb-light .border-white\/5,
-      .thumb-light .border-white\/10,
-      .thumb-light .border-white\/12,
-      .thumb-light .border-white\/15,
-      .thumb-light .border-white\/20,
-      .thumb-light .border-white\/\[0\.06\] { border-color: rgba(16,16,32,0.10); }
-
-      /* Sidebar nav idle + icon chip */
-      .thumb-light .thumb-nav { background: rgba(16,16,32,0.03); }
-      .thumb-light .thumb-nav:hover {
-        background: rgba(16,16,32,0.06);
-        border-color: rgba(16,16,32,0.10);
-      }
-      .thumb-light .thumb-nav-chip {
-        background: linear-gradient(180deg, rgba(16,16,32,0.07), rgba(16,16,32,0.02));
-        border-color: rgba(16,16,32,0.10);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
-      }
-      /* Active nav pill — clean light red instead of the dark-theme glow */
-      .thumb-light .thumb-nav-active {
-        background: linear-gradient(180deg, rgba(255,51,85,0.14), rgba(255,51,85,0.05));
-        border-color: rgba(255,51,85,0.35);
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,0.7),
-          0 10px 24px -14px rgba(255,45,80,0.4);
-      }
-      .thumb-light .thumb-nav-active:hover {
-        background: linear-gradient(180deg, rgba(255,51,85,0.20), rgba(255,51,85,0.08));
-        border-color: rgba(255,51,85,0.45);
-      }
-      /* Active icon chip stays red with a white glyph (readable on light) */
-      .thumb-light .thumb-nav-active .thumb-nav-chip {
-        background: linear-gradient(180deg, #ff3355, #d81232);
-        border-color: rgba(255,51,85,0.5);
-      }
-
-      /* Light scrollbar */
-      .thumb-light ::-webkit-scrollbar-track { background: #e7e7ee; }
-      .thumb-light ::-webkit-scrollbar-thumb { background: #c3c3ce; }
-      .thumb-light ::-webkit-scrollbar-thumb:hover { background: #a9a9b6; }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "jszip": "https://esm.sh/jszip@3.10.1"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+  </head>
   <body>
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

@@ -26,3 +26,15 @@ dist-ssr
 # Supabase CLI local state
 supabase/.temp
 .branches
+
+# Never commit Google service-account keys or any secret JSON
+service-account*.json
+*-service-account.json
+*.sa.json
+secrets/
+
+# Replit config holds environment secrets (Foundry API key etc.) — keep local only
+.replit
+
+# Claude Code local settings may contain tokens — keep local only
+.claude/settings.local.json

@@ -12,6 +12,57 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
   const project = env.VERTEX_PROJECT || 'vertixai-499009';
   const location = env.VERTEX_LOCATION || 'global';
 
+  // Exact pixel target per aspect ratio — OpenRouter image models take no
+  // aspectRatio field, so we pin the shape in-prompt (mirrors the edge function).
+  const PIXELS: Record<string, { width: number; height: number }> = {
+    '16:9': { width: 1280, height: 720 },
+    '9:16': { width: 720, height: 1280 },
+    '1:1': { width: 1024, height: 1024 },
+    '4:3': { width: 1024, height: 768 },
+    '3:4': { width: 768, height: 1024 },
+    '21:9': { width: 1280, height: 548 },
+    '4:5': { width: 864, height: 1080 },
+    '5:4': { width: 1080, height: 864 },
+  };
+
+  // Inline a non-data source URL into a base64 data URL (Node fetch has no CORS
+  // limits, so this handles layers the browser couldn't inline). Leaves data:
+  // URLs untouched; returns null if it can't be loaded.
+  const inlineNodeSource = async (s: string): Promise<string | null> => {
+    if (typeof s !== 'string') return null;
+    if (s.startsWith('data:')) return s;
+    try {
+      const r = await fetch(s);
+      if (!r.ok) return null;
+      const ab = await r.arrayBuffer();
+      const mime = (r.headers.get('content-type') || 'image/png').split(';')[0];
+      return `data:${mime};base64,${Buffer.from(ab).toString('base64')}`;
+    } catch { return null; }
+  };
+
+  // OpenRouter image fallback (Seedream / GPT) — returns data-URL images.
+  const viaOpenRouter = async (orKey: string, model: string, prompt: string, sources: string[], aspectRatio = '16:9'): Promise<string[]> => {
+    const dims = PIXELS[aspectRatio] || PIXELS['16:9'];
+    const sizePrompt = `${prompt}\n\nIMPORTANT: The output image MUST be exactly a ${aspectRatio} aspect ratio (${dims.width}x${dims.height} pixels). Do NOT return a square or any other shape.`;
+    const content: any[] = [{ type: 'text', text: sizePrompt }];
+    for (const s of sources) content.push({ type: 'image_url', image_url: { url: s } });
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json', 'X-Title': 'PodcastFlux' },
+      body: JSON.stringify({ model, modalities: ['image'], messages: [{ role: 'user', content }] }),
+    });
+    const data: any = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error?.message || `openrouter_${resp.status}`);
+    const msg = data?.choices?.[0]?.message;
+    const images: string[] = [];
+    for (const im of msg?.images ?? []) {
+      const url: string = im?.image_url?.url || '';
+      if (/^data:.*?;base64,/.test(url)) images.push(url);
+    }
+    if (!images.length) throw new Error('openrouter_no_image');
+    return images;
+  };
+
   const readBody = (req: any): Promise<string> =>
     new Promise((resolve, reject) => {
       let data = '';
@@ -34,46 +85,81 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
         };
         if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
 
+        const orKey = env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
+        const orSeedream = env.OPENROUTER_FALLBACK_MODEL || process.env.OPENROUTER_FALLBACK_MODEL || 'bytedance-seed/seedream-4.5';
+        const orGpt = env.OPENROUTER_IMAGE_MODEL || process.env.OPENROUTER_IMAGE_MODEL || 'openai/gpt-5.4-image-2';
+
         try {
-          const { prompt, sources = [], aspectRatio = '16:9', resolution } = JSON.parse((await readBody(req)) || '{}');
+          const { prompt, sources: rawSources = [], aspectRatio = '16:9', resolution } = JSON.parse((await readBody(req)) || '{}');
           if (!prompt) return send(400, { error: 'Missing prompt' });
-          if (!credPath) return send(500, { error: 'GOOGLE_APPLICATION_CREDENTIALS not set — add the service-account JSON path to .env.local and restart the dev server.' });
+          if (!credPath && !orKey) return send(500, { error: 'No image model configured — add GOOGLE_APPLICATION_CREDENTIALS or OPENROUTER_API_KEY to .env.local and restart the dev server.' });
 
-          const { GoogleGenAI } = await import('@google/genai');
-          const ai = new GoogleGenAI({ vertexai: true, project, location });
+          // Inline any remote/asset source URLs the browser couldn't convert.
+          const sources = (await Promise.all((rawSources as string[]).map(inlineNodeSource))).filter(Boolean) as string[];
 
-          const parts: any[] = [];
-          for (const s of sources as string[]) {
-            const m = /^data:(.*?);base64,(.*)$/.exec(s);
-            if (m) parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
-          }
-          parts.push({ text: prompt });
-
-          const isPro = resolution === '2K' || resolution === '4K';
-          const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-          const config: any = { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio } };
-          if (isPro) config.imageConfig.imageSize = resolution;
-
-          const result: any = await ai.models.generateContent({
-            model,
-            contents: [{ role: 'user', parts }], // Vertex requires the role field
-            config,
-          });
-
-          const images: string[] = [];
+          const errs: string[] = [];
           let text = '';
-          for (const p of result?.candidates?.[0]?.content?.parts ?? []) {
-            if (p.inlineData?.data) images.push(`data:${p.inlineData.mimeType || 'image/png'};base64,${p.inlineData.data}`);
-            else if (p.text) text += p.text;
+
+          // 1) Vertex (primary). On any failure (incl. safety refusals with an
+          //    attached image → no image part) we fall through to OpenRouter,
+          //    mirroring the production edge function's fallback chain.
+          if (credPath) {
+            try {
+              const { GoogleGenAI } = await import('@google/genai');
+              const ai = new GoogleGenAI({ vertexai: true, project, location });
+
+              const parts: any[] = [];
+              for (const s of sources as string[]) {
+                const m = /^data:(.*?);base64,(.*)$/.exec(s);
+                if (m) parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
+              }
+              parts.push({ text: prompt });
+
+              const isPro = resolution === '2K' || resolution === '4K';
+              // Nano Banana Pro (GA). Old `-preview` id was shut down 2026-06-25 → 404.
+              const model = isPro ? 'gemini-3-pro-image' : 'gemini-2.5-flash-image';
+              const config: any = { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio } };
+              if (isPro) config.imageConfig.imageSize = resolution;
+
+              const result: any = await ai.models.generateContent({
+                model,
+                contents: [{ role: 'user', parts }], // Vertex requires the role field
+                config,
+              });
+
+              const images: string[] = [];
+              for (const p of result?.candidates?.[0]?.content?.parts ?? []) {
+                if (p.inlineData?.data) images.push(`data:${p.inlineData.mimeType || 'image/png'};base64,${p.inlineData.data}`);
+                else if (p.text) text += p.text;
+              }
+              if (images.length) return send(200, { images, text });
+              errs.push('vertex: no_image');
+            } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
           }
-          if (!images.length && !text) return send(502, { error: 'No image generated.' });
-          return send(200, { images, text });
+
+          // 2 & 3) OpenRouter fallback — Seedream, then GPT image.
+          if (orKey) {
+            for (const model of [orSeedream, orGpt]) {
+              try {
+                const images = await viaOpenRouter(orKey, model, prompt, sources as string[], aspectRatio);
+                if (images.length) return send(200, { images, text: '' });
+              } catch (e: any) { errs.push(`openrouter:${model}: ` + (e?.message || String(e))); }
+            }
+          }
+
+          console.error('dev_generate_failed', errs.join(' | '));
+          return send(502, { error: 'Could not generate an image right now. Please try again.' });
         } catch (e: any) {
           return send(500, { error: e?.message || String(e) });
         }
       });
 
       // ── Text generation (titles / chapters) ──────────────────────────────
+      // Works with WHICHEVER key is present, in priority order:
+      //   1. Google service-account (GOOGLE_APPLICATION_CREDENTIALS) → Vertex
+      //   2. VERTEX_API_KEY (Vertex Express key) → Vertex, no service account
+      //   3. OPENROUTER_API_KEY → OpenRouter chat model (fallback)
+      // The transcript itself comes from /api/transcript (Supadata) separately.
       server.middlewares.use('/api/text', async (req, res) => {
         const send = (status: number, obj: unknown) => {
           res.statusCode = status;
@@ -81,26 +167,56 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
           res.end(JSON.stringify(obj));
         };
         if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
-        try {
-          const { prompt } = JSON.parse((await readBody(req)) || '{}');
-          if (!prompt) return send(400, { error: 'Missing prompt' });
-          if (!credPath) return send(500, { error: 'GOOGLE_APPLICATION_CREDENTIALS not set — add the service-account JSON path to .env.local and restart the dev server.' });
 
-          const { GoogleGenAI } = await import('@google/genai');
-          const ai = new GoogleGenAI({ vertexai: true, project, location });
-          const result: any = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          });
-          let text = '';
-          for (const p of result?.candidates?.[0]?.content?.parts ?? []) {
-            if (p.text) text += p.text;
-          }
-          if (!text.trim()) return send(502, { error: 'No text generated.' });
-          return send(200, { text });
-        } catch (e: any) {
-          return send(500, { error: e?.message || String(e) });
+        const { prompt } = JSON.parse((await readBody(req)) || '{}');
+        if (!prompt) return send(400, { error: 'Missing prompt' });
+
+        const vertexKey = env.VERTEX_API_KEY || process.env.VERTEX_API_KEY;
+        const orKey = env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
+        const errs: string[] = [];
+
+        // 1 & 2) Google / Vertex (service account OR Vertex Express key)
+        if (credPath || vertexKey) {
+          try {
+            const { GoogleGenAI } = await import('@google/genai');
+            const ai = credPath
+              ? new GoogleGenAI({ vertexai: true, project, location })
+              : new GoogleGenAI({ vertexai: true, apiKey: vertexKey });
+            const result: any = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            });
+            let text = '';
+            for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
+            if (text.trim()) return send(200, { text });
+            errs.push('vertex: empty');
+          } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
         }
+
+        // 3) OpenRouter fallback
+        if (orKey) {
+          try {
+            const model = env.OPENROUTER_TEXT_MODEL || process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-2.5-flash';
+            const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json', 'X-Title': 'PodcastFlux' },
+              body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
+            });
+            const data: any = await r.json().catch(() => ({}));
+            if (r.ok) {
+              const text = data?.choices?.[0]?.message?.content || '';
+              if (typeof text === 'string' && text.trim()) return send(200, { text });
+              errs.push('openrouter: empty');
+            } else {
+              errs.push('openrouter: ' + (data?.error?.message || r.status));
+            }
+          } catch (e: any) { errs.push('openrouter: ' + (e?.message || String(e))); }
+        }
+
+        if (!credPath && !vertexKey && !orKey) {
+          return send(500, { error: 'No text model configured. Add VERTEX_API_KEY or OPENROUTER_API_KEY to .env.local and restart the dev server.' });
+        }
+        return send(502, { error: 'Text generation failed. ' + errs.join(' | ') });
       });
 
       // ── YouTube transcript fetch via Supadata (key stays server-side) ─────
@@ -150,13 +266,21 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         allowedHosts: true,
       },
+      // Production serving on Replit: `vite build` then `vite preview` serves the
+      // static bundle. In a build, import.meta.env.DEV is false, so the services
+      // route to the secure Supabase Edge Functions (credits + fallback + auth),
+      // NOT the DEV-only /api/* proxies above (those exist only in configureServer).
+      preview: {
+        port: 5000,
+        host: '0.0.0.0',
+        allowedHosts: true,
+      },
       plugins: [react(), vertexProxyPlugin(env)],
       define: {
-        // In a DEPLOYED build, image generation goes through the secure Supabase
-        // Edge Function (services/geminiService.ts) — the image-gen key lives as a
-        // Supabase secret and is NEVER bundled into the browser.
-        // Only SUPADATA (transcript) key is defined here for the prod fallback.
-        'process.env.SUPADATA_API_KEY': JSON.stringify(env.SUPADATA_API_KEY),
+        // In a DEPLOYED build, BOTH image generation and transcript fetching go
+        // through secure Supabase Edge Functions (services/geminiService.ts,
+        // services/textService.ts) — their keys live as Supabase secrets and are
+        // NEVER bundled into the browser. No server keys are defined here.
       },
       resolve: {
         alias: {

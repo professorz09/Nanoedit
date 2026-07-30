@@ -15,6 +15,10 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
   const { user, profile } = useAuth();
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
 
+  // Add-on credit packs are only for paying subscribers (Pro / Studio).
+  // Free users must pick a plan first — top-ups aren't offered to them.
+  const hasPaidPlan = profile?.plan === 'pro' || profile?.plan === 'studio';
+
   const handlePick = (plan: Plan) => {
     if (!user) { onRequireLogin(); return; }
     onCheckout(plan, cycle);
@@ -87,7 +91,8 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
         })}
       </div>
 
-      {/* Add-on credit packs */}
+      {/* Add-on credit packs — paid plans only */}
+      {hasPaidPlan && (
       <div className="max-w-3xl mx-auto mt-10 px-1">
         <div className="thumb-glass rounded-3xl p-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -109,6 +114,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
           </div>
         </div>
       </div>
+      )}
     </section>
   );
 };

@@ -1,8 +1,8 @@
-# Nano Edit - AI Image Editor
+# PodcastFlux — AI Thumbnail Studio
 
 ## Overview
 
-Nano Edit is a client-side AI image editor powered by Google's Gemini 2.5 Flash and Pro models. Users can edit images using natural language prompts with control over aspect ratio, resolution, and various style presets. The application is built as a single-page React application with Vite as the build tool.
+PodcastFlux is a client-side AI thumbnail + image editor powered by Google's Gemini 2.5 Flash and Pro models. Users can edit images using natural language prompts with control over aspect ratio, resolution, and various style presets. The application is built as a single-page React application with Vite as the build tool.
 
 Key features:
 - Natural language image editing via Gemini AI

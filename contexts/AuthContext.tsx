@@ -18,6 +18,7 @@ interface AuthValue {
   user: User | null;
   profile: Profile | null;
   totalCredits: number;           // credits + addon_credits
+  creditsLoading: boolean;        // logged in but profile/credits not fetched yet
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -29,15 +30,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const loadProfile = useCallback(async (u: User | null) => {
-    if (!supabase || !u) { setProfile(null); return; }
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, email, plan, credits, addon_credits, renews_at')
-      .eq('id', u.id)
-      .single();
-    if (data) setProfile(data as Profile);
+    if (!supabase || !u) { setProfile(null); setProfileLoading(false); return; }
+    setProfileLoading(true);
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, email, plan, credits, addon_credits, renews_at')
+        .eq('id', u.id)
+        .single();
+      if (data) setProfile(data as Profile);
+    } finally {
+      setProfileLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -77,10 +84,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = useCallback(() => loadProfile(user), [loadProfile, user]);
 
   const totalCredits = (profile?.credits ?? 0) + (profile?.addon_credits ?? 0);
+  // Logged in but credits not fetched yet — used to show a skeleton instead of a "0" flash.
+  const creditsLoading = !!user && !profile && (profileLoading || !ready);
 
   return (
     <AuthContext.Provider
-      value={{ ready, configured: isSupabaseConfigured, user, profile, totalCredits, signInWithGoogle, signOut, refreshProfile }}
+      value={{ ready, configured: isSupabaseConfigured, user, profile, totalCredits, creditsLoading, signInWithGoogle, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
