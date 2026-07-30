@@ -116,8 +116,10 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
               parts.push({ text: prompt });
 
               const isPro = resolution === '2K' || resolution === '4K';
-              // Nano Banana Pro (GA). Old `-preview` id was shut down 2026-06-25 → 404.
-              const model = isPro ? 'gemini-3-pro-image' : 'gemini-2.5-flash-image';
+              // 2K/4K → Gemini 3 Pro Image ("Nano Banana Pro"); Fast/1K → Gemini 3.1
+              // Flash Image ("Nano Banana 2"). Current image model IDs (mirrors the
+              // production edge function). Pro honors imageSize 2K/4K below.
+              const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-3.1-flash-image-preview';
               const config: any = { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio } };
               if (isPro) config.imageConfig.imageSize = resolution;
 
@@ -137,7 +139,27 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
             } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
           }
 
-          // 2 & 3) OpenRouter fallback — Seedream, then GPT image.
+          // 2) Imagen 4 (Vertex, text-to-image only) — skipped when editing
+          //    (sources present), since it can't use source images.
+          if (credPath && sources.length === 0) {
+            try {
+              const { GoogleGenAI } = await import('@google/genai');
+              const ai = new GoogleGenAI({ vertexai: true, project, location });
+              const imagenAspects = new Set(['1:1', '3:4', '4:3', '9:16', '16:9']);
+              const config: any = { numberOfImages: 1 };
+              if (imagenAspects.has(aspectRatio)) config.aspectRatio = aspectRatio;
+              const result: any = await ai.models.generateImages({ model: 'imagen-4.0-generate-001', prompt, config });
+              const images: string[] = [];
+              for (const gi of result?.generatedImages ?? []) {
+                const b64 = gi?.image?.imageBytes;
+                if (b64) images.push(`data:${gi?.image?.mimeType || 'image/png'};base64,${b64}`);
+              }
+              if (images.length) return send(200, { images, text: '' });
+              errs.push('imagen: no_image');
+            } catch (e: any) { errs.push('imagen: ' + (e?.message || String(e))); }
+          }
+
+          // 3 & 4) OpenRouter fallback — Seedream, then GPT image.
           if (orKey) {
             for (const model of [orSeedream, orGpt]) {
               try {
