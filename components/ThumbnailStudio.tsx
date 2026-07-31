@@ -271,34 +271,28 @@ const ResultThumb: React.FC<{
   onBroken: (id: string, url: string) => void;
 }> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete, onBroken }) => {
   const [loaded, setLoaded] = useState(false);
-  const [errored, setErrored] = useState(false);
-  // One silent retry (cache-busted) before we treat a load failure as "dead".
-  // CDN cold-starts / momentary network blips shouldn't prune a live thumbnail;
-  // only a genuine 404 (rolling-cap-deleted object) fails twice → prune.
-  const [attempt, setAttempt] = useState(0);
   const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
-  const displaySrc = attempt === 0 ? img.url : `${img.url}${img.url.includes('?') ? '&' : '?'}_r=${attempt}`;
   return (
     <div className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
       <div className={`relative overflow-hidden bg-thumb-soft mx-auto w-full ${portrait ? 'aspect-[9/16] max-w-[240px]' : 'aspect-video'}`}>
-        {!loaded && !errored && <div className="absolute inset-0 thumb-skeleton" aria-hidden />}
-        {errored ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-thumb-soft text-thumb-sub text-xs">
-            <I.Image className="w-6 h-6 opacity-50" />
-            <span>Preview unavailable</span>
-          </div>
-        ) : (
-          <img
-            src={displaySrc}
-            alt={img.prompt}
-            loading="lazy"
-            decoding="async"
-            onLoad={() => setLoaded(true)}
-            onError={() => { if (attempt < 1) { setAttempt(1); } else { setErrored(true); onBroken(img.id, img.url); } }}
-            onClick={() => onView(img.url)}
-            className={`w-full h-full object-cover cursor-pointer transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          />
-        )}
+        {/* Shimmer sits BEHIND the image; the image is never opacity-gated by JS
+            (that would leave a cache-loaded image stuck transparent if onLoad
+            fires before React attaches the handler). Same render path as the
+            nano editor so both canvases behave identically. SafeImage owns the
+            silent retry + "unavailable" fallback. */}
+        {!loaded && <div className="absolute inset-0 thumb-skeleton" aria-hidden />}
+        <SafeImage
+          src={img.url}
+          alt={img.prompt}
+          loading="lazy"
+          decoding="async"
+          onClick={() => onView(img.url)}
+          onLoad={() => setLoaded(true)}
+          onError={() => { setLoaded(true); onBroken(img.id, img.url); }}
+          className="relative w-full h-full object-cover cursor-pointer img-fade"
+          fallbackClassName="absolute inset-0 w-full h-full"
+          fallbackLabel="Preview unavailable"
+        />
       </div>
       {/* Compact liquid-glass action bar — translucent pills, works on touch
           (mobile) and hover (desktop). Save + Edit are the primary actions. */}
