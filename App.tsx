@@ -135,10 +135,14 @@ function App() {
       let cancelled = false;
       const sync = async () => {
           const remote = await fetchUserGenerations(200);
-          if (cancelled || !remote.length) return;
+          if (cancelled) return;
           setGeneratedImages(prev => {
               const seen = new Set(prev.map(i => i.url));
-              const merged = [...prev, ...remote.filter(r => !seen.has(r.url))];
+              const added = remote.filter(r => !seen.has(r.url));
+              // TEMP diagnostic: how many did the server return vs what's cached?
+              console.log(`[history] server=${remote.length} cached=${prev.length} newFromServer=${added.length}`);
+              if (!added.length) return prev;
+              const merged = [...prev, ...added];
               merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
               return merged;
           });
