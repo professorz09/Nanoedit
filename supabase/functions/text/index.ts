@@ -25,6 +25,26 @@ const json = (status: number, obj: unknown) =>
 
 const MAX_PROMPT_CHARS = 32000; // chapters can include a long transcript
 
+// Free-tier (cost:0) calls aren't credit-gated, so bound them with a rolling
+// window instead — otherwise a signed-in user can hammer "Generate" and burn
+// an LLM completion (up to a 32k-char prompt) on every click, for free.
+const FREE_LIMIT = 20;
+const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+async function checkFreeRateLimit(admin: any, uid: string): Promise<boolean> {
+  const since = new Date(Date.now() - FREE_WINDOW_MS).toISOString();
+  const { count, error } = await admin
+    .from('tool_usage')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', uid)
+    .eq('tool', 'text_free')
+    .gte('created_at', since);
+  if (error) return true; // fail open — don't block the tool over a logging hiccup
+  if ((count ?? 0) >= FREE_LIMIT) return false;
+  await admin.from('tool_usage').insert({ user_id: uid, tool: 'text_free' }).catch(() => {});
+  return true;
+}
+
 // Vertex client from EITHER a service-account JSON or a Vertex Express key.
 function makeVertex(): any {
   const saRaw = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
@@ -68,6 +88,12 @@ Deno.serve(async (req) => {
   const cost = Number.isFinite(body?.cost) ? Math.max(0, Math.min(10, Math.floor(body.cost))) : 0;
   const uid = userData.user.id;
   const refundAll = async () => { for (let i = 0; i < cost; i++) await admin.rpc('refund_credit', { p_user: uid }).catch(() => {}); };
+
+  if (cost === 0) {
+    const ok = await checkFreeRateLimit(admin, uid);
+    if (!ok) return json(429, { error: 'You’ve hit the free-tool limit for now — try again in a bit.' });
+  }
+
   if (cost > 0) {
     let done = 0;
     for (let i = 0; i < cost; i++) {

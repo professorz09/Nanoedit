@@ -22,6 +22,25 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
+// Free (uncredited) tool — bound it with a rolling window so it can't be
+// hammered into a free, unlimited Supadata proxy.
+const FREE_LIMIT = 30;
+const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+async function checkFreeRateLimit(admin: any, uid: string): Promise<boolean> {
+  const since = new Date(Date.now() - FREE_WINDOW_MS).toISOString();
+  const { count, error } = await admin
+    .from('tool_usage')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', uid)
+    .eq('tool', 'transcript')
+    .gte('created_at', since);
+  if (error) return true; // fail open — don't block the tool over a logging hiccup
+  if ((count ?? 0) >= FREE_LIMIT) return false;
+  await admin.from('tool_usage').insert({ user_id: uid, tool: 'transcript' }).catch(() => {});
+  return true;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
@@ -35,6 +54,10 @@ Deno.serve(async (req) => {
   if (!jwt) return json(401, { error: 'Please sign in to use this tool.' });
   const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
   if (userErr || !userData?.user) return json(401, { error: 'Please sign in to use this tool.' });
+
+  const ok = await checkFreeRateLimit(admin, userData.user.id);
+  // Soft-fail like the Supadata-down case — the client falls back to manual paste.
+  if (!ok) return json(200, { segments: [], reason: 'rate_limited' });
 
   let body: any;
   try { body = await req.json(); } catch { return json(400, { error: 'Invalid request body' }); }
