@@ -262,8 +262,9 @@ export default function EditorView(props: EditorViewProps) {
                                 <div className="absolute top-1 left-1 bg-nano-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                                     {idx + 1}
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => removeSourceImage(idx)}
+                                    aria-label={`Remove source image ${idx + 1}`}
                                     className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100"
                                 >
                                     <IconX />

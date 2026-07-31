@@ -162,9 +162,9 @@ Deno.serve(async (req) => {
     const imageBase64 = typeof body?.imageBase64 === 'string' ? body.imageBase64 : '';
     const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 120) : null;
     const title = typeof body?.title === 'string' ? body.title.trim().slice(0, 200) || null : null;
+    if (imageBase64.length > MAX_IMAGE_B64_CHARS) return json(400, { error: 'Image is too large.' });
     const m = /^data:([^;]+);base64,(.*)$/.exec(imageBase64);
     if (!m) return json(400, { error: 'Missing or invalid image.' });
-    if (imageBase64.length > MAX_IMAGE_B64_CHARS) return json(400, { error: 'Image is too large.' });
     const mimeType = m[1];
     const data = m[2];
 
@@ -204,7 +204,12 @@ Deno.serve(async (req) => {
     // 3) Upload + insert as a GLOBAL style (user_id null).
     const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
     const path = `admin/${crypto.randomUUID()}.${ext}`;
-    const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    let bytes: Uint8Array;
+    try {
+      bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    } catch {
+      return json(400, { error: 'Missing or invalid image.' });
+    }
     const up = await admin.storage.from(BUCKET).upload(path, bytes, { contentType: mimeType, upsert: false });
     if (up.error) { console.error('upload_failed', up.error.message); return json(500, { error: 'Could not upload the image.' }); }
 

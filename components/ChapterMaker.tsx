@@ -83,11 +83,11 @@ ${context}`;
       const cleaned = cleanChapters(out);
       if (!cleaned) { setNote('Could not build chapters. Try again or paste a fuller transcript.'); }
       setChapters(cleaned || '');
-      refreshProfile(); // credits were charged server-side — sync the header count
     } catch (e: any) {
       setNote(e?.message?.slice(0, 140) || 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
+      refreshProfile(); // credits may have been charged server-side even on a failed request — sync the header count
     }
   }, [url, transcript, detail, user, totalCredits, configured, refreshProfile]);
 

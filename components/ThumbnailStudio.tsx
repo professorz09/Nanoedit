@@ -467,7 +467,10 @@ const ThumbnailStudio: React.FC<Props> = ({
         let concept = '';
         const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
         if (title || transcriptText) {
-          if (configured && totalCredits < YOUTUBE_ANALYSIS_COST) {
+          // Skip while the profile is still loading — totalCredits reads 0
+          // until it resolves, which would otherwise redirect a user with
+          // plenty of credits to pricing just because they clicked early.
+          if (configured && !creditsLoading && totalCredits < YOUTUBE_ANALYSIS_COST) {
             setBusy(false);
             setNoteText(`Analyzing a new video needs ${YOUTUBE_ANALYSIS_COST} credits. Please top up your plan.`);
             goPricing();
@@ -478,7 +481,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
               YOUTUBE_ANALYSIS_COST
             )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
-            refreshProfile(); // credits were charged server-side — sync the header count
+            await refreshProfile(); // credits were charged server-side — sync the header count
           } catch (e: any) {
             const msg = e?.message || '';
             if (/credit/i.test(msg)) { setBusy(false); setNoteText(msg); goPricing(); return; }
@@ -568,7 +571,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);

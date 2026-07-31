@@ -2,7 +2,7 @@
 
 Drop new style-reference thumbnails here (16:9, .jpg/.png/.webp), then run:
 
-```
+```bash
 SUPABASE_URL=https://<ref>.supabase.co \
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \

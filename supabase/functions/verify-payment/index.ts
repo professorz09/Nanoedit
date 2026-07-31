@@ -18,7 +18,7 @@
 // Secrets: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
 // ═══════════════════════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { CATALOG } from '../_shared/pricing.ts';
+import { CATALOG, CURRENCY, inrPaise } from '../_shared/pricing.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -97,19 +97,40 @@ Deno.serve(async (req) => {
     return json(502, { error: 'Could not confirm the payment. Please contact support.' });
   }
   if (order.status !== 'paid') return json(400, { error: 'Payment not completed.' });
-  if (order?.notes?.uid && order.notes.uid !== uid) return json(403, { error: 'This order belongs to another account.' });
+  // Fail CLOSED: require notes.uid to be present AND match. The order id,
+  // payment id and signature are all visible to the paying browser, so a
+  // missing notes.uid (a dashboard-created order, a future code path) must
+  // never be treated as "unowned, so allow it" — that would let a different
+  // signed-in account replay someone else's payment details for credit.
+  if (order?.notes?.uid !== uid) return json(403, { error: 'This order belongs to another account.' });
 
   const item = CATALOG[order?.notes?.item];
   if (!item) return json(400, { error: 'Unknown item.' });
 
-  // 3) Idempotency — if this payment was already credited, succeed without
-  //    double-granting (verify can be retried by the browser / a page reload).
-  const ledgerReason = `purchase:${item.kind === 'plan' ? item.plan : 'addon'}:${paymentId}`;
-  const { data: existing } = await admin
-    .from('credit_ledger').select('id').eq('user_id', uid).eq('reason', ledgerReason).limit(1);
-  if (existing && existing.length) return json(200, { ok: true, alreadyGranted: true });
+  // Confirm the amount actually paid matches what this item should cost —
+  // defense in depth against a stale/tampered order somehow reaching here
+  // with the right notes.item but a wrong amount.
+  if (order.currency !== CURRENCY || order.amount !== inrPaise(item.usd)) {
+    console.error('amount_mismatch', paymentId, order.amount, order.currency);
+    return json(400, { error: 'Payment amount does not match the item.' });
+  }
 
-  // Grant credits.
+  // 3) Idempotency — claim the ledger row FIRST (atomically, via a unique
+  //    index on (user_id, reason) for purchase:* reasons — see migration
+  //    0015). Two concurrent verify calls for the same payment can no longer
+  //    both pass a SELECT-then-grant race and double-credit: only one insert
+  //    wins, the other gets 23505 and reports alreadyGranted.
+  const ledgerReason = `purchase:${item.kind === 'plan' ? item.plan : 'addon'}:${paymentId}`;
+  const { error: claimErr } = await admin
+    .from('credit_ledger').insert({ user_id: uid, delta: item.credits, reason: ledgerReason });
+  if (claimErr) {
+    if (claimErr.code === '23505') return json(200, { ok: true, alreadyGranted: true });
+    console.error('claim_failed', paymentId, claimErr.message);
+    return json(500, { error: 'Payment succeeded but crediting failed. Please contact support.' });
+  }
+
+  // Grant credits. If this fails AFTER the claim above, delete the claim so
+  // a retry can re-attempt instead of being told "already granted" forever.
   try {
     if (item.kind === 'plan') {
       const { error } = await admin.from('profiles').update({
@@ -130,9 +151,9 @@ Deno.serve(async (req) => {
       }).eq('id', uid);
       if (error) throw error;
     }
-    await admin.from('credit_ledger').insert({ user_id: uid, delta: item.credits, reason: ledgerReason });
   } catch (e: any) {
     console.error('grant_failed', paymentId, e?.message || String(e));
+    await admin.from('credit_ledger').delete().eq('user_id', uid).eq('reason', ledgerReason).catch(() => {});
     return json(500, { error: 'Payment succeeded but crediting failed. Please contact support.' });
   }
 

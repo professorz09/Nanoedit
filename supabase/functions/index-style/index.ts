@@ -35,6 +35,7 @@ const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
 const EMBED_DIMS = 768; // must match style_images.embedding vector(768)
 const BUCKET = 'styles';
 const MAX_PER_USER = 20; // per-user cap on custom styles (quota / abuse guard)
+const MAX_IMAGE_BYTES = 9_000_000; // matches admin-styles' ~9MB decoded cap
 
 // Same schema tag-styles.mjs asks for — kept in sync so custom + global styles
 // carry identical metadata (incl. the editable `elements` breakdown).
@@ -148,6 +149,7 @@ Deno.serve(async (req) => {
   try {
     const { data: blob, error: dlErr } = await admin.storage.from(BUCKET).download(path);
     if (dlErr || !blob) throw new Error(dlErr?.message || 'download failed');
+    if (blob.size > MAX_IMAGE_BYTES) return json(400, { error: 'Image is too large.' });
     const buf = new Uint8Array(await blob.arrayBuffer());
     let binary = '';
     for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);

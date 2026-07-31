@@ -27,7 +27,7 @@ const authedFetch = async (path: string, body: unknown) => {
   if (!supabase) throw new Error('Please sign in to continue.');
   const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supaUrl) throw new Error('Please sign in to continue.');
+  if (!supaUrl) throw new Error('Payments are not configured. Please contact support.');
 
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -66,15 +66,23 @@ export const buyItem = async (itemId: string): Promise<void> => {
       name: 'PodcastFlux',
       description: order.label,
       handler: async (resp: any) => {
+        const payload = {
+          razorpay_order_id: resp.razorpay_order_id,
+          razorpay_payment_id: resp.razorpay_payment_id,
+          razorpay_signature: resp.razorpay_signature,
+        };
         try {
-          await authedFetch('verify-payment', {
-            razorpay_order_id: resp.razorpay_order_id,
-            razorpay_payment_id: resp.razorpay_payment_id,
-            razorpay_signature: resp.razorpay_signature,
-          });
+          // verify-payment is idempotent (claims the ledger row before
+          // crediting), so a single retry safely covers a transient failure
+          // right after a successful charge — the money already moved.
+          try {
+            await authedFetch('verify-payment', payload);
+          } catch {
+            await authedFetch('verify-payment', payload);
+          }
           resolve();
-        } catch (e) {
-          reject(e);
+        } catch (e: any) {
+          reject(new Error(`${e?.message || 'Verification failed.'} Payment reference: ${resp.razorpay_payment_id}`));
         }
       },
       modal: { ondismiss: () => reject(new Error('cancelled')) },

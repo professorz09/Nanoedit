@@ -48,16 +48,22 @@ const ResultThumb: React.FC<{
             <span>Preview unavailable</span>
           </div>
         ) : (
-          <img
-            src={src}
-            alt={img.prompt}
-            loading="lazy"
-            decoding="async"
-            onLoad={() => setLoaded(true)}
-            onError={handleError}
+          <button
+            type="button"
             onClick={() => onView(img.url)}
-            className={`w-full h-full object-cover cursor-pointer transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          />
+            aria-label="View full size"
+            className="block w-full h-full p-0 border-0 bg-transparent cursor-pointer"
+          >
+            <img
+              src={src}
+              alt={img.prompt}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setLoaded(true)}
+              onError={handleError}
+              className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+            />
+          </button>
         )}
       </div>
       {/* Clean action bar (always visible, works on touch) — single delete */}

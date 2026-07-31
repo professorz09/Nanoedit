@@ -2,6 +2,18 @@
 // Maker, and Title Generator. Kept as a plain service rather than living
 // inside a UI component, so those features don't need to import out of a page.
 
+const FETCH_TIMEOUT_MS = 8000;
+
+// fetch() with a hard timeout — a stalled request (bad network, a hung CDN
+// edge) would otherwise leave the "youtube" generation flow waiting forever.
+// Times out as a rejection so every caller's existing try/catch → null
+// fallback keeps working unchanged.
+const fetchWithTimeout = (url: string): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+};
+
 // Extract the 11-char YouTube video id from most URL shapes
 export const extractYouTubeId = (url: string): string | null => {
   const m = url.match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
@@ -12,7 +24,7 @@ export const extractYouTubeId = (url: string): string | null => {
 // be sent to the model as a real style reference.
 export const urlToBase64 = async (url: string): Promise<string | null> => {
   try {
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise((resolve) => {
@@ -35,7 +47,7 @@ export const fetchYouTubeTitle = async (id: string): Promise<string | null> => {
   ];
   for (const url of endpoints) {
     try {
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url);
       if (!res.ok) continue;
       const data = await res.json().catch(() => null);
       const title = typeof data?.title === 'string' ? data.title.trim() : '';
@@ -52,7 +64,7 @@ export const fetchYouTubeThumb = async (id: string): Promise<string | null> => {
   const qualities = ['maxresdefault', 'sddefault', 'hqdefault'];
   for (const q of qualities) {
     try {
-      const res = await fetch(`https://i.ytimg.com/vi/${id}/${q}.jpg`);
+      const res = await fetchWithTimeout(`https://i.ytimg.com/vi/${id}/${q}.jpg`);
       if (!res.ok) continue;
       const blob = await res.blob();
       // hqdefault always exists (120x90 grey placeholder is ~1KB); skip tiny/empty ones

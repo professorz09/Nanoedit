@@ -73,8 +73,13 @@ const AdminStyles: React.FC = () => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f || !f.type.startsWith('image/')) return;
-    setFile(f);
-    setPreview(await readFileAsDataUrl(f));
+    try {
+      const dataUrl = await readFileAsDataUrl(f);
+      setFile(f);
+      setPreview(dataUrl);
+    } catch {
+      setAddNote('Could not read that image. Please pick another file.');
+    }
   };
 
   const submit = async () => {
@@ -125,12 +130,14 @@ const AdminStyles: React.FC = () => {
 
       {/* Add new style */}
       <div className="thumb-glass rounded-3xl p-5 sm:p-6 mt-6 grid sm:grid-cols-[200px_1fr] gap-5">
-        <div
+        <button
+          type="button"
           onClick={() => fileRef.current?.click()}
+          aria-label="Pick a style image"
           className="aspect-video sm:aspect-square rounded-2xl border-2 border-dashed border-thumb-line hover:border-thumb-red/40 bg-thumb-soft cursor-pointer flex items-center justify-center overflow-hidden text-thumb-sub text-xs font-bold text-center p-3"
         >
           {preview ? <img src={preview} alt="" className="w-full h-full object-cover" /> : 'Click to pick an image'}
-        </div>
+        </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
 
         <div className="space-y-3">
