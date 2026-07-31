@@ -51,7 +51,11 @@ function App() {
 
   // Generation queue — parallel processing, per-item timers, cancel/retry.
   const { queue, setQueue, isProcessing, itemTimers, cancelQueueItem, retryQueueItem } = useImageQueue({
-    onGenerated: (newImages) => setGeneratedImages(prev => [...newImages, ...prev]),
+    // Capped to match the server's own rolling cleanup (MAX_THUMBNAILS_PER_USER
+    // in the "generate" Edge Function, default 50) — without this, the local
+    // IndexedDB history grows forever (never pruned client-side), well past
+    // what the server actually still has in Storage.
+    onGenerated: (newImages) => setGeneratedImages(prev => [...newImages, ...prev].slice(0, 50)),
     onText: (text) => setTextResponse(text),
     onError: (message) => setGlobalError(message),
   });
