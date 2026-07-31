@@ -337,7 +337,7 @@ Deno.serve(async (req) => {
   // 6) Rolling cap — keep only the newest N per user; delete older file(s) + row(s).
   //    Best-effort: never fail the response over cleanup.
   try {
-    const cap = parseInt(Deno.env.get('MAX_THUMBNAILS_PER_USER') || '50', 10) || 50;
+    const cap = parseInt(Deno.env.get('MAX_THUMBNAILS_PER_USER') || '200', 10) || 200;
     const { data: stale } = await admin
       .from('generations')
       .select('id, path')

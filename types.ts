@@ -100,7 +100,7 @@ export const PRESET_PROMPTS = [
 
 // ── Thumbnail Studio ──────────────────────────────────────────────
 // Input mode drives which composer the studio uses.
-export type ThumbInputMode = 'youtube' | 'templates' | 'prompt' | 'reference' | 'sketch';
+export type ThumbInputMode = 'youtube' | 'templates' | 'recreate' | 'prompt' | 'reference' | 'sketch';
 
 export interface ThumbnailTemplate {
   id: string;

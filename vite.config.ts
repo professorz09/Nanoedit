@@ -258,6 +258,72 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
           return send(500, { error: e?.message || String(e) });
         }
       });
+
+      // ── Razorpay (DEV ONLY) ───────────────────────────────────────────────
+      // Mirrors the create-order / verify-payment Edge Functions so the checkout
+      // flow works against `vite dev`. NOTE: dev can VERIFY the signature but
+      // CANNOT grant credits (no service-role key locally) — crediting only
+      // happens in production via the Supabase functions. Keep the catalog in
+      // sync with supabase/functions/_shared/pricing.ts.
+      const USD_TO_INR = 84;
+      const CATALOG: Record<string, { usd: number; label: string }> = {
+        'plan:pro:monthly':    { usd: 39,  label: 'Pro plan (monthly)' },
+        'plan:pro:yearly':     { usd: 390, label: 'Pro plan (yearly)' },
+        'plan:studio:monthly': { usd: 79,  label: 'Studio plan (monthly)' },
+        'plan:studio:yearly':  { usd: 790, label: 'Studio plan (yearly)' },
+        'addon:addon_small':   { usd: 8,   label: '100 credit pack' },
+        'addon:addon_large':   { usd: 30,  label: '500 credit pack' },
+      };
+      const rzpKeyId = env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
+      const rzpKeySecret = env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET;
+
+      server.middlewares.use('/api/create-order', async (req, res) => {
+        const send = (status: number, obj: unknown) => {
+          res.statusCode = status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(obj));
+        };
+        if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
+        if (!rzpKeyId || !rzpKeySecret) return send(500, { error: 'Add RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET to .env.local and restart the dev server.' });
+        try {
+          const { item } = JSON.parse((await readBody(req)) || '{}');
+          const cat = CATALOG[item];
+          if (!cat) return send(400, { error: 'Unknown item.' });
+          const amount = Math.round(cat.usd * USD_TO_INR) * 100; // paise
+          const auth = Buffer.from(`${rzpKeyId}:${rzpKeySecret}`).toString('base64');
+          const r = await fetch('https://api.razorpay.com/v1/orders', {
+            method: 'POST',
+            headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount, currency: 'INR', receipt: `r_dev_${Date.now().toString(36)}`, notes: { item } }),
+          });
+          const data: any = await r.json().catch(() => ({}));
+          if (!r.ok || !data?.id) return send(502, { error: data?.error?.description || 'Razorpay order failed.' });
+          return send(200, { order_id: data.id, amount: data.amount, currency: data.currency, key_id: rzpKeyId, label: cat.label });
+        } catch (e: any) {
+          return send(500, { error: e?.message || String(e) });
+        }
+      });
+
+      server.middlewares.use('/api/verify-payment', async (req, res) => {
+        const send = (status: number, obj: unknown) => {
+          res.statusCode = status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(obj));
+        };
+        if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
+        if (!rzpKeySecret) return send(500, { error: 'RAZORPAY_KEY_SECRET not set.' });
+        try {
+          const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = JSON.parse((await readBody(req)) || '{}');
+          if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) return send(400, { error: 'Missing payment details.' });
+          const { createHmac } = await import('crypto');
+          const expected = createHmac('sha256', rzpKeySecret).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest('hex');
+          if (expected !== razorpay_signature) return send(400, { error: 'Payment verification failed.' });
+          // Dev: signature valid. Credits are granted only in production.
+          return send(200, { ok: true, dev: true });
+        } catch (e: any) {
+          return send(500, { error: e?.message || String(e) });
+        }
+      });
     },
   };
 }

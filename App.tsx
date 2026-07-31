@@ -134,7 +134,7 @@ function App() {
       if (isRestoring) return;
       let cancelled = false;
       const sync = async () => {
-          const remote = await fetchUserGenerations(60);
+          const remote = await fetchUserGenerations(200);
           if (cancelled || !remote.length) return;
           setGeneratedImages(prev => {
               const seen = new Set(prev.map(i => i.url));
@@ -556,7 +556,7 @@ function App() {
     if (!ctx) return false;
     try {
       const { data } = ctx.getImageData(0, 0, c.width, c.height);
-      for (let i = 3; i < data.length; i += 40) if (data[i] > 10) return true;
+      for (let i = 3; i < data.length; i += 16) if (data[i] > 10) return true;
     } catch { /* tainted canvas — assume drawn */ return true; }
     return false;
   };
@@ -590,10 +590,16 @@ function App() {
     setSelectedArea(null);
     setAnnotations([]);
 
-    // Attach ONLY the marked-up image (mask outline + numbered position markers
-    // burned in) as the sole source, then generate.
+    // Attach the marked-up image (mask outline + numbered position markers burned
+    // in) as a LAYER in the panel — replacing the original it was drawn on, or
+    // appended if that source is gone — so it's visible and reusable, THEN queue
+    // the edit generation from it.
     const commit = (merged: string) => {
-      setSourceImages([merged]);
+      setSourceImages(prev => {
+        const withoutSrc = prev.filter(u => u !== src);
+        const next = [...withoutSrc, merged];
+        return next.length > 4 ? next.slice(next.length - 4) : next;
+      });
       setQueue(prev => [...prev, {
         id: crypto.randomUUID(),
         prompt: editPrompt,

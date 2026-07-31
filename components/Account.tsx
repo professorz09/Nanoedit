@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { getPlan } from '../services/plans';
+import StyleManager from './StyleManager';
 
 interface LedgerRow {
   id: string;
@@ -137,6 +138,9 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
           )}
         </div>
       </div>
+
+      {/* Custom styles + personas */}
+      <StyleManager />
     </section>
   );
 };

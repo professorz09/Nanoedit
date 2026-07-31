@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react
 import { GeneratedImage, QueueItem, ThumbInputMode, THUMBNAIL_TEMPLATES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
-import { Plan, BillingCycle, priceFor } from '../services/plans';
+import { Plan, BillingCycle } from '../services/plans';
+import { startPayment, planItem, addonItem } from '../services/razorpayService';
 import AuthModal from './AuthModal';
 import SafeImage from './SafeImage';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
@@ -20,7 +21,7 @@ const PanelFallback = () => (
 );
 import { getFromLocalStorage, saveToLocalStorage } from '../services/storageService';
 import { fetchTranscript, segmentsToText, generateText } from '../services/textService';
-import { useStyleImages } from '../services/stylesService';
+import { useStyleImages, matchStyles, fetchStyleObjects, uploadCustomStyle, deleteStyle, type StyleMeta, type StyleRecord } from '../services/stylesService';
 
 // Auto-load any real thumbnails dropped into attached_assets/showcase/ (16:9 jpg/png/webp).
 // No code changes needed — just add image files and they appear in the showcase gallery.
@@ -220,11 +221,11 @@ interface Props {
 }
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
+  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
   { id: 'templates', label: 'Styles', icon: I.Grid },
-  { id: 'sketch', label: 'Sketch', icon: I.Brush },
   { id: 'prompt', label: 'Prompt', icon: I.Text },
   { id: 'reference', label: 'Image', icon: I.Image },
-  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
+  { id: 'sketch', label: 'Sketch', icon: I.Brush },
 ];
 
 const TESTIMONIALS = [
@@ -294,9 +295,9 @@ const ResultThumb: React.FC<{
       </div>
       {/* Compact liquid-glass action bar — translucent pills, works on touch
           (mobile) and hover (desktop). Save + Edit are the primary actions. */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-thumb-card">
-        <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 h-8 rounded-full bg-thumb-soft/50 backdrop-blur-md border border-thumb-line/50 text-thumb-ink text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-soft/80 active:scale-95 transition-all"><I.Download className="w-3.5 h-3.5" /> Save</button>
-        <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas" className="flex-1 h-8 rounded-full bg-thumb-red/85 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-sm hover:bg-thumb-red active:scale-95 transition-all"><I.Edit className="w-3.5 h-3.5" /> Edit</button>
+      <div className="flex items-center gap-1 sm:gap-1.5 p-1.5 bg-thumb-card">
+        <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 h-8 rounded-full bg-thumb-soft/50 backdrop-blur-md border border-thumb-line/50 text-thumb-ink text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-soft/80 active:scale-95 transition-all"><I.Download className="w-3.5 h-3.5 shrink-0" /> <span className="hidden sm:inline">Save</span></button>
+        <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas" className="flex-1 h-8 rounded-full bg-thumb-red/85 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-sm hover:bg-thumb-red active:scale-95 transition-all"><I.Edit className="w-3.5 h-3.5 shrink-0" /> <span className="hidden sm:inline">Edit</span></button>
         <button onClick={() => onPreview(img.url)} title="YouTube feed preview" className="w-8 h-8 shrink-0 rounded-full bg-thumb-soft/50 backdrop-blur-md border border-thumb-line/50 text-thumb-sub hover:text-thumb-ink hover:bg-thumb-soft/80 active:scale-95 flex items-center justify-center transition-all"><I.Tv className="w-3.5 h-3.5" /></button>
         <button onClick={() => onDelete(img.id)} title="Delete" className="w-8 h-8 shrink-0 rounded-full bg-thumb-soft/50 backdrop-blur-md border border-thumb-line/50 text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 hover:bg-thumb-soft/80 active:scale-95 flex items-center justify-center transition-all"><I.Trash className="w-3.5 h-3.5" /></button>
       </div>
@@ -529,6 +530,15 @@ const ThumbnailStudio: React.FC<Props> = ({
     }
   }, [styleImages, selectedRef]);
   const [uploads, setUploads] = useState<string[]>([]);
+  // ── Recreate tab: styles WITH their AI `elements` breakdown, so the UI can show
+  // per-element fields (face slots / text replace / background choice). ──────────
+  const [recreateStyles, setRecreateStyles] = useState<StyleRecord[]>([]);
+  const [recreateSel, setRecreateSel] = useState<StyleRecord | null>(null);
+  const [faceReps, setFaceReps] = useState<Record<string, string>>({});           // faceId → uploaded photo dataURL
+  const [textReps, setTextReps] = useState<Record<string, { value: string; keepStyle: boolean }>>({});
+  const [bgMode, setBgMode] = useState<'keep' | 'random' | 'custom' | 'white'>('keep');
+  const [bgCustom, setBgCustom] = useState('');
+  const [otherKeep, setOtherKeep] = useState<Record<string, boolean>>({});
   const [sketchData, setSketchData] = useState<string | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
   const [genCount, setGenCount] = useState(1);
@@ -576,7 +586,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account'>('home');
 
   // Auth + billing
-  const { user, profile, totalCredits, creditsLoading, signOut, configured } = useAuth();
+  const { user, profile, totalCredits, creditsLoading, signOut, configured, refreshProfile } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [authReason, setAuthReason] = useState<string | undefined>(undefined);
 
@@ -595,40 +605,30 @@ const ThumbnailStudio: React.FC<Props> = ({
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
 
-  // Stripe checkout — asks the backend for a Checkout URL and redirects.
-  const startCheckout = async (plan: Plan, cycle: BillingCycle) => {
-    if (!user || !supabase) { requireLogin('Log in to upgrade.'); return; }
+  // Razorpay checkout — opens the hosted modal, verifies server-side, then
+  // refreshes the profile so the new credits show up immediately.
+  const [payBusy, setPayBusy] = useState(false);
+
+  const runPayment = async (item: string) => {
+    if (!user || !supabase) { requireLogin('Log in to continue.'); return; }
+    if (payBusy) return;
+    setPayBusy(true);
+    setNote(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ plan: plan.id, cycle, priceEnv: priceFor(plan, cycle).priceEnv }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) window.location.href = data.url;
-      else setNote('Checkout is not available yet. Please try again shortly.');
-    } catch {
-      setNote('Could not start checkout. Please try again.');
+      const r = await startPayment(item, { email: user.email ?? undefined });
+      if (r.ok) {
+        await refreshProfile();
+        setNote(r.credits ? `Payment successful — ${r.credits} credits added.` : 'Payment successful — credits added.');
+      } else if (!r.cancelled) {
+        setNote(r.error ?? 'Payment could not be completed. Please try again.');
+      }
+    } finally {
+      setPayBusy(false);
     }
   };
 
-  const buyAddon = async (addonId: string) => {
-    if (!user || !supabase) { requireLogin('Log in to buy credits.'); return; }
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ addon: addonId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) window.location.href = data.url;
-      else setNote('Checkout is not available yet. Please try again shortly.');
-    } catch {
-      setNote('Could not start checkout. Please try again.');
-    }
-  };
+  const startCheckout = (plan: Plan, cycle: BillingCycle) => runPayment(planItem(plan.id as 'pro' | 'studio', cycle));
+  const buyAddon = (addonId: string) => runPayment(addonItem(addonId));
 
   // YouTube feed preview
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -759,10 +759,52 @@ const ThumbnailStudio: React.FC<Props> = ({
     e.target.value = '';
   };
 
+  // ── Recreate tab helpers ──────────────────────────────────────────────────
+  // Stable per-element keys (fall back to positional ids for older/un-analysed styles).
+  const faceKey = (f: { id?: string }, i: number) => f.id || `f${i}`;
+  const textKey = (t: { id?: string }, i: number) => t.id || `t${i}`;
+  const otherKey = (o: { id?: string }, i: number) => o.id || `o${i}`;
+  const ordinal = (n: number) => ['first', 'second', 'third', 'fourth', 'fifth'][n - 1] || `${n}th`;
+
+  // Selecting a style seeds the editable fields from its analysed elements.
+  const selectRecreate = useCallback((s: StyleRecord) => {
+    setRecreateSel(s);
+    const el = s.meta.elements || {};
+    const tr: Record<string, { value: string; keepStyle: boolean }> = {};
+    (el.texts || []).forEach((t, i) => { tr[t.id || `t${i}`] = { value: t.current || '', keepStyle: true }; });
+    setTextReps(tr);
+    const ok: Record<string, boolean> = {};
+    (el.other || []).forEach((o, i) => { ok[o.id || `o${i}`] = true; });
+    setOtherKeep(ok);
+    setFaceReps({});
+    setBgMode('keep');
+    setBgCustom('');
+  }, []);
+
+  // Load the style pool WITH meta the first time the Recreate tab opens.
+  useEffect(() => {
+    if (mode !== 'recreate' || recreateStyles.length) return;
+    let alive = true;
+    fetchStyleObjects().then(list => {
+      if (!alive) return;
+      setRecreateStyles(list);
+      if (list.length) selectRecreate(list[0]);
+    });
+    return () => { alive = false; };
+  }, [mode, recreateStyles.length, selectRecreate]);
+
+  const readFaceFile = (key: string, file: File | undefined) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const r = new FileReader();
+    r.onload = e => { if (e.target?.result) setFaceReps(prev => ({ ...prev, [key]: e.target!.result as string })); };
+    r.readAsDataURL(file);
+  };
+
   const canGenerate = (() => {
     if (busy) return false;
     if (mode === 'youtube') return extractYouTubeId(youtubeUrl) !== null;
     if (mode === 'templates') return !!selectedRef && (titleText.trim().length > 0 || uploads.length > 0);
+    if (mode === 'recreate') return !!recreateSel;
     if (mode === 'prompt') return promptText.trim().length > 0;
     if (mode === 'reference') return uploads.length > 0 || promptText.trim().length > 0;
     if (mode === 'sketch') return sketchData !== null;
@@ -863,32 +905,91 @@ const ThumbnailStudio: React.FC<Props> = ({
       // Text is allowed now: use the user's direction if given, else the AI-derived
       // headline drawn from the video's content.
       const textSeed = promptText.trim() || headline;
-      const personDir = hasFace
-        ? ''
-        : 'If the original thumbnail features a real person, keep that SAME person as the main subject and faithfully preserve their face and likeness. If it has no person, build the scene from the concept and do not invent a person. ';
 
-      if (thumb) sources = [thumb, ...sources];
-
-      // Build one thumbnail prompt for a given concept string.
+      // Concept-only prompt — the absolute last resort if NOT A SINGLE style image
+      // is readable. It builds from the video's topic/concept and NEVER from the
+      // video's own thumbnail (recreating that low-res source is exactly what we
+      // want to avoid).
       const buildYt = (concept: string) => {
         const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
-        return thumb
-          ? `Using the uploaded original YouTube thumbnail (FIRST image) as reference for the subject and topic, create a FRESH, far more click-worthy thumbnail for this video that captures its core hook. ${titleLine}${conceptLine}${ytPremium}${realFootage}${personDir}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`
-          : `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
+        return `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
       };
 
-      // Two DISTINCT variants (per request). If the model only gave one concept,
-      // the second variant is a free-composition take so the two still differ.
+      const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
+      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+
+      // ── Auto-style: ALWAYS recreate in one of the app's OWN styles — NEVER the
+      // video's own (low-res) thumbnail. Vector search finds the styles that best
+      // fit THIS video's topic; if that's unavailable (not signed in / embedding
+      // quota), we still fall back to the loaded style pool — never the source
+      // thumbnail. A little per-run randomness among the top options keeps repeats
+      // on the same link fresh.
+      setBusy(true);
+      setNote('Finding the best-matching style…');
+      const matchQuery = [title, conceptA, conceptB, promptText, transcriptText]
+        .filter(v => v && v.trim()).join('. ').slice(0, 4000);
+      const matched = await matchStyles(matchQuery, 8);
+
+      // Prefer vector matches (they carry AI tags); otherwise use the loaded style
+      // pool (bundled/DB) so a style is ALWAYS chosen from our own thumbnails.
+      const candidates: { url: string; meta?: StyleMeta }[] = matched.length
+        ? matched.map(m => ({ url: m.url, meta: m.meta }))
+        : styleImages.map(u => ({ url: u }));
+
+      if (candidates.length) {
+        const pool = candidates.slice(0, Math.min(5, candidates.length));
+        for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+        const chosen = [pool[0], pool[1] || pool[0]];
+        const concepts = [conceptA || conceptB, conceptB || conceptA];
+        const headlineText = (promptText.trim() || headline || '').trim();
+
+        setNote('Designing your thumbnails in the best-matching style…');
+        let launched = 0;
+        for (let i = 0; i < 2; i++) {
+          const style = chosen[i];
+          const meta = style.meta || {};
+          const concept = concepts[i] || '';
+          const styleB64 = await urlToBase64(style.url);
+          if (!styleB64) continue; // skip an unreadable style rather than recreating the video's thumbnail
+
+          const styleHint = meta.summary ? `Reference style vibe: ${meta.summary}. ` : '';
+
+          // PERSON: uploaded photo → swap that person in; otherwise build the
+          // subject from the video's concept (never reuse the style's own person).
+          const faceStyle = hasFace
+            ? "For the main person, use the person from the uploaded photo (the SECOND image) — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. "
+            : "Build the main subject from the video's concept; do NOT reuse the style image's specific person or face. ";
+
+          // TEXT: driven by whether THIS style itself uses on-image text. If it
+          // does → replace it with a headline for THIS video (from the title). If
+          // it doesn't → represent the topic with VISUALS ONLY, no text. When the
+          // style is un-analysed, allow text only if the user gave a headline.
+          const styleTexts = Array.isArray(meta.elements?.texts) ? meta.elements!.texts! : [];
+          const metaKnown = !!(meta.summary || meta.text_density || meta.elements);
+          const styleUsesText = styleTexts.length > 0
+            || meta.text_density === 'high' || meta.text_density === 'low'
+            || (!metaKnown && !!headlineText);
+          const textStyle = styleUsesText
+            ? (headlineText
+                ? `This style shows headline text — REPLACE it with a short punchy headline for THIS video, derived from its title/topic (distil to 2-4 uppercase words, not a full sentence) based on "${headlineText}". Keep the SAME position, size and treatment as the style. Render ONLY this one headline, correctly spelled — no other words, duplicates or gibberish. `
+                : `This style shows headline text — add ONE short punchy 2-4 word uppercase headline capturing THIS video's hook, in the same position/treatment as the style; correctly spelled, no other words or gibberish. `)
+            : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
+
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. Do NOT copy every element and do NOT reuse its specific subject, people, props or exact wording — take ONLY what's needed and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
+          onGenerate(finalize(p), [styleB64, ...uploads], genOpts);
+          launched++;
+        }
+        if (launched) { setBusy(false); setNote(null); scrollToResults(); return; }
+      }
+
+      // Absolute last resort: not a single style image was readable → build from
+      // the video's concept alone (still NEVER the video's own thumbnail).
       const variants = (conceptA && conceptB)
         ? [buildYt(conceptA), buildYt(conceptB)]
         : [buildYt(conceptA || conceptB), buildYt('')];
-
-      const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
-      variants.forEach(v => onGenerate(finalize(v), sources, {
-        count: 1,
-        modelType: genModel === 'pro' ? 'pro' : 'flash',
-        aspect: format === 'short' ? '9:16' : '16:9',
-      }));
+      variants.forEach(v => onGenerate(finalize(v), [...uploads], genOpts));
+      setBusy(false);
+      setNote(null);
       scrollToResults();
       return;
     } else if (mode === 'templates') {
@@ -918,6 +1019,60 @@ const ThumbnailStudio: React.FC<Props> = ({
         // Templates get extra care: match the template's look AND adapt it to the topic.
         prompt = `${tpl.style} ${usingTplRef ? 'Use the first reference image as the exact style, layout, composition and color template — closely match its framing, lighting and color grade while creating an original thumbnail for this topic (do not copy its subject verbatim). ' : ''}The video is about "${topic}". ${topicDirective(topic)}${hasFace ? 'Feature the person/photo from the uploaded reference as the main subject and preserve their likeness, blending them naturally into the template style. ' : ''}${textDirective(titleText)} ${BASE_THUMB}`;
       }
+    } else if (mode === 'recreate') {
+      // Recreate = faithfully reproduce the chosen style thumbnail, applying ONLY
+      // the per-element changes the user set (swap faces, replace/keep text,
+      // keep/replace background). Base image first, then any uploaded face photos.
+      if (!recreateSel) return;
+      setBusy(true);
+      const baseB64 = await urlToBase64(recreateSel.url);
+      setBusy(false);
+      if (!baseB64) { setNote('Could not load that style — please retry.'); return; }
+
+      const el = recreateSel.meta.elements || {};
+      const changes: string[] = [];
+      const extraSources: string[] = [];
+
+      // FACES — each uploaded photo becomes an additional source image the model
+      // swaps in. Base is image 1, so face photos start at image 2.
+      (el.faces || []).forEach((f, i) => {
+        const key = faceKey(f, i);
+        const dataUrl = faceReps[key];
+        if (!dataUrl) return; // no replacement → leave that person as-is
+        extraSources.push(dataUrl);
+        const where = f.position ? `the ${f.position} person` : 'the main person';
+        const ord = ordinal(1 + extraSources.length); // this photo's position among all sources
+        changes.push(`Replace ${where} with the person in the ${ord} image — swap in their face and full likeness accurately and photorealistically, matching the original pose, head angle, scale and lighting so they blend in seamlessly.`);
+      });
+
+      // TEXT — replace with the user's wording (keeping or changing the style), or
+      // remove if cleared; leave untouched when unchanged.
+      (el.texts || []).forEach((t, i) => {
+        const r = textReps[textKey(t, i)];
+        if (!r) return;
+        const val = r.value.trim();
+        const where = t.position ? `the ${t.position} text` : 'the headline text';
+        if (!val) { changes.push(`Remove ${where} completely.`); return; }
+        if (t.current && val === t.current.trim()) return; // unchanged → keep as-is
+        changes.push(`Change ${where} to read EXACTLY "${val}"${r.keepStyle ? ', keeping the SAME font, size, color and treatment as the original' : ', in a fresh bold, highly legible treatment'} — spelled correctly, no other words.`);
+      });
+
+      // BACKGROUND
+      if (bgMode === 'random') changes.push('Replace the background with a fresh, topic-appropriate background while keeping the main subject and overall layout.');
+      else if (bgMode === 'white') changes.push('Replace the background with a clean, solid pure-white background.');
+      else if (bgMode === 'custom' && bgCustom.trim()) changes.push(`Replace the background with: ${bgCustom.trim()}.`);
+      // 'keep' → no instruction, background stays exactly as-is.
+
+      // OTHER elements the user chose to drop.
+      (el.other || []).forEach((o, i) => {
+        if (otherKeep[otherKey(o, i)] === false) changes.push(`Remove the ${o.label || 'highlighted element'} from the image.`);
+      });
+
+      const changeText = changes.length
+        ? `Apply ONLY these changes and nothing else: ${changes.join(' ')} `
+        : 'Reproduce it faithfully with no changes. ';
+      prompt = `You are EDITING the FIRST image — an existing, finished YouTube thumbnail. Reproduce it faithfully: keep its EXACT composition, layout, framing, background, props, graphics, lighting, colour grade and any text that is NOT being changed. Do not restyle, redraw or move the parts that aren't being changed. ${changeText}Do NOT add, invent or write any new text, letters, captions, labels or watermarks beyond the changes above. Keep the result photorealistic with natural skin texture and a sharp, fully-detailed face, rendered at maximum fidelity — crisp 4K-level detail, no blur, noise, artifacts, warping or distorted anatomy. Output in the SAME aspect ratio and shape as the reference thumbnail.`;
+      sources = [baseB64, ...extraSources];
     } else if (mode === 'prompt') {
       const faceDir = uploads.length > 0 ? 'Feature the person(s) from the uploaded photo(s) as the main subject and preserve their face and likeness accurately. ' : '';
       prompt = `${promptText.trim()}. ${faceDir}${topicDirective(promptText)} ${BASE_THUMB}`;
@@ -941,7 +1096,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, recreateSel, faceReps, textReps, bgMode, bgCustom, otherKeep, sketchData, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -1182,7 +1337,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
             {/* Tabs */}
             {/* Expanding-pill selector: the active tab grows to show its label; the
-                rest stay compact (icon only) so five tabs fit one clean line. */}
+                rest stay compact (icon only) so all tabs fit one clean line. */}
             <div className="flex items-stretch gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
               {TABS.map(t => {
                 const active = mode === t.id;
@@ -1224,7 +1379,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                         className="w-full bg-transparent py-4 outline-none text-[15px] placeholder-thumb-sub/50"
                       />
                     </div>
-                    <p className="text-[12px] text-thumb-sub leading-relaxed">Just paste the link — we analyse the video and craft the perfect thumbnail for you.</p>
                   </div>
 
                   {/* Advanced (optional) */}
@@ -1282,11 +1436,9 @@ const ThumbnailStudio: React.FC<Props> = ({
               {mode === 'templates' && (
                 <div className="space-y-3 animate-fade-in-up">
                   {/* Single style picker: tap a REAL thumbnail and the AI recreates
-                      its exact look (style, layout, lighting, colors) for your topic. */}
-                  <label className="text-sm font-bold text-thumb-ink flex items-center gap-2">
-                    <I.Image className="w-4 h-4 text-thumb-red" /> Pick a style to recreate
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
+                      its exact look (style, layout, lighting, colors) for your topic.
+                      Clean layout: style images → face-upload button → text field. */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[340px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
                     {styleImages.map(src => {
                       const active = selectedRef === src;
                       return (
@@ -1303,6 +1455,134 @@ const ThumbnailStudio: React.FC<Props> = ({
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {mode === 'recreate' && (
+                <div className="space-y-3 animate-fade-in-up">
+                  <p className="text-[12px] text-thumb-sub leading-relaxed">
+                    Pick a style — we detect its people, text and background so you can swap only what you want.
+                  </p>
+                  {/* Style picker (same pool as Styles, but with detected elements) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[240px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
+                    {recreateStyles.map(s => {
+                      const active = recreateSel?.id === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => selectRecreate(s)}
+                          className={`relative rounded-2xl overflow-hidden border-2 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
+                        >
+                          <div className="aspect-video overflow-hidden bg-black/40">
+                            <img src={s.url} alt="Style" loading="lazy" className="w-full h-full object-cover" />
+                          </div>
+                          {s.own && <div className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-black/60 text-white">Mine</div>}
+                          {active && <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-thumb-red text-white flex items-center justify-center text-[11px] font-bold">✓</div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {recreateStyles.length === 0 && <p className="text-sm text-thumb-sub">Loading styles…</p>}
+
+                  {/* Dynamic per-element fields for the selected style */}
+                  {recreateSel && (() => {
+                    const el = recreateSel.meta.elements || {};
+                    const faces = el.faces || [];
+                    const texts = el.texts || [];
+                    const others = el.other || [];
+                    const analysed = faces.length || texts.length || others.length || !!el.background;
+                    if (!analysed) {
+                      return <p className="text-[12px] text-thumb-sub bg-thumb-soft border border-thumb-line rounded-xl px-3 py-2.5">This style isn't analysed for editable parts yet — generate to recreate it as-is, or pick another.</p>;
+                    }
+                    return (
+                      <div className="space-y-4 pt-1">
+                        {/* People */}
+                        {faces.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[12px] font-bold uppercase tracking-wider text-thumb-sub">People</p>
+                            <div className="flex flex-wrap gap-2.5">
+                              {faces.map((f, i) => {
+                                const key = faceKey(f, i);
+                                const pic = faceReps[key];
+                                return (
+                                  <label key={key} className="cursor-pointer">
+                                    <div className={`w-20 rounded-xl border-2 border-dashed overflow-hidden transition-colors ${pic ? 'border-thumb-red' : 'border-thumb-line hover:border-thumb-ink'}`}>
+                                      <div className="aspect-square bg-thumb-soft flex items-center justify-center overflow-hidden">
+                                        {pic ? <img src={pic} className="w-full h-full object-cover" alt="" /> : <I.Upload className="w-4 h-4 text-thumb-sub" />}
+                                      </div>
+                                    </div>
+                                    <span className="block text-center text-[10px] text-thumb-sub mt-1 capitalize">{f.position || `Person ${i + 1}`}</span>
+                                    <input type="file" accept="image/*" hidden onChange={e => { readFaceFile(key, e.target.files?.[0]); e.currentTarget.value = ''; }} />
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[11px] text-thumb-sub">Upload a photo to replace a person, or leave empty to keep them.</p>
+                          </div>
+                        )}
+
+                        {/* Text */}
+                        {texts.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[12px] font-bold uppercase tracking-wider text-thumb-sub">Text</p>
+                            {texts.map((t, i) => {
+                              const key = textKey(t, i);
+                              const r = textReps[key] || { value: '', keepStyle: true };
+                              return (
+                                <div key={key} className="space-y-1.5">
+                                  <input
+                                    value={r.value}
+                                    onChange={e => setTextReps(prev => ({ ...prev, [key]: { ...r, value: e.target.value } }))}
+                                    placeholder={t.current ? `Was: "${t.current}"` : 'Text (leave empty to remove)'}
+                                    className="w-full bg-thumb-soft border border-thumb-line rounded-xl px-3.5 py-2.5 outline-none text-sm placeholder-thumb-sub/50 focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
+                                  />
+                                  <label className="flex items-center gap-2 text-[12px] text-thumb-sub cursor-pointer">
+                                    <input type="checkbox" checked={r.keepStyle} onChange={e => setTextReps(prev => ({ ...prev, [key]: { ...r, keepStyle: e.target.checked } }))} className="accent-thumb-red" />
+                                    Keep the same text style
+                                  </label>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Background */}
+                        {el.background && (
+                          <div className="space-y-2">
+                            <p className="text-[12px] font-bold uppercase tracking-wider text-thumb-sub">Background</p>
+                            <div className="grid grid-cols-4 gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
+                              {(['keep', 'random', 'custom', 'white'] as const).map(m => (
+                                <button key={m} type="button" onClick={() => setBgMode(m)} className={`py-2 rounded-lg text-[12px] font-bold capitalize transition-colors ${bgMode === m ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>{m}</button>
+                              ))}
+                            </div>
+                            {bgMode === 'custom' && (
+                              <input value={bgCustom} onChange={e => setBgCustom(e.target.value)} placeholder="Describe the background you want" className="w-full bg-thumb-soft border border-thumb-line rounded-xl px-3.5 py-2.5 outline-none text-sm placeholder-thumb-sub/50 focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10" />
+                            )}
+                            {bgMode === 'keep' && <p className="text-[11px] text-thumb-sub">Keeping the original background from the style.</p>}
+                          </div>
+                        )}
+
+                        {/* Other elements */}
+                        {others.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[12px] font-bold uppercase tracking-wider text-thumb-sub">Other elements</p>
+                            <div className="flex flex-wrap gap-2">
+                              {others.map((o, i) => {
+                                const key = otherKey(o, i);
+                                const keep = otherKeep[key] !== false;
+                                return (
+                                  <button key={key} type="button" onClick={() => setOtherKeep(prev => ({ ...prev, [key]: !keep }))} className={`px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors ${keep ? 'border-thumb-line text-thumb-ink bg-thumb-soft' : 'border-transparent text-thumb-sub bg-thumb-soft/50 line-through'}`}>
+                                    {o.label || `Element ${i + 1}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[11px] text-thumb-sub">Tap to keep or drop an element.</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1378,22 +1658,21 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </button>
               )}
 
-              {/* templates = edit instruction (optional); reference + sketch = overlay title (optional) */}
+              {/* templates = clean label-less text field; reference + sketch = overlay title (optional) */}
               {(mode === 'templates' || mode === 'reference' || mode === 'sketch') && (
                 <div className="space-y-2.5">
-                  <label className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'templates' ? 'What to change' : 'Title text on thumbnail'}</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-thumb-sub bg-white/5 border border-white/10">optional</span>
-                  </label>
+                  {mode !== 'templates' && (
+                    <label className="flex items-center justify-between">
+                      <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Title text on thumbnail</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-thumb-sub bg-white/5 border border-white/10">optional</span>
+                    </label>
+                  )}
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
-                    placeholder={mode === 'templates' ? "e.g. Replace the face with my photo · change the title to 'MODI JI'" : 'e.g. THIS CHANGED EVERYTHING'}
+                    placeholder={mode === 'templates' ? 'What to change (optional)' : 'e.g. THIS CHANGED EVERYTHING'}
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
                   />
-                  {mode === 'templates' && (
-                    <p className="text-[12px] text-thumb-sub leading-relaxed">This is an edit instruction — it won't be written on the image. Leave it empty to just swap in your uploaded photo.</p>
-                  )}
                 </div>
               )}
 
@@ -1478,9 +1757,9 @@ const ThumbnailStudio: React.FC<Props> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   {sortedQueue.map(item => (
-                    <div key={item.id} className="aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
+                    <div key={item.id} className="col-span-2 sm:col-span-1 aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
                       {item.status === 'processing' ? (
                         (() => {
                           const t = itemTimers[item.id] || 0;
