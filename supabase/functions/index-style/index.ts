@@ -204,7 +204,11 @@ Deno.serve(async (req) => {
     })
     .select('id, path, name, meta')
     .single();
-  if (insErr) { console.error('insert_failed', insErr.message); return json(500, { error: 'Could not save the style.' }); }
+  if (insErr) {
+    if (insErr.code === '23505') return json(409, { error: 'This image is already in your style library.' });
+    console.error('insert_failed', insErr.message);
+    return json(500, { error: 'Could not save the style.' });
+  }
 
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
   return json(200, { style: { ...row, url: publicUrl } });
