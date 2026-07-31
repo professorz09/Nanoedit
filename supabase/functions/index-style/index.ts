@@ -205,7 +205,21 @@ Deno.serve(async (req) => {
     .select('id, path, name, meta')
     .single();
   if (insErr) {
-    if (insErr.code === '23505') return json(409, { error: 'This image is already in your style library.' });
+    if (insErr.code === '23505') {
+      // A retry (e.g. after a client timeout) hit the same path the original
+      // request already indexed — that earlier call succeeded, so this is a
+      // success too. Return the existing row instead of surfacing an error.
+      const { data: existing, error: fetchErr } = await admin
+        .from('style_images')
+        .select('id, path, name, meta')
+        .eq('path', path)
+        .single();
+      if (!fetchErr && existing) {
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+        return json(200, { style: { ...existing, url: publicUrl } });
+      }
+      return json(409, { error: 'This image is already in your style library.' });
+    }
     console.error('insert_failed', insErr.message);
     return json(500, { error: 'Could not save the style.' });
   }
