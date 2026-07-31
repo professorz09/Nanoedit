@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText } from '../services/textService';
-import { extractYouTubeId } from './ThumbnailStudio';
+import { extractYouTubeId } from '../services/youtubeService';
 import { useAuth } from '../contexts/AuthContext';
 
 const TITLE_COST = 2; // credits charged per title-generation run

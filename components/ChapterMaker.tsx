@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText, formatTime } from '../services/textService';
-import { extractYouTubeId } from './ThumbnailStudio';
+import { extractYouTubeId } from '../services/youtubeService';
 import { useAuth } from '../contexts/AuthContext';
 
 const CHAPTERS_COST = 3; // credits charged per chapters run (YouTube transcript analysis)
