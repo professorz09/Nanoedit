@@ -269,7 +269,28 @@ const ResultThumb: React.FC<{
 }> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete }) => {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
+  // A freshly-generated image can 404 for a moment right after upload (CDN edge
+  // hasn't picked it up yet) — retry a few times with backoff + a cache-busting
+  // query param before giving up, instead of permanently hiding the result.
+  const [attempt, setAttempt] = useState(0);
+  const MAX_RETRIES = 4;
   const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
+
+  // data: URLs (dev-mode base64 results) fail deterministically — retrying the
+  // identical string can't help, so only retry real (Storage/CDN) URLs.
+  const isRemote = !img.url.startsWith('data:');
+
+  const handleError = () => {
+    if (isRemote && attempt < MAX_RETRIES) {
+      const delay = 500 * (attempt + 1);
+      setTimeout(() => setAttempt(a => a + 1), delay);
+    } else {
+      setErrored(true);
+    }
+  };
+
+  const src = !isRemote || attempt === 0 ? img.url : `${img.url}${img.url.includes('?') ? '&' : '?'}retry=${attempt}`;
+
   return (
     <div className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
       <div className={`relative overflow-hidden bg-thumb-soft mx-auto w-full ${portrait ? 'aspect-[9/16] max-w-[240px]' : 'aspect-video'}`}>
@@ -281,12 +302,12 @@ const ResultThumb: React.FC<{
           </div>
         ) : (
           <img
-            src={img.url}
+            src={src}
             alt={img.prompt}
             loading="lazy"
             decoding="async"
             onLoad={() => setLoaded(true)}
-            onError={() => setErrored(true)}
+            onError={handleError}
             onClick={() => onView(img.url)}
             className={`w-full h-full object-cover cursor-pointer transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
           />
