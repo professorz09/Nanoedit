@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react
 import { GeneratedImage, QueueItem, ThumbInputMode, THUMBNAIL_TEMPLATES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
-import { Plan, BillingCycle, priceFor } from '../services/plans';
+import { Plan, BillingCycle } from '../services/plans';
+import { buyItem } from '../services/paymentsService';
 import AuthModal from './AuthModal';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
 // the user opens that tab, so the initial studio view stays lean.
@@ -558,7 +559,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account'>('home');
 
   // Auth + billing
-  const { user, profile, totalCredits, creditsLoading, signOut, configured } = useAuth();
+  const { user, profile, totalCredits, creditsLoading, signOut, configured, refreshProfile } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [authReason, setAuthReason] = useState<string | undefined>(undefined);
 
@@ -577,38 +578,27 @@ const ThumbnailStudio: React.FC<Props> = ({
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
 
-  // Stripe checkout — asks the backend for a Checkout URL and redirects.
+  // Razorpay checkout — creates a server-side order, opens the Razorpay modal,
+  // then verifies + grants the purchase server-side (see paymentsService.ts).
   const startCheckout = async (plan: Plan, cycle: BillingCycle) => {
     if (!user || !supabase) { requireLogin('Log in to upgrade.'); return; }
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ plan: plan.id, cycle, priceEnv: priceFor(plan, cycle).priceEnv }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) window.location.href = data.url;
-      else setNote('Checkout is not available yet. Please try again shortly.');
-    } catch {
-      setNote('Could not start checkout. Please try again.');
+      await buyItem(`plan:${plan.id}:${cycle}`);
+      await refreshProfile();
+      setNote(`You're on ${plan.name} now. Enjoy!`);
+    } catch (e: any) {
+      if (e?.message !== 'cancelled') setNote(e?.message || 'Could not start checkout. Please try again.');
     }
   };
 
   const buyAddon = async (addonId: string) => {
     if (!user || !supabase) { requireLogin('Log in to buy credits.'); return; }
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ addon: addonId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) window.location.href = data.url;
-      else setNote('Checkout is not available yet. Please try again shortly.');
-    } catch {
-      setNote('Could not start checkout. Please try again.');
+      await buyItem(`addon:${addonId}`);
+      await refreshProfile();
+      setNote('Credits added to your account.');
+    } catch (e: any) {
+      if (e?.message !== 'cancelled') setNote(e?.message || 'Could not start checkout. Please try again.');
     }
   };
 

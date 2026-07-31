@@ -1,0 +1,108 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// Supabase Edge Function: "match-style"
+// Vector search over the style pool for the YouTube auto-style flow.
+//
+// The browser can't embed text (the Vertex key is server-side only), so it POSTs
+// the video's topic here. We embed it with the SAME model used to index the
+// styles (gemini-embedding-001 → 768 dims) and run the match_styles() RPC to find
+// the closest styles by cosine similarity. Returns their public URLs + tags so
+// the client can recreate the best-fitting styles.
+//
+// Auth: requires a logged-in user (JWT), same anti-abuse gate as "text". Spends
+// no credits — matching is a free helper step of the paid generation.
+//
+// Deploy:  supabase functions deploy match-style --project-ref vowgdlbvundorxwjdntu --use-api
+// Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
+//   EMBED_MODEL = gemini-embedding-001   (optional override)
+// ═══════════════════════════════════════════════════════════════════════════
+import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+const json = (status: number, obj: unknown) =>
+  new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+
+const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
+const EMBED_DIMS = 768; // must match the style_images.embedding vector(768) column
+const BUCKET = 'styles';
+const MAX_TEXT = 8000;
+
+function makeVertex(): any {
+  const saRaw = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
+  if (saRaw) {
+    const sa = JSON.parse(saRaw);
+    return new GoogleGenAI({
+      vertexai: true,
+      project: sa.project_id,
+      location: Deno.env.get('VERTEX_LOCATION') || 'global',
+      googleAuthOptions: { credentials: sa, scopes: ['https://www.googleapis.com/auth/cloud-platform'] },
+    });
+  }
+  const key = Deno.env.get('VERTEX_API_KEY');
+  if (key) return new GoogleGenAI({ vertexai: true, apiKey: key });
+  return null;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
+
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const admin = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+    auth: { persistSession: false },
+  });
+
+  // Anti-abuse gate: must be signed in (same as the other helper endpoints).
+  const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').trim();
+  if (!jwt) return json(401, { error: 'Please sign in.' });
+  const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
+  if (userErr || !userData?.user) return json(401, { error: 'Please sign in.' });
+  const uid = userData.user.id;
+
+  let body: any;
+  try { body = await req.json(); } catch { return json(400, { error: 'Invalid request body' }); }
+  const text = typeof body?.text === 'string' ? body.text.trim().slice(0, MAX_TEXT) : '';
+  if (!text) return json(400, { error: 'Missing text' });
+  const count = Number.isFinite(body?.count) ? Math.max(1, Math.min(12, Math.floor(body.count))) : 8;
+
+  const ai = makeVertex();
+  if (!ai) return json(500, { error: 'Match service is not configured.' });
+
+  // 1) Embed the query topic (same model + dims as the offline index).
+  let embedding: number[] | null = null;
+  try {
+    const r: any = await ai.models.embedContent({
+      model: EMBED_MODEL,
+      contents: text,
+      // Styles were indexed as RETRIEVAL_DOCUMENT; the query is RETRIEVAL_QUERY.
+      config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_QUERY' },
+    });
+    embedding = r?.embeddings?.[0]?.values ?? null;
+  } catch (e: any) {
+    console.error('embed_failed', e?.message || String(e));
+  }
+  if (!embedding?.length) return json(502, { error: 'Could not analyse the topic. Please try again.' });
+
+  // 2) Cosine-similarity search over the indexed styles — global defaults PLUS
+  // the caller's own custom styles (p_user_id filters to user_id IS NULL OR own).
+  const { data, error } = await admin.rpc('match_styles', {
+    query_embedding: JSON.stringify(embedding),
+    match_count: count,
+    p_user_id: uid,
+  });
+  if (error) { console.error('match_styles_failed', error.message); return json(502, { error: 'Style search failed.' }); }
+
+  const publicPrefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
+  const styles = (data || []).map((row: any) => ({
+    url: /^https?:\/\//.test(row.path) ? row.path : `${publicPrefix}${row.path}`,
+    name: row.name ?? null,
+    meta: row.meta ?? {},
+    similarity: row.similarity ?? null,
+  }));
+
+  return json(200, { styles });
+});
