@@ -9,6 +9,8 @@ import AuthModal from './AuthModal';
 import { I } from './ThumbIcons';
 import ResultThumb from './ResultThumb';
 import SketchCanvas from './SketchCanvas';
+import PersonaPicker from './PersonaPicker';
+import { savePersona } from '../services/personasService';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
 // the user opens that tab, so the initial studio view stays lean.
 const Pricing = React.lazy(() => import('./Pricing'));
@@ -133,11 +135,11 @@ interface Props {
 }
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
-  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
   { id: 'templates', label: 'Styles', icon: I.Grid },
   { id: 'prompt', label: 'Prompt', icon: I.Text },
   { id: 'reference', label: 'Image', icon: I.Image },
   { id: 'sketch', label: 'Sketch', icon: I.Brush },
+  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
 ];
 
 const TESTIMONIALS = [
@@ -172,7 +174,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   onGenerate, generatedImages, queue, isProcessing, itemTimers,
   onView, onDownload, onDownloadAll, onDelete, onOpenEditor, onRetry, onCancel,
 }) => {
-  const [mode, setMode] = useState<ThumbInputMode>('youtube');
+  const [mode, setMode] = useState<ThumbInputMode>('templates');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -415,6 +417,22 @@ const ThumbnailStudio: React.FC<Props> = ({
     });
   };
 
+  // Saved faces ("personas") — reuse a face across generations without
+  // re-uploading it every time. personaRefreshKey bumps to tell every open
+  // PersonaPicker instance to re-fetch after a new save.
+  const [personaRefreshKey, setPersonaRefreshKey] = useState(0);
+  const pickPersona = (dataUrl: string) => setUploads(prev => [...prev, dataUrl].slice(0, 4));
+  const saveAsPersona = async (dataUrl: string) => {
+    if (!user) { requireLogin('Log in to save faces.'); return; }
+    try {
+      await savePersona(dataUrl);
+      setPersonaRefreshKey(k => k + 1);
+      setNoteText('Face saved for reuse.', 'success');
+    } catch (e: any) {
+      setNoteText(e?.message || 'Could not save that face.');
+    }
+  };
+
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) readFiles(Array.from(e.target.files));
     e.target.value = '';
@@ -621,33 +639,33 @@ const ThumbnailStudio: React.FC<Props> = ({
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {configured && user ? (
               <>
-                <button onClick={goPricing} title="Credits — tap to top up" className="flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-2.5 pr-3 py-1.5 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
+                <button onClick={goPricing} title="Credits — tap to top up" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-2.5 pr-3 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
                   <I.Bolt className="w-4 h-4 text-thumb-red" />
                   {creditsLoading
                     ? <span className="thumb-skeleton inline-block w-5 h-4 rounded align-middle" aria-label="Loading credits" />
                     : totalCredits}
                   <span className="hidden sm:inline text-thumb-sub font-semibold">credits</span>
                 </button>
-                <button onClick={goAccount} className="w-9 h-9 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
+                <button onClick={goAccount} className="w-11 h-11 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
                   {(user.email?.[0] || 'U').toUpperCase()}
                 </button>
               </>
             ) : (
               <>
                 {configured && (
-                  <button onClick={() => requireLogin()} className="text-sm font-bold text-thumb-ink hover:text-thumb-red transition-colors px-2">
+                  <button onClick={() => requireLogin()} className="h-11 inline-flex items-center rounded-full border border-thumb-line px-4 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 hover:text-thumb-red transition-colors">
                     Log in
                   </button>
                 )}
-                <button onClick={goGenerate} className="thumb-btn text-white font-bold text-sm px-5 py-2.5 rounded-full">
+                <button onClick={goGenerate} className="h-11 inline-flex items-center thumb-btn text-white font-bold text-sm px-4 sm:px-5 rounded-full">
                   Start now
                 </button>
               </>
             )}
-            <button onClick={() => setSidebarOpen(true)} className="p-2 text-thumb-ink/70 hover:text-thumb-ink" aria-label="Menu"><I.Menu className="w-6 h-6" /></button>
+            <button onClick={() => setSidebarOpen(true)} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-full text-thumb-ink/70 hover:text-thumb-ink hover:bg-thumb-soft transition-colors" aria-label="Menu"><I.Menu className="w-6 h-6" /></button>
           </div>
         </div>
       </header>
@@ -884,12 +902,14 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Add a person's photo</label>
+                          <PersonaPicker enabled={mode === 'youtube' && ytAdvanced} refreshKey={personaRefreshKey} onPick={pickPersona} />
                           {uploads.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {uploads.map((u, i) => (
                                 <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
                                   <img src={u} alt="" className="w-full h-full object-cover" />
-                                  <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                                  <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} aria-label={`Remove photo ${i + 1}`} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                                  {user && <button onClick={() => saveAsPersona(u)} title="Save face" aria-label="Save this face for reuse" className="absolute bottom-0.5 right-0.5 w-5 h-5 bg-black/60 hover:bg-thumb-red text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.Star className="w-3 h-3" /></button>}
                                 </div>
                               ))}
                             </div>
@@ -991,13 +1011,19 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
+              {/* Saved faces (shared for templates + reference + prompt + sketch) */}
+              {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && (
+                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} />
+              )}
+
               {/* Uploaded thumbnails preview (shared for templates + reference + prompt + sketch) */}
               {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && uploads.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {uploads.map((u, i) => (
                     <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
                       <img src={u} alt="" className="w-full h-full object-cover" />
-                      <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                      <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} aria-label={`Remove photo ${i + 1}`} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                      {user && <button onClick={() => saveAsPersona(u)} title="Save face" aria-label="Save this face for reuse" className="absolute bottom-0.5 right-0.5 w-5 h-5 bg-black/60 hover:bg-thumb-red text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.Star className="w-3 h-3" /></button>}
                     </div>
                   ))}
                 </div>
@@ -1672,16 +1698,23 @@ const ThumbnailStudio: React.FC<Props> = ({
               const open = openFaq === i;
               return (
                 <div key={i} className={`thumb-glass rounded-2xl overflow-hidden transition-all duration-300 ${open ? 'thumb-float-red' : ''}`}>
-                  <button onClick={() => setOpenFaq(open ? null : i)} className="w-full flex items-center gap-4 text-left px-4 sm:px-5 py-4">
-                    <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 ${open ? 'thumb-btn text-white' : 'bg-white/5 border border-white/10 text-thumb-ink'}`}>
-                      <span className={`transition-transform duration-300 ${open ? 'rotate-45' : ''} text-xl leading-none font-light`}>+</span>
-                    </span>
-                    <span className={`font-bold text-[15px] sm:text-base transition-colors duration-200 ${open ? 'text-thumb-red' : 'text-thumb-ink'}`}>{f.q}</span>
-                  </button>
-                  <div className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                    <div className="overflow-hidden">
-                      <p className="px-4 sm:px-5 pb-5 sm:pl-[4.25rem] text-sm text-thumb-sub leading-relaxed">{f.a}</p>
-                    </div>
+                  <h3 className="m-0">
+                    <button
+                      onClick={() => setOpenFaq(open ? null : i)}
+                      aria-expanded={open}
+                      aria-controls={`faq-answer-${i}`}
+                      className="w-full flex items-center gap-4 text-left px-4 sm:px-5 py-4"
+                    >
+                      <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 ${open ? 'thumb-btn text-white' : 'bg-white/5 border border-white/10 text-thumb-ink'}`}>
+                        <span className={`transition-transform duration-300 ${open ? 'rotate-45' : ''} text-xl leading-none font-light`}>+</span>
+                      </span>
+                      <span className={`font-bold text-[15px] sm:text-base transition-colors duration-200 ${open ? 'text-thumb-red' : 'text-thumb-ink'}`}>{f.q}</span>
+                    </button>
+                  </h3>
+                  {/* max-height (not grid-template-rows) — animates reliably on iOS Safari,
+                      which doesn't smoothly interpolate fr-unit grid track sizes. */}
+                  <div id={`faq-answer-${i}`} className={`overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? 'max-h-[400px]' : 'max-h-0'}`}>
+                    <p className="px-4 sm:px-5 pb-5 sm:pl-[4.25rem] text-sm text-thumb-sub leading-relaxed">{f.a}</p>
                   </div>
                 </div>
               );
