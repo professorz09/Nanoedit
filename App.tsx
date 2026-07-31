@@ -85,7 +85,9 @@ function App() {
   const markLoaded = (src: string) => setLoadedSrcs(prev => (prev[src] ? prev : { ...prev, [src]: true }));
 
   // Style pool for the "From styles" picker — DB-backed, bundled fallback.
-  const styleImages = useStyleImages(REFERENCE_IMAGES);
+  // Only hits Supabase once the picker is actually opened (showStylePicker),
+  // not on every editor load — most sessions never open it.
+  const styleImages = useStyleImages(REFERENCE_IMAGES, showStylePicker);
 
   // Fullscreen-viewer zoom & pan (wheel/drag/pinch). Resets when the viewed image changes.
   const {

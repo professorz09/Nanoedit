@@ -523,8 +523,9 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [selectedTemplate, setSelectedTemplate] = useState<string>(THUMBNAIL_TEMPLATES[0].id);
   // The Styles tab has a single picker: pick a REAL thumbnail and the AI recreates
   // its exact look for your topic. Default to the first one so a style is always set.
-  // The pool comes from the DB (falls back to the bundled REFERENCE_IMAGES).
-  const styleImages = useStyleImages(REFERENCE_IMAGES);
+  // The pool comes from the DB (falls back to the bundled REFERENCE_IMAGES) — only
+  // fetched once this tab is actually opened, not on every visit to the studio.
+  const styleImages = useStyleImages(REFERENCE_IMAGES, mode === 'templates');
   const [selectedRef, setSelectedRef] = useState<string | null>(REFERENCE_IMAGES[0] ?? null);
   // Keep a valid default selected as the DB pool loads / changes.
   useEffect(() => {
