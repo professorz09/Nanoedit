@@ -94,6 +94,12 @@ const I = {
 };
 
 // ── Prompt composition ────────────────────────────────────────────
+// Credits charged for the one-time-per-video YouTube analysis (transcript
+// fetch + LLM concept step) in "youtube" mode. Cached per video id (see
+// ytCache below), so re-generating from the SAME link never re-charges this —
+// only the normal per-image credit applies after the first analysis.
+const YOUTUBE_ANALYSIS_COST = 5;
+
 const BASE_THUMB = 'Design a top-tier, agency-grade, scroll-stopping YouTube thumbnail in 16:9 landscape — match the production quality, polish and click-worthiness of the best viral thumbnails from the biggest creators. Unless a specific art style is explicitly requested, lean photorealistic and lifelike — real-camera depth of field, natural skin texture, and a sharp, detailed, expressive face with realistic lighting. Compose it in whatever way best suits the topic — a bold real scene, a dramatic environment, or a clean backdrop — with a strong, clear focal point and real depth; just avoid random, meaningless clutter. Depict the subject and topic accurately. Use dramatic lighting, punchy vibrant colors and strong contrast so it pops even at small sizes. Render at high fidelity — crisp, detailed and clean, with no blur, noise, artifacts, warping or distorted anatomy. Do not add extra text, letters, captions, subtitles, watermarks or gibberish beyond any text that is explicitly requested.';
 
 // Vertical variant for YouTube Shorts / Reels / TikTok covers.
@@ -795,16 +801,29 @@ const ThumbnailStudio: React.FC<Props> = ({
         ]);
         // Turn the title + transcript into a concrete visual thumbnail concept.
         // Best-effort — if the text model is unavailable we still generate from the
-        // title and the original thumbnail.
+        // title and the original thumbnail. Charged once per new video (cached
+        // above); insufficient credits stop here instead of silently degrading.
         let concept = '';
-        try {
-          const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
-          if (title || transcriptText) {
-            concept = (await generateText(
-              `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`
-            )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
+        const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
+        if (title || transcriptText) {
+          if (configured && totalCredits < YOUTUBE_ANALYSIS_COST) {
+            setBusy(false);
+            setNote(`Analyzing a new video needs ${YOUTUBE_ANALYSIS_COST} credits. Please top up your plan.`);
+            goPricing();
+            return;
           }
-        } catch { /* concept stays empty — fall back to title + thumbnail */ }
+          try {
+            concept = (await generateText(
+              `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
+              YOUTUBE_ANALYSIS_COST
+            )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
+            refreshProfile(); // credits were charged server-side — sync the header count
+          } catch (e: any) {
+            const msg = e?.message || '';
+            if (/credit/i.test(msg)) { setBusy(false); setNote(msg); goPricing(); return; }
+            /* otherwise concept stays empty — fall back to title + thumbnail */
+          }
+        }
         analysis = { thumb, title, concept };
         ytCache.current[id] = analysis;
         setBusy(false);
@@ -1171,7 +1190,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         className="w-full bg-transparent py-4 outline-none text-[15px] placeholder-thumb-sub/50"
                       />
                     </div>
-                    <p className="text-[12px] text-thumb-sub leading-relaxed">Just paste the link — we analyse the video and craft the perfect thumbnail for you.</p>
+                    <p className="text-[12px] text-thumb-sub leading-relaxed">Just paste the link — we analyse the video and craft the perfect thumbnail for you. Analyzing a new video uses {YOUTUBE_ANALYSIS_COST} credits (once per link — regenerating from the same link is free); the thumbnail itself uses your normal per-image credit.</p>
                   </div>
 
                   {/* Advanced (optional) */}

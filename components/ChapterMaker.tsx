@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText, formatTime } from '../services/textService';
 import { extractYouTubeId } from './ThumbnailStudio';
+import { useAuth } from '../contexts/AuthContext';
+
+const CHAPTERS_COST = 5; // credits charged per chapters run (YouTube transcript analysis)
 
 const Ic = {
   List: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>),
@@ -33,11 +36,17 @@ const ChapterMaker: React.FC = () => {
   const [note, setNote] = useState<string | null>(null);
   const [chapters, setChapters] = useState('');
   const [copied, setCopied] = useState(false);
+  const { user, totalCredits, configured, refreshProfile } = useAuth();
 
   const run = useCallback(async () => {
     setNote(null);
     const id = extractYouTubeId(url.trim());
     if (!id) { setNote('Paste a valid YouTube link.'); return; }
+    // Chapter generation reads the full transcript — gate on sign-in + credits before doing any work.
+    if (configured) {
+      if (!user) { setNote('Please sign in to generate chapters.'); return; }
+      if (totalCredits < CHAPTERS_COST) { setNote(`You need ${CHAPTERS_COST} credits to generate chapters. Please top up your plan.`); return; }
+    }
     setBusy(true);
 
     let context = '';
@@ -70,16 +79,17 @@ TRANSCRIPT:
 ${context}`;
 
     try {
-      const out = await generateText(prompt);
+      const out = await generateText(prompt, CHAPTERS_COST);
       const cleaned = cleanChapters(out);
       if (!cleaned) { setNote('Could not build chapters. Try again or paste a fuller transcript.'); }
       setChapters(cleaned || '');
+      refreshProfile(); // credits were charged server-side — sync the header count
     } catch (e: any) {
       setNote(e?.message?.slice(0, 140) || 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
     }
-  }, [url, transcript, detail]);
+  }, [url, transcript, detail, user, totalCredits, configured, refreshProfile]);
 
   const copyAll = () => {
     navigator.clipboard?.writeText(chapters);
@@ -139,6 +149,7 @@ ${context}`;
         <button onClick={run} disabled={busy} className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70">
           {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analyzing video…</> : <><Ic.Wand className="w-5 h-5" /> Generate Chapters</>}
         </button>
+        <p className="text-center text-[12px] text-thumb-sub -mt-1">Uses {CHAPTERS_COST} credits per generation</p>
       </div>
 
       {/* ── Results ── */}
