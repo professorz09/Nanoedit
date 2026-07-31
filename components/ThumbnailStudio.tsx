@@ -11,6 +11,7 @@ const Pricing = React.lazy(() => import('./Pricing'));
 const Account = React.lazy(() => import('./Account'));
 const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
 const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
+const AdminStyles = React.lazy(() => import('./AdminStyles'));
 
 // Lightweight loader shown while a lazy tab chunk arrives (usually a few ms).
 const PanelFallback = () => (
@@ -586,7 +587,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     return () => { if (ric && cancel) cancel(id); else clearTimeout(id); };
   }, []);
   // Landing ('home') vs generator ('generate') vs feed preview ('preview') vs pricing
-  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account'>('home');
+  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account' | 'admin'>('home');
 
   // Auth + billing
   const { user, profile, totalCredits, creditsLoading, signOut, configured, refreshProfile } = useAuth();
@@ -604,6 +605,15 @@ const ThumbnailStudio: React.FC<Props> = ({
   const goAccount = () => {
     if (configured && !user) { requireLogin('Log in to see your account.'); return; }
     setSection('account');
+    setSidebarOpen(false);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
+  };
+
+  // Real gate is server-side (admin-styles Edge Function re-checks is_admin on
+  // every call) — this just avoids showing the nav entry/page to non-admins.
+  const goAdmin = () => {
+    if (!profile?.is_admin) return;
+    setSection('admin');
     setSidebarOpen(false);
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
@@ -947,6 +957,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 { label: 'Chapters', on: goChapters, active: section === 'chapters' },
                 { label: 'Feed test', on: goPreview, active: section === 'preview' },
                 { label: 'Pricing', on: goPricing, active: section === 'pricing' },
+                ...(profile?.is_admin ? [{ label: 'Admin', on: goAdmin, active: section === 'admin' }] : []),
               ].map(item => (
                 <button
                   key={item.label}
@@ -1030,6 +1041,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               { key: 'editor', label: 'Editor', tag: 'Canvas', icon: I.Edit, active: false, onClick: () => { setSidebarOpen(false); onOpenEditor(); } },
               { key: 'pricing', label: 'Pricing', tag: 'Plans', icon: I.Star, active: section === 'pricing', onClick: goPricing },
               { key: 'account', label: 'Account', tag: 'Profile', icon: I.Check, active: section === 'account', onClick: goAccount },
+              ...(profile?.is_admin ? [{ key: 'admin', label: 'Admin', tag: 'Styles', icon: I.Grid, active: section === 'admin', onClick: goAdmin }] : []),
             ] as { key: string; label: string; tag: string; icon: (p: any) => React.ReactElement; active: boolean; onClick: () => void }[]).map(item => (
               <button
                 key={item.key}
@@ -1832,6 +1844,13 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'account' && (
           <Suspense fallback={<PanelFallback />}>
             <Account onUpgrade={goPricing} onLogin={() => requireLogin('Log in to see your account.')} />
+          </Suspense>
+        )}
+
+        {/* ── Admin: global styles (server re-checks is_admin on every call) ── */}
+        {section === 'admin' && profile?.is_admin && (
+          <Suspense fallback={<PanelFallback />}>
+            <AdminStyles />
           </Suspense>
         )}
 
