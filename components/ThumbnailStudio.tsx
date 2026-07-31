@@ -10,6 +10,7 @@ import { I } from './ThumbIcons';
 import ResultThumb from './ResultThumb';
 import SketchCanvas from './SketchCanvas';
 import PersonaPicker from './PersonaPicker';
+import SegmentedControl from './SegmentedControl';
 import { savePersona } from '../services/personasService';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
 // the user opens that tab, so the initial studio view stays lean.
@@ -1059,47 +1060,33 @@ const ThumbnailStudio: React.FC<Props> = ({
               {/* Format: 16:9 thumbnail vs 9:16 Shorts */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
-                <div className="grid grid-cols-2 gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setFormat('thumb')}
-                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-bold transition-colors ${format === 'thumb' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-                  >
-                    <span className="w-5 h-3 rounded-[3px] border-2 border-current" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormat('short')}
-                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-bold transition-colors ${format === 'short' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-                  >
-                    <span className="w-3 h-4 rounded-[3px] border-2 border-current" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span>
-                  </button>
-                </div>
+                <SegmentedControl
+                  value={format}
+                  onChange={setFormat}
+                  options={[
+                    { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                    { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                  ]}
+                />
               </div>
 
               {/* Output options */}
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
-                  <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
-                    {[1, 2, 3, 4].map(n => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setGenCount(n)}
-                        className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genCount === n ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl
+                    value={String(genCount)}
+                    onChange={(v) => setGenCount(Number(v))}
+                    options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
-                  <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
-                    <button type="button" onClick={() => setGenModel('fast')} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genModel === 'fast' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>Fast</button>
-                    <button type="button" onClick={() => setGenModel('pro')} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genModel === 'pro' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>Pro</button>
-                  </div>
+                  <SegmentedControl
+                    value={genModel}
+                    onChange={setGenModel}
+                    options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
+                  />
                 </div>
               </div>
 
