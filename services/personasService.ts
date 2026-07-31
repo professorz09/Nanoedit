@@ -74,8 +74,15 @@ export const savePersona = async (dataUrl: string, name?: string): Promise<Perso
   return { id: row.id, name: row.name, path: row.path, url: signed?.signedUrl || '' };
 };
 
-export const deletePersona = async (persona: Persona): Promise<void> => {
-  if (!supabase) return;
-  await supabase.from('user_personas').delete().eq('id', persona.id);
+// Returns whether the delete actually succeeded — the caller should keep the
+// persona visible (and can show an error) if it didn't, rather than removing
+// the row from the UI while the underlying data still exists.
+export const deletePersona = async (persona: Persona): Promise<boolean> => {
+  if (!supabase) return false;
+  const { error } = await supabase.from('user_personas').delete().eq('id', persona.id);
+  if (error) return false;
+  // Only remove the file once the row is confirmed gone — otherwise a storage
+  // failure here would leave a DB row pointing at a deleted file.
   await supabase.storage.from(BUCKET).remove([persona.path]).catch(() => {});
+  return true;
 };

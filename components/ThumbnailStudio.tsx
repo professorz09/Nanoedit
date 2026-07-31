@@ -208,6 +208,12 @@ const ThumbnailStudio: React.FC<Props> = ({
   // Once a link is analysed, regenerating from the SAME link reuses this — the
   // transcript is never re-fetched and no second analysis call is made.
   const ytCache = useRef<Record<string, { thumb: string | null; title: string | null; concept: string }>>({});
+  // Raw fetch (thumbnail/title/transcript) cached separately from the AI concept
+  // above — insufficient credits or a failed generateText call stop the concept
+  // step, but the fetch itself already happened and burned a transcript-fetch
+  // rate-limit slot; without this, retrying (e.g. after buying credits) would
+  // re-fetch the transcript from scratch and could exhaust that limit.
+  const ytFetchCache = useRef<Record<string, [string | null, string | null, Awaited<ReturnType<typeof fetchTranscript>>]>>({});
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [legal, setLegal] = useState<null | 'about' | 'privacy' | 'terms'>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -276,22 +282,25 @@ const ThumbnailStudio: React.FC<Props> = ({
     if (!user || !supabase) { requireLogin('Log in to upgrade.'); return; }
     try {
       await buyItem(`plan:${plan.id}:${cycle}`);
-      await refreshProfile();
-      setNoteText(`You're on ${plan.name} now. Enjoy!`, 'success');
     } catch (e: any) {
       if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
+      return;
     }
+    // The charge already succeeded — a refresh hiccup here is cosmetic, not a checkout failure.
+    setNoteText(`You're on ${plan.name} now. Enjoy!`, 'success');
+    refreshProfile().catch(() => {});
   };
 
   const buyAddon = async (addonId: string) => {
     if (!user || !supabase) { requireLogin('Log in to buy credits.'); return; }
     try {
       await buyItem(`addon:${addonId}`);
-      await refreshProfile();
-      setNoteText('Credits added to your account.', 'success');
     } catch (e: any) {
       if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
+      return;
     }
+    setNoteText('Credits added to your account.', 'success');
+    refreshProfile().catch(() => {});
   };
 
   // YouTube feed preview
@@ -474,11 +483,13 @@ const ThumbnailStudio: React.FC<Props> = ({
       if (!analysis) {
         setBusy(true);
         setNoteText('Analysing the video — thumbnail, title and transcript…', 'info');
-        const [thumb, title, segments] = await Promise.all([
+        const fetched = ytFetchCache.current[id] ?? await Promise.all([
           fetchYouTubeThumb(id),
           fetchYouTubeTitle(id),
           fetchTranscript(id),
         ]);
+        ytFetchCache.current[id] = fetched;
+        const [thumb, title, segments] = fetched;
         // Turn the title + transcript into a concrete visual thumbnail concept.
         // Best-effort — if the text model is unavailable we still generate from the
         // title and the original thumbnail. Charged once per new video (cached

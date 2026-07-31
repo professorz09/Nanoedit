@@ -32,7 +32,7 @@ const SegmentedControl = <T extends string>({
   useEffect(() => {
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, []);
+  }, [value, options.length]);
 
   return (
     <div ref={groupRef} className={`relative flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl ${className}`}>
@@ -48,6 +48,7 @@ const SegmentedControl = <T extends string>({
           type="button"
           ref={el => { btnRefs.current[opt.value] = el; }}
           onClick={() => onChange(opt.value)}
+          aria-pressed={value === opt.value}
           className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-bold transition-colors duration-200 ${value === opt.value ? 'text-white' : 'text-thumb-sub hover:text-thumb-ink'}`}
         >
           {opt.label}
