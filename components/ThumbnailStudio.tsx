@@ -98,7 +98,7 @@ const I = {
 // fetch + LLM concept step) in "youtube" mode. Cached per video id (see
 // ytCache below), so re-generating from the SAME link never re-charges this —
 // only the normal per-image credit applies after the first analysis.
-const YOUTUBE_ANALYSIS_COST = 5;
+const YOUTUBE_ANALYSIS_COST = 3;
 
 const BASE_THUMB = 'Design a top-tier, agency-grade, scroll-stopping YouTube thumbnail in 16:9 landscape — match the production quality, polish and click-worthiness of the best viral thumbnails from the biggest creators. Unless a specific art style is explicitly requested, lean photorealistic and lifelike — real-camera depth of field, natural skin texture, and a sharp, detailed, expressive face with realistic lighting. Compose it in whatever way best suits the topic — a bold real scene, a dramatic environment, or a clean backdrop — with a strong, clear focal point and real depth; just avoid random, meaningless clutter. Depict the subject and topic accurately. Use dramatic lighting, punchy vibrant colors and strong contrast so it pops even at small sizes. Render at high fidelity — crisp, detailed and clean, with no blur, noise, artifacts, warping or distorted anatomy. Do not add extra text, letters, captions, subtitles, watermarks or gibberish beyond any text that is explicitly requested.';
 
@@ -548,7 +548,9 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [genModel, setGenModel] = useState<'fast' | 'pro'>('pro');
   const [format, setFormat] = useState<'thumb' | 'short'>('thumb'); // 16:9 thumbnail vs 9:16 Shorts
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  type Note = { text: string; kind: 'error' | 'success' | 'info' };
+  const [note, setNote] = useState<Note | null>(null);
+  const setNoteText = (text: string, kind: Note['kind'] = 'error') => setNote({ text, kind });
   // Per-video-id cache of the analysed YouTube inputs (thumbnail, title, AI concept).
   // Once a link is analysed, regenerating from the SAME link reuses this — the
   // transcript is never re-fetched and no second analysis call is made.
@@ -613,9 +615,9 @@ const ThumbnailStudio: React.FC<Props> = ({
     try {
       await buyItem(`plan:${plan.id}:${cycle}`);
       await refreshProfile();
-      setNote(`You're on ${plan.name} now. Enjoy!`);
+      setNoteText(`You're on ${plan.name} now. Enjoy!`, 'success');
     } catch (e: any) {
-      if (e?.message !== 'cancelled') setNote(e?.message || 'Could not start checkout. Please try again.');
+      if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
     }
   };
 
@@ -624,9 +626,9 @@ const ThumbnailStudio: React.FC<Props> = ({
     try {
       await buyItem(`addon:${addonId}`);
       await refreshProfile();
-      setNote('Credits added to your account.');
+      setNoteText('Credits added to your account.', 'success');
     } catch (e: any) {
-      if (e?.message !== 'cancelled') setNote(e?.message || 'Could not start checkout. Please try again.');
+      if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
     }
   };
 
@@ -793,7 +795,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       let analysis = ytCache.current[id];
       if (!analysis) {
         setBusy(true);
-        setNote('Analysing the video — thumbnail, title and transcript…');
+        setNoteText('Analysing the video — thumbnail, title and transcript…', 'info');
         const [thumb, title, segments] = await Promise.all([
           fetchYouTubeThumb(id),
           fetchYouTubeTitle(id),
@@ -808,7 +810,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         if (title || transcriptText) {
           if (configured && totalCredits < YOUTUBE_ANALYSIS_COST) {
             setBusy(false);
-            setNote(`Analyzing a new video needs ${YOUTUBE_ANALYSIS_COST} credits. Please top up your plan.`);
+            setNoteText(`Analyzing a new video needs ${YOUTUBE_ANALYSIS_COST} credits. Please top up your plan.`);
             goPricing();
             return;
           }
@@ -820,7 +822,7 @@ const ThumbnailStudio: React.FC<Props> = ({
             refreshProfile(); // credits were charged server-side — sync the header count
           } catch (e: any) {
             const msg = e?.message || '';
-            if (/credit/i.test(msg)) { setBusy(false); setNote(msg); goPricing(); return; }
+            if (/credit/i.test(msg)) { setBusy(false); setNoteText(msg); goPricing(); return; }
             /* otherwise concept stays empty — fall back to title + thumbnail */
           }
         }
@@ -852,7 +854,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         prompt = `Using the uploaded original YouTube thumbnail (FIRST image) as reference for the subject and topic, create a FRESH, far more click-worthy thumbnail for this video that captures its core hook. ${titleLine}${conceptLine}${ytPremium}${personDir}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
       } else {
         if (!title && !concept && !promptText.trim()) {
-          setNote('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
+          setNoteText('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
           return;
         }
         prompt = `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
@@ -1412,7 +1414,11 @@ const ThumbnailStudio: React.FC<Props> = ({
               </div>
 
               {note && (
-                <div className="text-xs bg-thumb-redSoft text-red-300 border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>
+                <div className={`text-xs rounded-xl px-4 py-3 leading-relaxed border ${
+                  note.kind === 'success' ? 'bg-thumb-greenSoft text-thumb-green border-thumb-green/30'
+                  : note.kind === 'info' ? 'bg-thumb-soft text-thumb-sub border-thumb-line'
+                  : 'bg-thumb-redSoft text-red-300 border-thumb-red/20'
+                }`}>{note.text}</div>
               )}
 
               {/* Generate */}
