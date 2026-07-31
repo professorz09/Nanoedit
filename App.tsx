@@ -442,6 +442,18 @@ function App() {
       setGeneratedImages(prev => prev.filter(img => img.id !== id));
       if (viewedImage) setViewedImage(null);
   };
+
+  // Self-heal a dead tile: a generated image whose URL 404s (a Storage object
+  // the server-side rolling cap deleted, but still referenced by this device's
+  // IndexedDB cache) renders as "unavailable". Silently drop it so stale tiles
+  // disappear instead of showing the broken placeholder. If the file actually
+  // still exists on the server, the next history sync re-adds it. Only prune
+  // server-backed http(s) URLs — never local data:/blob: images (those are
+  // in-session and a transient decode error shouldn't erase them).
+  const handleBrokenImage = (id: string, url: string) => {
+      if (/^(data:|blob:)/i.test(url)) return;
+      setGeneratedImages(prev => prev.filter(img => img.id !== id));
+  };
   
   const clearAllGeneratedImages = () => {
     if (window.confirm('Clear all generated images? This cannot be undone.')) {
@@ -817,6 +829,7 @@ function App() {
                   onDownload={downloadImage}
                   onDownloadAll={handleDownloadAll}
                   onDelete={deleteGeneratedImage}
+                  onBroken={handleBrokenImage}
                   onOpenEditor={handleOpenEditor}
                   onRetry={retryQueueItem}
                   onCancel={cancelQueueItem}
@@ -876,6 +889,7 @@ function App() {
         addToLayers={addToLayers}
         downloadImage={downloadImage}
         deleteGeneratedImage={deleteGeneratedImage}
+        onBrokenImage={handleBrokenImage}
         prompt={prompt}
         setPrompt={setPrompt}
         handleGenerate={handleGenerate}

@@ -24,10 +24,15 @@ const SafeImage = ({
   ...rest
 }: any) => {
   const [errored, setErrored] = React.useState(false);
+  // One silent, cache-busted retry before showing the fallback — a CDN cold-start
+  // or momentary network blip shouldn't trip the "unavailable" placeholder (and,
+  // via onError, prune a still-live thumbnail). Only a genuine 404 fails twice.
+  const [attempt, setAttempt] = React.useState(0);
 
   // Reset when the source changes so a reused element retries a new URL.
   React.useEffect(() => {
     setErrored(false);
+    setAttempt(0);
   }, [src]);
 
   if (!src || errored) {
@@ -50,9 +55,11 @@ const SafeImage = ({
     );
   }
 
+  const displaySrc = attempt === 0 ? src : `${src}${String(src).includes('?') ? '&' : '?'}_r=${attempt}`;
+
   return (
     <img
-      src={src}
+      src={displaySrc}
       alt={alt}
       className={className}
       style={style}
@@ -60,6 +67,7 @@ const SafeImage = ({
       onClick={onClick}
       onLoad={onLoad}
       onError={(e: any) => {
+        if (attempt < 1) { setAttempt(1); return; }
         setErrored(true);
         if (onError) onError(e);
       }}

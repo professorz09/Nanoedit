@@ -19,9 +19,11 @@ export const fetchUserGenerations = async (limit = 60): Promise<GeneratedImage[]
     const { data, error } = await supabase
       .from('generations')
       .select('id, prompt, path, created_at')
+      .eq('user_id', session.user.id)   // belt-and-braces with the RLS "read own" policy
       .order('created_at', { ascending: false })
       .limit(limit);
-    if (error || !data) return [];
+    if (error) { console.error('fetchUserGenerations query error', error); return []; }
+    if (!data) return [];
 
     return data.map((row: any) => {
       const { data: pub } = supabase!.storage.from('thumbnails').getPublicUrl(row.path);

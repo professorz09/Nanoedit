@@ -215,6 +215,7 @@ interface Props {
   onDownload: (url: string) => void;
   onDownloadAll: () => void;
   onDelete: (id: string) => void;
+  onBroken: (id: string, url: string) => void;
   onOpenEditor: (url?: string) => void;
   onRetry: (item: QueueItem) => void;
   onCancel: (id: string) => void;
@@ -267,10 +268,16 @@ const ResultThumb: React.FC<{
   onOpenEditor: (url: string) => void;
   onPreview: (url: string) => void;
   onDelete: (id: string) => void;
-}> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete }) => {
+  onBroken: (id: string, url: string) => void;
+}> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete, onBroken }) => {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
+  // One silent retry (cache-busted) before we treat a load failure as "dead".
+  // CDN cold-starts / momentary network blips shouldn't prune a live thumbnail;
+  // only a genuine 404 (rolling-cap-deleted object) fails twice → prune.
+  const [attempt, setAttempt] = useState(0);
   const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
+  const displaySrc = attempt === 0 ? img.url : `${img.url}${img.url.includes('?') ? '&' : '?'}_r=${attempt}`;
   return (
     <div className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
       <div className={`relative overflow-hidden bg-thumb-soft mx-auto w-full ${portrait ? 'aspect-[9/16] max-w-[240px]' : 'aspect-video'}`}>
@@ -282,12 +289,12 @@ const ResultThumb: React.FC<{
           </div>
         ) : (
           <img
-            src={img.url}
+            src={displaySrc}
             alt={img.prompt}
             loading="lazy"
             decoding="async"
             onLoad={() => setLoaded(true)}
-            onError={() => setErrored(true)}
+            onError={() => { if (attempt < 1) { setAttempt(1); } else { setErrored(true); onBroken(img.id, img.url); } }}
             onClick={() => onView(img.url)}
             className={`w-full h-full object-cover cursor-pointer transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
           />
@@ -511,7 +518,7 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
 
 const ThumbnailStudio: React.FC<Props> = ({
   onGenerate, generatedImages, queue, isProcessing, itemTimers,
-  onView, onDownload, onDownloadAll, onDelete, onOpenEditor, onRetry, onCancel,
+  onView, onDownload, onDownloadAll, onDelete, onBroken, onOpenEditor, onRetry, onCancel,
 }) => {
   const [mode, setMode] = useState<ThumbInputMode>('templates');
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -1822,13 +1829,32 @@ const ThumbnailStudio: React.FC<Props> = ({
                       onOpenEditor={onOpenEditor}
                       onPreview={openPreview}
                       onDelete={onDelete}
+                      onBroken={onBroken}
                     />
                   ))}
 
                   {visibleCount < generatedImages.length && (
-                    <div ref={loadMoreRef} className="col-span-full flex justify-center py-6">
-                      <span className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" aria-label="Loading more" />
-                    </div>
+                    <>
+                      {/* Skeleton placeholders for the next page — each one mirrors the
+                          real ResultThumb (same card shell, aspect ratio of the actual
+                          image about to load, and action-bar footprint) so the grid
+                          doesn't jump when images swap in. Lays out 2-per-row on mobile
+                          and desktop, exactly like the loaded tiles. The IntersectionObserver
+                          sentinel rides the first one so scrolling into view loads more. */}
+                      {generatedImages.slice(visibleCount, visibleCount + 2).map((next, i) => {
+                        const portrait = next.aspect === '9:16' || next.aspect === '4:5' || next.aspect === '3:4';
+                        return (
+                          <div
+                            key={`sk-${next.id}`}
+                            ref={i === 0 ? loadMoreRef : undefined}
+                            className={`overflow-hidden rounded-2xl border border-thumb-line mx-auto w-full ${portrait ? 'aspect-[9/16] max-w-[240px]' : 'aspect-video'}`}
+                            aria-label={i === 0 ? 'Loading more' : undefined}
+                          >
+                            <div className="w-full h-full thumb-skeleton" aria-hidden />
+                          </div>
+                        );
+                      })}
+                    </>
                   )}
                 </div>
               </>

@@ -49,6 +49,7 @@ interface EditorViewProps {
   addToLayers: any;
   downloadImage: any;
   deleteGeneratedImage: any;
+  onBrokenImage?: (id: string, url: string) => void;
   prompt: any;
   setPrompt: any;
   handleGenerate: any;
@@ -142,6 +143,7 @@ export default function EditorView(props: EditorViewProps) {
     addToLayers,
     downloadImage,
     deleteGeneratedImage,
+    onBrokenImage,
     prompt,
     setPrompt,
     handleGenerate,
@@ -442,7 +444,7 @@ export default function EditorView(props: EditorViewProps) {
                             >
                                 {/* Shimmer placeholder — sits behind the image so there's no white flash while it loads. Removed once loaded so it never shimmers through transparent PNGs. */}
                                 {!loadedSrcs[img.url] && <div className="thumb-skeleton absolute inset-0" aria-hidden />}
-                                <SafeImage src={img.url} alt={img.prompt} loading="lazy" className="relative w-full h-full object-cover cursor-pointer img-fade" fallbackClassName="absolute inset-0 w-full h-full" onClick={() => setViewedImage(img.url)} onLoad={() => markLoaded(img.url)} onError={() => markLoaded(img.url)} />
+                                <SafeImage src={img.url} alt={img.prompt} loading="lazy" className="relative w-full h-full object-cover cursor-pointer img-fade" fallbackClassName="absolute inset-0 w-full h-full" onClick={() => setViewedImage(img.url)} onLoad={() => markLoaded(img.url)} onError={() => { markLoaded(img.url); onBrokenImage?.(img.id, img.url); }} />
                                 <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-3 sm:p-4 transition-all duration-300 ${uiVisible ? 'opacity-100 md:opacity-0 md:group-hover:opacity-100' : 'opacity-0 pointer-events-none'}`}>
                                     <p 
                                         onClick={(e) => {
