@@ -84,9 +84,14 @@ function parseJson(text: string): any {
   try { return JSON.parse(body.slice(start, end + 1)); } catch { return null; }
 }
 
-// The compact topic fingerprint we embed for vector search (mirrors tag-styles).
-function embedText(meta: any): string {
+// The compact topic fingerprint we embed for vector search (mirrors
+// scripts/tag-styles.mjs). The title — when the caller has one — leads, since
+// it carries the actual topic/niche signal directly; vision tagging alone
+// can't tell two visually-similar thumbnails (e.g. "shocked face") apart by
+// topic the way the original video's title can.
+function embedText(meta: any, title?: string | null): string {
   return [
+    title,
     meta?.niche,
     meta?.emotion,
     (meta?.keywords || []).join(', '),
@@ -116,6 +121,9 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json(400, { error: 'Invalid request body' }); }
   const path = typeof body?.path === 'string' ? body.path.trim() : '';
   const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 120) : null;
+  // Optional: the source video's title, if the caller knows it — folded into
+  // both the stored metadata and the embedded text (see embedText below).
+  const title = typeof body?.title === 'string' ? body.title.trim().slice(0, 200) || null : null;
   if (!path) return json(400, { error: 'Missing path' });
 
   // The path MUST be inside the caller's own folder — no indexing others' files.
@@ -163,13 +171,14 @@ Deno.serve(async (req) => {
     console.error('tag_failed', e?.message || String(e));
   }
   if (!meta) return json(502, { error: 'Could not analyse the image. Please try a clearer thumbnail.' });
+  if (title) meta.title = title;
 
   // 3) Embed the topic fingerprint (same model + dims + taskType as the index).
   let embedding: number[] | null = null;
   try {
     const r: any = await ai.models.embedContent({
       model: EMBED_MODEL,
-      contents: embedText(meta),
+      contents: embedText(meta, title),
       config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_DOCUMENT' },
     });
     embedding = r?.embeddings?.[0]?.values ?? null;
@@ -184,7 +193,7 @@ Deno.serve(async (req) => {
     .insert({
       user_id: uid,
       path,
-      name,
+      name: name || title,
       meta,
       embedding: JSON.stringify(embedding),
       tagged_at: new Date().toISOString(),
