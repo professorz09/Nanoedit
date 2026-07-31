@@ -886,7 +886,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                               {uploads.map((u, i) => (
                                 <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
                                   <img src={u} alt="" className="w-full h-full object-cover" />
-                                  <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                                  <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
                                 </div>
                               ))}
                             </div>
@@ -994,7 +994,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   {uploads.map((u, i) => (
                     <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
                       <img src={u} alt="" className="w-full h-full object-cover" />
-                      <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                      <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
                     </div>
                   ))}
                 </div>
@@ -1212,7 +1212,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 {previewImage ? (
                   <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 group">
                     <img src={previewImage} alt="Your thumbnail" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <button onClick={() => previewFileRef.current?.click()} className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold">Change</button>
                       <button onClick={() => setPreviewImage(null)} className="px-3 py-1.5 rounded-lg bg-thumb-red text-white text-xs font-bold">Remove</button>
                     </div>
@@ -1251,7 +1251,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   {previewImageB ? (
                     <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 group">
                       <img src={previewImageB} alt="Thumbnail B" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <button onClick={() => previewFileRefB.current?.click()} className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold">Change</button>
                         <button onClick={() => setPreviewImageB(null)} className="px-3 py-1.5 rounded-lg bg-thumb-red text-white text-xs font-bold">Remove</button>
                       </div>
