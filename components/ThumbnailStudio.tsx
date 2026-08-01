@@ -455,6 +455,10 @@ const ThumbnailStudio: React.FC<Props> = ({
   // this just queues it like any other generation.
   const [changeFaceTarget, setChangeFaceTarget] = useState<string | null>(null);
   const applyChangeFace = (prompt: string, sources: string[]) => {
+    // Same eligibility gate as the main Generate button — this bypasses that
+    // button entirely, so it needs its own login/credit check before queuing.
+    if (configured && !user) { requireLogin('Log in to change faces.'); return; }
+    if (configured && user && !creditsLoading && totalCredits <= 0) { goPricing(); return; }
     onGenerate(prompt, sources, { count: 1, modelType: genModel === 'pro' ? 'pro' : 'flash' });
     setChangeFaceTarget(null);
     scrollToResults();

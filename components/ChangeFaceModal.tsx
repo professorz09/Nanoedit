@@ -47,17 +47,24 @@ const ChangeFaceModal: React.FC<{
   };
 
   const filled = slots.filter(s => s.image);
-  const canSubmit = filled.length > 0 && !busy;
+  // With more than one replacement face, "person 1"/"person 2" fallback labels
+  // don't actually identify anyone in the target image — the model could swap
+  // the wrong face. Require a real description for each slot once there's more
+  // than one, so it's always unambiguous which face is being replaced.
+  const needsDescriptions = filled.length > 1 && filled.some(s => !s.instruction.trim());
+  const canSubmit = filled.length > 0 && !needsDescriptions && !busy;
+  const dismissible = !busy;
 
   const apply = async () => {
-    if (!canSubmit) return;
+    if (filled.length === 0 || busy) return;
+    if (needsDescriptions) { setError('Describe which face each photo replaces (e.g. "the man on the left").'); return; }
     setError(null);
     setBusy(true);
     try {
       const targetB64 = await urlToBase64(targetUrl);
       if (!targetB64) { setError('Could not load that thumbnail. Try again.'); return; }
       const lines = filled.map((s, i) => {
-        const who = s.instruction.trim() || (filled.length === 1 ? 'the main person' : `person ${i + 1}`);
+        const who = s.instruction.trim() || 'the main person';
         return `Reference photo ${i + 2} shows a replacement person for "${who}" — find that person in the FIRST image and swap them in: replace ONLY their face/head, preserving the original pose, head angle, scale, expression and lighting so they blend in seamlessly and look completely real. `;
       }).join('');
       const prompt = `You are EDITING the FIRST image — an existing, finished YouTube thumbnail. Reproduce it EXACTLY: keep the same composition, layout, background, props, graphics, on-image text and colour grade unchanged. Do NOT restyle, redraw or move anything that isn't being changed. ${lines}Do not add, remove, invent, duplicate or alter any other person, object or text on the image. Keep the result photorealistic with natural skin texture and a sharp, fully-detailed face, rendered at maximum fidelity — crisp, no blur, noise, artifacts, warping or distorted anatomy. Output the image in the SAME aspect ratio and shape as the original.`;
@@ -67,15 +74,18 @@ const ChangeFaceModal: React.FC<{
     }
   };
 
+  // Once Apply has kicked off the async urlToBase64() + onSubmit(), the modal
+  // must not still be dismissable — onSubmit would otherwise fire after the
+  // user thinks they cancelled, queuing a generation they never confirmed.
   return (
-    <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={dismissible ? onClose : undefined}>
       <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <div>
             <h3 className="text-base font-black text-thumb-ink">Change face</h3>
             <p className="text-xs text-thumb-sub mt-0.5">Swap in the right person — upload a photo or pick a saved face</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><I.X className="w-4 h-4" /></button>
+          <button onClick={onClose} disabled={!dismissible} className="w-8 h-8 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center disabled:opacity-40"><I.X className="w-4 h-4" /></button>
         </div>
 
         <div className="flex gap-3 my-3 shrink-0">
@@ -138,7 +148,7 @@ const ChangeFaceModal: React.FC<{
         {error && <p className="text-xs text-thumb-red mt-3">{error}</p>}
 
         <div className="flex items-center gap-2 mt-4 pt-3 border-t border-thumb-line shrink-0">
-          <button onClick={onClose} className="px-4 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold hover:bg-thumb-line/60 transition-colors">Cancel</button>
+          <button onClick={onClose} disabled={!dismissible} className="px-4 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold hover:bg-thumb-line/60 transition-colors disabled:opacity-40">Cancel</button>
           <button
             onClick={apply}
             disabled={!canSubmit}
