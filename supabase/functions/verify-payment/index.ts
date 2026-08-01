@@ -153,7 +153,10 @@ Deno.serve(async (req) => {
     }
   } catch (e: any) {
     console.error('grant_failed', paymentId, e?.message || String(e));
-    await admin.from('credit_ledger').delete().eq('user_id', uid).eq('reason', ledgerReason).catch(() => {});
+    // supabase-js's .from() builder is PromiseLike, not a real Promise — it
+    // implements .then() but NOT .catch(), so chaining .catch() here throws a
+    // synchronous TypeError instead of ever swallowing a failed delete.
+    try { await admin.from('credit_ledger').delete().eq('user_id', uid).eq('reason', ledgerReason); } catch (_) { /* best-effort */ }
     return json(500, { error: 'Payment succeeded but crediting failed. Please contact support.' });
   }
 
