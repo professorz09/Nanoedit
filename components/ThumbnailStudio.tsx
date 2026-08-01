@@ -944,7 +944,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                         className="w-full bg-transparent py-4 outline-none text-[15px] placeholder-thumb-sub/50"
                       />
                     </div>
-                    <p className="text-[12px] text-thumb-sub leading-relaxed">Just paste the link — we analyse the video and craft the perfect thumbnail for you. Analyzing a new video uses {YOUTUBE_ANALYSIS_COST} credits (once per link — regenerating from the same link is free); the thumbnail itself uses your normal per-image credit.</p>
                   </div>
 
                   {/* Advanced (optional) */}
@@ -972,7 +971,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Add a person's photo</label>
-                          <PersonaPicker enabled={mode === 'youtube' && ytAdvanced} refreshKey={personaRefreshKey} onPick={pickPersona} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} />
+                          <PersonaPicker enabled={mode === 'youtube' && ytAdvanced} refreshKey={personaRefreshKey} onPick={pickPersona} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={false} />
                           {uploads.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {uploads.map((u, i) => (
@@ -1072,9 +1071,11 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Saved faces (shared for templates + reference + prompt + sketch) */}
+              {/* Saved faces (shared for templates + reference + prompt + sketch). In
+                  reference mode the dropzone above is already the upload entry point,
+                  so this only shows previously-saved faces, not another "Add" tile. */}
               {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && (
-                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} />
+                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={mode !== 'reference'} />
               )}
 
               {/* Uploaded thumbnails preview (shared for templates + reference + prompt + sketch) */}
@@ -1088,14 +1089,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                     </div>
                   ))}
                 </div>
-              )}
-
-              {/* Optional add-photo for templates + prompt + sketch */}
-              {(mode === 'templates' || mode === 'prompt' || mode === 'sketch') && uploads.length === 0 && (
-                <button onClick={triggerUpload} className="text-xs font-semibold text-thumb-red hover:underline flex items-center gap-1.5">
-                  <I.Upload className="w-3.5 h-3.5" /> Add your face/photo (optional)
-                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
-                </button>
               )}
 
               {/* templates + reference = single edit/direction instruction (optional);

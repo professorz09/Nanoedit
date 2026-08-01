@@ -14,7 +14,11 @@ const PersonaPicker: React.FC<{
   onPick: (dataUrl: string) => void;
   loggedIn: boolean;
   onRequireLogin: () => void;
-}> = ({ enabled, refreshKey, onPick, loggedIn, onRequireLogin }) => {
+  /** Hide the leading "Add" tile when the caller already renders its own
+   *  upload dropzone/button right next to this — avoids two upload entry
+   *  points doing the same thing. Saved-face thumbnails still show. */
+  showAddTile?: boolean;
+}> = ({ enabled, refreshKey, onPick, loggedIn, onRequireLogin, showAddTile = true }) => {
   const [personas, setPersonas] = useState<Persona[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -82,25 +86,30 @@ const PersonaPicker: React.FC<{
   };
 
   if (!enabled) return null;
+  if (!showAddTile && !personas?.length) return null;
 
   return (
     <div className="space-y-1">
       {error && <p className="text-[11px] text-thumb-red">{error}</p>}
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
-        <button
-          type="button"
-          onClick={() => { if (!loggedIn) { onRequireLogin(); return; } fileRef.current?.click(); }}
-          disabled={adding}
-          aria-label="Add a face"
-          className="shrink-0 w-14 h-14 rounded-xl border-2 border-dashed border-white/12 hover:border-thumb-red text-thumb-sub hover:text-thumb-red flex flex-col items-center justify-center gap-0.5 transition-colors disabled:opacity-50"
-        >
-          {adding
-            ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            : <><I.Upload className="w-4 h-4" /><span className="text-[10px] font-bold">Add</span></>}
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={addNew} />
+        {showAddTile && (
+          <>
+            <button
+              type="button"
+              onClick={() => { if (!loggedIn) { onRequireLogin(); return; } fileRef.current?.click(); }}
+              disabled={adding}
+              aria-label="Add a face"
+              className="shrink-0 w-16 h-16 rounded-xl border-2 border-dashed border-white/12 hover:border-thumb-red text-thumb-sub hover:text-thumb-red flex flex-col items-center justify-center gap-0.5 transition-colors disabled:opacity-50"
+            >
+              {adding
+                ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                : <><I.Upload className="w-4 h-4" /><span className="text-[10px] font-bold">Add</span></>}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={addNew} />
+          </>
+        )}
         {personas?.map(p => (
-          <div key={p.id} className="relative shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-thumb-line group">
+          <div key={p.id} className="relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
             <button
               type="button"
               onClick={() => pick(p)}
