@@ -1076,10 +1076,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   sketch = overlay title (optional) */}
               {(mode === 'templates' || mode === 'reference' || mode === 'sketch') && (
                 <div className="space-y-2.5">
-                  <label className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'sketch' ? 'Title text on thumbnail' : 'What to change'}</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-thumb-sub bg-white/5 border border-white/10">optional</span>
-                  </label>
+                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'sketch' ? 'Title text on thumbnail' : 'What to change'}</label>
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
