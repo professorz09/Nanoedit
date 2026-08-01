@@ -313,7 +313,16 @@ Deno.serve(async (req) => {
   for (const a of attempts) {
     try {
       const res = await a.run();
-      if (res.images.length) { gen = res; usedProvider = a.name; break; }
+      if (res.images.length) {
+        // `cost` was reserved for exactly ONE image (the client makes a
+        // separate call — and pays separately — per variation; see wantCount
+        // in ThumbnailStudio.tsx). A model that returns more than one image
+        // part in a single response must not turn into extra free images —
+        // keep only the first and ignore the rest.
+        gen = { ...res, images: res.images.slice(0, 1) };
+        usedProvider = a.name;
+        break;
+      }
       errors.push(`${a.name}: no_image`);
     } catch (e: any) {
       errors.push(`${a.name}: ${e?.message || 'error'}`);
