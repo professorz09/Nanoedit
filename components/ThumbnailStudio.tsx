@@ -443,20 +443,27 @@ const ThumbnailStudio: React.FC<Props> = ({
   // it keeps memory + network light no matter how many thumbnails exist.
   const PAGE = 8;
   const [visibleCount, setVisibleCount] = useState(PAGE);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
   // New results prepend to the top — make sure they're shown without a scroll.
   useEffect(() => { setVisibleCount(c => Math.max(c, PAGE)); }, [generatedImages.length]);
-  useEffect(() => {
-    const el = loadMoreRef.current;
-    if (!el || visibleCount >= generatedImages.length) return;
+
+  // A callback ref (not useRef + a useEffect keyed on visibleCount/length) —
+  // the sentinel can first mount long after those values last changed (e.g.
+  // the whole gallery history is already restored before the user ever opens
+  // this tab), which left a dependency-array effect with nothing to re-run and
+  // the observer never created, so nothing past the first page ever loaded.
+  // A callback ref fires exactly when the DOM node itself mounts/unmounts, so
+  // it can't miss that.
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) return;
     const io = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) {
-        setVisibleCount(c => Math.min(c + PAGE, generatedImages.length));
-      }
+      if (entries[0]?.isIntersecting) setVisibleCount(c => c + PAGE);
     }, { rootMargin: '400px' });
     io.observe(el);
-    return () => io.disconnect();
-  }, [visibleCount, generatedImages.length]);
+    observerRef.current = io;
+  }, []);
 
   const readFiles = (files: File[]) => {
     files.filter(f => f.type.startsWith('image/')).forEach(file => {
