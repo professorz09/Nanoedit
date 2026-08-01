@@ -1691,9 +1691,19 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'home' && (SHOWCASE_IMAGES.length > 0 ? (
           <section className="pt-16">
             <p className="text-center text-[13px] font-bold uppercase tracking-[0.15em] text-thumb-sub mb-6">Thumbnails people actually clicked</p>
-            <div className="relative -mx-5 overflow-hidden">
+            <div className="relative -mx-5 overflow-hidden space-y-4">
               <div className="flex gap-4 w-max thumb-marquee">
                 {[...SHOWCASE_IMAGES, ...SHOWCASE_IMAGES].map((src, i) => (
+                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
+                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+              {/* Second row scrolls the opposite way (reversed order so it doesn't
+                  just mirror row one frame-for-frame) — more thumbnails visible
+                  at once, and the crossing directions read as more dynamic. */}
+              <div className="flex gap-4 w-max thumb-marquee-reverse">
+                {[...SHOWCASE_IMAGES.slice().reverse(), ...SHOWCASE_IMAGES.slice().reverse()].map((src, i) => (
                   <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
                     <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
                   </div>
