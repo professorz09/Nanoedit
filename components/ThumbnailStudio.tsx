@@ -1347,7 +1347,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                     // sm:grid-cols-2 the parent uses, so it's naturally 1-wide on
                     // mobile and 2-wide on desktop) so "more thumbnails incoming"
                     // reads clearly instead of looking like a stalled fetch.
-                    <div ref={loadMoreRef} className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-4" aria-label="Loading more thumbnails">
+                    <div ref={loadMoreRef} role="status" className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-4" aria-label="Loading more thumbnails">
                       {Array.from({ length: Math.min(PAGE, generatedImages.length - visibleCount) }).map((_, i) => (
                         <div key={i} className="aspect-video rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card">
                           <div className="w-full h-full thumb-skeleton" aria-hidden />

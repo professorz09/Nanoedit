@@ -136,10 +136,27 @@ function App() {
   }, []);
 
   // Source images (in-progress editor state) are always local-only, independent of login.
+  //
+  // A prior version of the brush/pin Apply flow persisted its internal
+  // [original, marked] editor snapshots into sourceImages, so anyone who
+  // used that flow before the fix has them stuck in IndexedDB, restored
+  // forever as if they were Input Layers the user actually added. They're
+  // structurally identical to a real uploaded image (also a plain PNG data
+  // URL) — nothing to detect after the fact — so bump a schema version
+  // instead: the first load after this fix wipes the (purely transient,
+  // in-progress) saved layers once rather than trying to cherry-pick which
+  // entries were legacy snapshots.
+  const SOURCE_IMAGES_SCHEMA_VERSION = '2';
   useEffect(() => {
       let alive = true;
       (async () => {
           try {
+              const seenVersion = getFromLocalStorage('nano_source_images_schema', null);
+              if (seenVersion !== SOURCE_IMAGES_SCHEMA_VERSION) {
+                  saveToLocalStorage('nano_source_images_schema', SOURCE_IMAGES_SCHEMA_VERSION);
+                  await saveToIndexedDB(STORAGE_KEYS.SOURCE_IMAGES, []);
+                  return;
+              }
               const savedSource = await getFromIndexedDB(STORAGE_KEYS.SOURCE_IMAGES);
               if (alive && savedSource) setSourceImages(savedSource);
           } catch (e) {
@@ -662,12 +679,6 @@ function App() {
       ? 'You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline and/or numbered red pins marking exactly where to apply the requested change(s). Use the SECOND image only to locate where to edit — never render its outline or pin markers in the output. Produce one edited version of the FIRST image. '
       : '';
     const editPrompt = (guide + (segs.length ? segs.join(' ') : 'Edit the image: ')).trim();
-    // editPrompt (the technical instruction sent to the model, incl. the
-    // TWO-image guide above) is NOT what belongs in the visible Prompt box —
-    // brush/pin edits enqueue directly, they don't need the compose box
-    // filled, and showing the raw internal instruction there just confuses
-    // the user. Clear it instead.
-    setPrompt('');
     setIsImageMode(true);
 
     const merge = () => {
@@ -737,6 +748,10 @@ function App() {
           status: 'pending',
           timestamp: Date.now(),
         }]);
+        // Only clear the visible Prompt box once the edit is actually queued —
+        // clearing it earlier (e.g. before image load/canvas export) would lose
+        // whatever the user had typed there if that step then failed.
+        setPrompt('');
         setBrushMode(false);
         setViewedImage(null);
       };

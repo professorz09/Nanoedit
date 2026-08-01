@@ -271,6 +271,30 @@ export default function EditorView(props: EditorViewProps) {
     }
   };
 
+  // p.url is a 1-day SIGNED Storage URL — not one of our own public URLs, so
+  // it wouldn't even pass the generate function's own source validation, let
+  // alone survive being persisted to IndexedDB past its TTL. Fetch it once
+  // and convert to a data URL before handing it to addToLayers, same as
+  // PersonaPicker.pick() already does for this exact reason.
+  const [personaPicking, setPersonaPicking] = React.useState<string | null>(null);
+  const pickPersona = async (p: Persona) => {
+    setPersonaPicking(p.id);
+    try {
+      const res = await fetch(p.url);
+      if (!res.ok) { fetchPersonas().then(setPersonas); return; }
+      const blob = await res.blob();
+      const dataUrl = await new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onloadend = () => resolve(r.result as string);
+        r.readAsDataURL(blob);
+      });
+      addToLayers(dataUrl);
+      setShowPersonaPicker(false);
+    } finally {
+      setPersonaPicking(null);
+    }
+  };
+
   const removePersona = async (p: Persona) => {
     setPersonaError(null);
     const ok = await deletePersona(p);
@@ -908,8 +932,9 @@ export default function EditorView(props: EditorViewProps) {
                           <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
                               <button
                                   type="button"
-                                  onClick={() => { addToLayers(p.url); setShowPersonaPicker(false); }}
-                                  className="w-full h-full block"
+                                  onClick={() => pickPersona(p)}
+                                  disabled={personaPicking === p.id}
+                                  className="w-full h-full block disabled:opacity-50"
                               >
                                   <img src={p.url} alt={p.name || 'Saved face'} className="w-full h-full object-cover hover:scale-105 transition-transform" />
                               </button>
