@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { GeneratedImage } from '../types';
 import { I } from './ThumbIcons';
+import { useImageLoad } from '../hooks/useImageLoad';
 
-// A single result card with its own skeleton-while-loading state.
+// A single result card with its own skeleton-while-loading state (shared,
+// cross-canvas cache + retry logic lives in hooks/useImageLoad).
 // The image only fetches when near the viewport (loading="lazy"), so a long
 // history stays cheap — the browser (and Supabase Storage/CDN) isn't hit for
 // off-screen thumbnails.
@@ -14,29 +16,8 @@ const ResultThumb: React.FC<{
   onPreview: (url: string) => void;
   onDelete: (id: string) => void;
 }> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete }) => {
-  const [loaded, setLoaded] = useState(false);
-  const [errored, setErrored] = useState(false);
-  // A freshly-generated image can 404 for a moment right after upload (CDN edge
-  // hasn't picked it up yet) — retry a few times with backoff + a cache-busting
-  // query param before giving up, instead of permanently hiding the result.
-  const [attempt, setAttempt] = useState(0);
-  const MAX_RETRIES = 4;
+  const { loaded, errored, src, onLoad, onError } = useImageLoad(img.url);
   const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
-
-  // data: URLs (dev-mode base64 results) fail deterministically — retrying the
-  // identical string can't help, so only retry real (Storage/CDN) URLs.
-  const isRemote = !img.url.startsWith('data:');
-
-  const handleError = () => {
-    if (isRemote && attempt < MAX_RETRIES) {
-      const delay = 500 * (attempt + 1);
-      setTimeout(() => setAttempt(a => a + 1), delay);
-    } else {
-      setErrored(true);
-    }
-  };
-
-  const src = !isRemote || attempt === 0 ? img.url : `${img.url}${img.url.includes('?') ? '&' : '?'}retry=${attempt}`;
 
   return (
     <div className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
@@ -59,8 +40,8 @@ const ResultThumb: React.FC<{
               alt={img.prompt}
               loading="lazy"
               decoding="async"
-              onLoad={() => setLoaded(true)}
-              onError={handleError}
+              onLoad={onLoad}
+              onError={onError}
               className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
             />
           </button>
