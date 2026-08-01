@@ -3,10 +3,13 @@ import { ASPECT_RATIOS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from '../types';
 import {
   IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette,
   IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip,
-  IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera,
+  IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera, IconUser,
 } from './Icons';
 import LoadedThumb from './LoadedThumb';
 import RetryImage from './RetryImage';
+import AuthModal from './AuthModal';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchPersonas, savePersona, deletePersona, Persona } from '../services/personasService';
 
 // Props are the App-level state/handlers the editor reads. The project ships
 // without @types/react, so precise setter/event types add no real safety here —
@@ -218,6 +221,63 @@ export default function EditorView(props: EditorViewProps) {
 
   React.useEffect(() => { if (!brushMode) setPanelPos(null); }, [brushMode]);
 
+  // Saved faces ("personas") — this editor is a separate component tree from
+  // ThumbnailStudio (which already has this) and was never wired to auth, so
+  // it manages its own sign-in state the same self-contained way
+  // ThumbnailStudio does, rather than threading user/login state down through
+  // App.tsx's props for a single feature.
+  const { user, configured } = useAuth();
+  const loggedIn = !configured || !!user;
+  const [authOpen, setAuthOpen] = React.useState(false);
+  const [showPersonaPicker, setShowPersonaPicker] = React.useState(false);
+  const [personas, setPersonas] = React.useState<Persona[] | null>(null);
+  const [personaAdding, setPersonaAdding] = React.useState(false);
+  const [personaError, setPersonaError] = React.useState<string | null>(null);
+  const personaFileRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!showPersonaPicker || !loggedIn) return;
+    let alive = true;
+    fetchPersonas().then(items => { if (alive) setPersonas(items); });
+    return () => { alive = false; };
+  }, [showPersonaPicker, loggedIn]);
+
+  const openPersonaPicker = () => {
+    if (!loggedIn) { setAuthOpen(true); return; }
+    setShowPersonaPicker(true);
+  };
+
+  const addPersonaFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    setPersonaError(null);
+    setPersonaAdding(true);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const saved = await savePersona(dataUrl);
+      if (saved.url) setPersonas(prev => [saved, ...(prev ?? [])]);
+      addToLayers(dataUrl);
+      setShowPersonaPicker(false);
+    } catch (err: any) {
+      setPersonaError(err?.message || 'Could not save that face.');
+    } finally {
+      setPersonaAdding(false);
+    }
+  };
+
+  const removePersona = async (p: Persona) => {
+    setPersonaError(null);
+    const ok = await deletePersona(p);
+    if (ok) setPersonas(prev => prev?.filter(x => x.id !== p.id) ?? null);
+    else setPersonaError('Could not remove that face. Try again.');
+  };
+
   // panelRef and panelPos are shared between the full panel AND the minimized
   // toggle button (only one is ever mounted at a time) — dragging either one
   // moves both, so a position picked while minimized carries over once you
@@ -378,6 +438,15 @@ export default function EditorView(props: EditorViewProps) {
                                 <span className="text-[10px] font-medium">Styles</span>
                             </button>
                         )}
+                        <button
+                            type="button"
+                            onClick={openPersonaPicker}
+                            className="shrink-0 w-24 h-24 border-2 border-dashed border-thumb-line rounded-xl flex flex-col items-center justify-center gap-1 text-thumb-sub hover:border-nano-accent hover:text-nano-accent transition-all cursor-pointer bg-thumb-soft"
+                            title="Add a saved face"
+                        >
+                            <IconUser />
+                            <span className="text-[10px] font-medium">Persona</span>
+                        </button>
                         {sourceImages.map((img, idx) => (
                             <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-thumb-line animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
                                 <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
@@ -811,6 +880,58 @@ export default function EditorView(props: EditorViewProps) {
               </div>
           </div>
       )}
+
+      {showPersonaPicker && (
+          <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPersonaPicker(false)}>
+              <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                      <div>
+                          <h3 className="text-base font-black text-thumb-ink">Add a saved face</h3>
+                          <p className="text-xs text-thumb-sub mt-0.5">Pick a face you've saved before, or add a new one</p>
+                      </div>
+                      <button onClick={() => setShowPersonaPicker(false)} className="w-8 h-8 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><IconX /></button>
+                  </div>
+                  {personaError && <p className="text-xs text-red-400 mb-3">{personaError}</p>}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-1">
+                      <button
+                          type="button"
+                          onClick={() => personaFileRef.current?.click()}
+                          disabled={personaAdding}
+                          className="aspect-square rounded-xl border-2 border-dashed border-thumb-line hover:border-nano-accent text-thumb-sub hover:text-nano-accent flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                      >
+                          {personaAdding
+                              ? <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              : <><IconUpload /><span className="text-[11px] font-bold">Add new</span></>}
+                      </button>
+                      <input ref={personaFileRef} type="file" accept="image/*" className="hidden" onChange={addPersonaFile} />
+                      {personas?.map(p => (
+                          <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
+                              <button
+                                  type="button"
+                                  onClick={() => { addToLayers(p.url); setShowPersonaPicker(false); }}
+                                  className="w-full h-full block"
+                              >
+                                  <img src={p.url} alt={p.name || 'Saved face'} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                              </button>
+                              <button
+                                  type="button"
+                                  onClick={() => removePersona(p)}
+                                  aria-label="Remove saved face"
+                                  className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                              >
+                                  <IconX />
+                              </button>
+                          </div>
+                      ))}
+                  </div>
+                  {personas !== null && !personas.length && (
+                      <p className="text-sm text-thumb-sub text-center py-6">No saved faces yet — tap "Add new" to save one.</p>
+                  )}
+              </div>
+          </div>
+      )}
+
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} reason="Log in to save faces." />
 
       {/* Help Panel */}
       {showHelp && uiVisible && (
