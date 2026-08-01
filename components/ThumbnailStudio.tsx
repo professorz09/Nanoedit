@@ -262,6 +262,11 @@ const ThumbnailStudio: React.FC<Props> = ({
 
   // Auth + billing
   const { user, profile, totalCredits, creditsLoading, signOut, configured, refreshProfile } = useAuth();
+  // Lets the checkout-return poll below (a long-lived effect closure with an
+  // empty dep array) read the LATEST totalCredits on each iteration instead
+  // of the stale value captured when the effect first ran.
+  const totalCreditsRef = useRef(totalCredits);
+  useEffect(() => { totalCreditsRef.current = totalCredits; }, [totalCredits]);
   const [authOpen, setAuthOpen] = useState(false);
   const [authReason, setAuthReason] = useState<string | undefined>(undefined);
 
@@ -289,19 +294,53 @@ const ThumbnailStudio: React.FC<Props> = ({
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
 
-  // Razorpay checkout — creates a server-side order, opens the Razorpay modal,
-  // then verifies + grants the purchase server-side (see paymentsService.ts).
+  // Dodo redirects back here after checkout (return_url set in
+  // create-checkout) — there's no client-side "payment succeeded" callback
+  // like Razorpay had, since crediting happens purely via the "dodo-webhook"
+  // Edge Function, which can land a second or two after the browser's own
+  // redirect. Poll the profile until the credited amount actually shows up,
+  // instead of leaving the user staring at a stale balance.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('dodo_checkout') !== 'return') return;
+    window.history.replaceState(null, '', window.location.pathname);
+    goPricing();
+    setNoteText('Finalizing your purchase…', 'info');
+
+    const before = totalCredits;
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 8 && !cancelled; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        await refreshProfile().catch(() => {});
+        if (cancelled) return;
+        if (totalCreditsRef.current > before) {
+          setNoteText("You're all set — credits have been added!", 'success');
+          return;
+        }
+      }
+      if (!cancelled) {
+        setNoteText("Still finalizing your purchase — if credits don't show up in a minute, contact support.", 'info');
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Dodo Payments checkout — creates a server-side checkout session and
+  // navigates the browser to Dodo's hosted checkout page (see
+  // paymentsService.ts). There's no "success" branch here: on success the
+  // page navigates away entirely before this promise would resolve. Dodo
+  // redirects back to `?dodo_checkout=return`, handled by the effect below,
+  // which shows the success note once the webhook has actually granted the
+  // credits — a failure here only ever means checkout couldn't even start.
   const startCheckout = async (plan: Plan, cycle: BillingCycle) => {
     if (!user || !supabase) { requireLogin('Log in to upgrade.'); return; }
     try {
       await buyItem(`plan:${plan.id}:${cycle}`);
     } catch (e: any) {
-      if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
-      return;
+      setNoteText(e?.message || 'Could not start checkout. Please try again.');
     }
-    // The charge already succeeded — a refresh hiccup here is cosmetic, not a checkout failure.
-    setNoteText(`You're on ${plan.name} now. Enjoy!`, 'success');
-    refreshProfile().catch(() => {});
   };
 
   const buyAddon = async (addonId: string) => {
@@ -309,11 +348,8 @@ const ThumbnailStudio: React.FC<Props> = ({
     try {
       await buyItem(`addon:${addonId}`);
     } catch (e: any) {
-      if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
-      return;
+      setNoteText(e?.message || 'Could not start checkout. Please try again.');
     }
-    setNoteText('Credits added to your account.', 'success');
-    refreshProfile().catch(() => {});
   };
 
   // YouTube feed preview
