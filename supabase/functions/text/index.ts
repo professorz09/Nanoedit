@@ -29,6 +29,14 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
+// supabase-js's .rpc()/.from() builders are PromiseLike, not real Promises —
+// they implement .then() but NOT .catch(), so `await admin.rpc(...).catch(fn)`
+// throws a synchronous "catch is not a function" TypeError instead of ever
+// reaching `fn`. try/catch is the only safe way to swallow a failed RPC.
+const refundOnce = async (admin: any, uid: string) => {
+  try { await admin.rpc('refund_credit', { p_user: uid }); } catch (_) { /* best-effort */ }
+};
+
 const MAX_PROMPT_CHARS = 32000; // chapters can include a long transcript
 
 // The ONLY source of truth for what each operation costs — matches
@@ -83,13 +91,13 @@ Deno.serve(async (req) => {
   if (cost === undefined) return json(400, { error: 'Unknown operation.' });
 
   const uid = userData.user.id;
-  const refundAll = async () => { for (let i = 0; i < cost; i++) await admin.rpc('refund_credit', { p_user: uid }).catch(() => {}); };
+  const refundAll = async () => { for (let i = 0; i < cost; i++) await refundOnce(admin, uid); };
 
   let done = 0;
   for (let i = 0; i < cost; i++) {
     const { data, error } = await admin.rpc('spend_credit', { p_user: uid });
     if (error || !data) {
-      for (let j = 0; j < done; j++) await admin.rpc('refund_credit', { p_user: uid }).catch(() => {});
+      for (let j = 0; j < done; j++) await refundOnce(admin, uid);
       return json(402, { error: `Not enough credits — this tool costs ${cost} credits per run.` });
     }
     done++;

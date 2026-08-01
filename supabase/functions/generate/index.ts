@@ -37,6 +37,15 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
+// supabase-js's .rpc() builder is PromiseLike, not a real Promise — it
+// implements .then() but NOT .catch(), so `await admin.rpc(...).catch(fn)`
+// throws a synchronous "catch is not a function" TypeError instead of ever
+// reaching `fn` — which would crash the handler AND skip the refund. try/catch
+// is the only safe way to swallow a failed RPC.
+const refundOnce = async (admin: any, uid: string) => {
+  try { await admin.rpc('refund_credit', { p_user: uid }); } catch (_) { /* best-effort */ }
+};
+
 // ── Limits (defense against payload abuse / runaway cost) ────────────────────
 const MAX_PROMPT_CHARS = 6000; // premium/analysed prompts (concept + base direction) run long
 const MAX_SOURCES = 6;
@@ -296,7 +305,7 @@ Deno.serve(async (req) => {
 
   if (!gen || !gen.images.length) {
     // Total failure across all providers → refund. A failed generation is free.
-    await admin.rpc('refund_credit', { p_user: user.id }).catch(() => {});
+    await refundOnce(admin, user.id);
     console.error('all_providers_failed', errors.join(' | '));
     return json(502, { error: 'Could not generate an image right now. Please try again.' });
   }
@@ -319,7 +328,7 @@ Deno.serve(async (req) => {
   } catch (storeErr: any) {
     // The user DID get an image from the model; a storage hiccup shouldn't
     // silently eat the credit AND the result. Refund and report.
-    await admin.rpc('refund_credit', { p_user: user.id }).catch(() => {});
+    await refundOnce(admin, user.id);
     console.error('storage_failed', storeErr?.message || storeErr);
     return json(502, { error: 'Generated, but saving failed. Please try again.' });
   }

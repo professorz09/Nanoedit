@@ -60,6 +60,44 @@ export const fetchStyleImages = async (): Promise<string[]> => {
   return inflight;
 };
 
+export interface MatchedStyle {
+  url: string;
+  name: string | null;
+  meta: any;
+  similarity: number | null;
+}
+
+/**
+ * Vector-search the style pool (global + the caller's own custom styles) for
+ * the ones that best fit a topic — powers the YouTube auto-style flow so
+ * generation is grounded in one of OUR curated thumbnails instead of the
+ * video's own (often low-quality) one. Costs 1 credit server-side (the
+ * "match-style" Edge Function), refunded on failure. Returns [] on any
+ * problem (not signed in, no credits, network) — callers should fall back to
+ * the plain style pool (fetchStyleImages/useStyleImages) rather than block.
+ */
+export const matchStyles = async (text: string, count = 8): Promise<MatchedStyle[]> => {
+  if (!supabase) return [];
+  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (!supaUrl) return [];
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return [];
+    const resp = await fetch(`${supaUrl}/functions/v1/match-style`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
+      body: JSON.stringify({ text, count }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json().catch(() => ({}));
+    return Array.isArray(data?.styles) ? data.styles : [];
+  } catch {
+    return [];
+  }
+};
+
 /**
  * Returns the style pool to render. Renders `bundled` immediately for a fast
  * first paint. Nothing is fetched from Supabase until `enabled` is true — the

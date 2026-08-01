@@ -34,6 +34,13 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     blankRef.current = c.toDataURL('image/png');
   }, []);
 
+  // Failsafe: if we unmount mid-stroke (e.g. switching tabs while drawing),
+  // never leave the page's text-selection locked off.
+  useEffect(() => () => {
+    document.body.style.userSelect = '';
+    (document.body.style as any).webkitUserSelect = '';
+  }, []);
+
   // Report the drawing to the parent — null while it's still an empty page.
   const emit = () => {
     const c = canvasRef.current;
@@ -71,6 +78,12 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     const p = pos(e);
     last.current = p;
     canvasRef.current?.setPointerCapture(e.pointerId);
+    // Kill page text-selection for the whole drag: pointerdown's preventDefault
+    // doesn't stop the compat mousedown, so a fast drag still selects surrounding
+    // text. Lock userSelect on <body> and drop any range that already got picked.
+    document.body.style.userSelect = 'none';
+    (document.body.style as any).webkitUserSelect = 'none';
+    window.getSelection?.()?.removeAllRanges?.();
     strokeStyle(ctx);
     ctx.beginPath();
     ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2); // dot on a single tap
@@ -81,6 +94,7 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     if (!drawing.current) return;
     e.preventDefault();
     const ctx = ctxOf(); if (!ctx || !last.current) return;
+    window.getSelection?.()?.removeAllRanges?.();
     const p = pos(e);
     strokeStyle(ctx);
     ctx.beginPath();
@@ -94,6 +108,8 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
     if (!drawing.current) return;
     drawing.current = false;
     last.current = null;
+    document.body.style.userSelect = '';
+    (document.body.style as any).webkitUserSelect = '';
     emit();
   };
 

@@ -37,7 +37,10 @@ async function checkFreeRateLimit(admin: any, uid: string): Promise<boolean> {
     .gte('created_at', since);
   if (error) return true; // fail open — don't block the tool over a logging hiccup
   if ((count ?? 0) >= FREE_LIMIT) return false;
-  await admin.from('tool_usage').insert({ user_id: uid, tool: 'transcript' }).catch(() => {});
+  // supabase-js's .from() builder is PromiseLike, not a real Promise — it has
+  // no .catch(), so chaining one here throws a synchronous TypeError instead
+  // of swallowing a failed insert (this is a fire-and-forget usage log).
+  try { await admin.from('tool_usage').insert({ user_id: uid, tool: 'transcript' }); } catch (_) { /* best-effort */ }
   return true;
 }
 

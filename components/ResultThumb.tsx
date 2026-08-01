@@ -16,7 +16,7 @@ const ResultThumb: React.FC<{
   onPreview: (url: string) => void;
   onDelete: (id: string) => void;
 }> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete }) => {
-  const { loaded, errored, src, onLoad, onError } = useImageLoad(img.url);
+  const { loaded, errored, src, onLoad, onError, imgRef } = useImageLoad(img.url);
   const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
 
   return (
@@ -36,6 +36,7 @@ const ResultThumb: React.FC<{
             className="block w-full h-full p-0 border-0 bg-transparent cursor-pointer"
           >
             <img
+              ref={imgRef}
               src={src}
               alt={img.prompt}
               loading="lazy"

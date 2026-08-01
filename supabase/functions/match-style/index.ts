@@ -29,6 +29,14 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
+// supabase-js's .rpc() builder is PromiseLike, not a real Promise — it
+// implements .then() but NOT .catch(), so `await admin.rpc(...).catch(fn)`
+// throws a synchronous "catch is not a function" TypeError instead of ever
+// reaching `fn`. try/catch is the only safe way to swallow a failed RPC.
+const refundOnce = async (admin: any, uid: string) => {
+  try { await admin.rpc('refund_credit', { p_user: uid }); } catch (_) { /* best-effort */ }
+};
+
 const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
 const EMBED_DIMS = 768; // must match the style_images.embedding vector(768) column
 const BUCKET = 'styles';
@@ -100,7 +108,7 @@ Deno.serve(async (req) => {
     console.error('embed_failed', e?.message || String(e));
   }
   if (!embedding?.length) {
-    await admin.rpc('refund_credit', { p_user: uid }).catch(() => {});
+    await refundOnce(admin, uid);
     return json(502, { error: 'Could not analyse the topic. Please try again.' });
   }
 
@@ -113,7 +121,7 @@ Deno.serve(async (req) => {
   });
   if (error) {
     console.error('match_styles_failed', error.message);
-    await admin.rpc('refund_credit', { p_user: uid }).catch(() => {});
+    await refundOnce(admin, uid);
     return json(502, { error: 'Style search failed.' });
   }
 

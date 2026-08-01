@@ -11,11 +11,11 @@ const LoadedThumb: React.FC<{
   className: string;
   onClick?: () => void;
 }> = ({ src, alt, className, onClick }) => {
-  const { loaded, errored, src: displaySrc, onLoad, onError } = useImageLoad(src);
+  const { loaded, errored, src: displaySrc, onLoad, onError, imgRef } = useImageLoad(src);
   return (
     <>
       {!loaded && !errored && <div className="thumb-skeleton absolute inset-0" aria-hidden />}
-      <img src={displaySrc} alt={alt} loading="lazy" className={className} onClick={onClick} onLoad={onLoad} onError={onError} />
+      <img ref={imgRef} src={displaySrc} alt={alt} loading="lazy" className={className} onClick={onClick} onLoad={onLoad} onError={onError} />
     </>
   );
 };
