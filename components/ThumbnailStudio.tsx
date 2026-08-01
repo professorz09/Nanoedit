@@ -474,7 +474,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     if (mode === 'youtube') return extractYouTubeId(youtubeUrl) !== null;
     if (mode === 'templates') return !!selectedRef && (titleText.trim().length > 0 || uploads.length > 0);
     if (mode === 'prompt') return promptText.trim().length > 0;
-    if (mode === 'reference') return uploads.length > 0 || promptText.trim().length > 0;
+    if (mode === 'reference') return uploads.length > 0 || titleText.trim().length > 0;
     if (mode === 'sketch') return sketchData !== null;
     return false;
   })();
@@ -611,9 +611,10 @@ const ThumbnailStudio: React.FC<Props> = ({
       const extra = promptText.trim() ? `Extra direction: ${promptText.trim()}. ` : '';
       prompt = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${extra}${topicDirective(promptText || titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
     } else {
-      // reference
-      const extra = promptText.trim() ? `Additional direction: ${promptText.trim()}. ` : '';
-      prompt = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${uploads.length ? 'If a person appears, preserve their likeness. ' : ''}${extra}${topicDirective(promptText || titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
+      // reference — single field, same instruction-only pipeline as Styles/templates:
+      // it's creative direction for the model, never auto-rendered as on-image text.
+      const extra = titleText.trim() ? `Apply this direction: ${titleText.trim()}. ` : '';
+      prompt = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${uploads.length ? 'If a person appears, preserve their likeness. ' : ''}${extra}${topicDirective(titleText)}Do NOT add, invent or write any new text, letters, words, captions or labels anywhere on the image. ${BASE_THUMB}`;
     }
 
     // Shorts mode: swap the landscape base directive for the vertical one (every
@@ -1028,13 +1029,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <span className="text-xs text-thumb-sub/80">Up to 4 images · PNG or JPG</span>
                   </div>
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
-                  <textarea
-                    value={promptText}
-                    onChange={e => setPromptText(e.target.value)}
-                    rows={2}
-                    placeholder="Optional: extra direction (colors, mood, subject...)"
-                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
-                  />
                 </div>
               )}
 
@@ -1078,17 +1072,18 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </button>
               )}
 
-              {/* templates = edit instruction (optional); reference + sketch = overlay title (optional) */}
+              {/* templates + reference = single edit/direction instruction (optional);
+                  sketch = overlay title (optional) */}
               {(mode === 'templates' || mode === 'reference' || mode === 'sketch') && (
                 <div className="space-y-2.5">
                   <label className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'templates' ? 'What to change' : 'Title text on thumbnail'}</span>
+                    <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'sketch' ? 'Title text on thumbnail' : 'What to change'}</span>
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-thumb-sub bg-white/5 border border-white/10">optional</span>
                   </label>
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
-                    placeholder={mode === 'templates' ? "e.g. Replace the face with my photo · change the title to 'MODI JI'" : 'e.g. THIS CHANGED EVERYTHING'}
+                    placeholder={mode === 'sketch' ? 'e.g. THIS CHANGED EVERYTHING' : "e.g. Replace the face with my photo · change the title to 'MODI JI'"}
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
                   />
                 </div>

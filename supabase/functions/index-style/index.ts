@@ -131,6 +131,14 @@ Deno.serve(async (req) => {
   const prefix = `user/${uid}/`;
   if (!path.startsWith(prefix)) return json(403, { error: 'You can only index your own uploads.' });
 
+  // A retry (e.g. after a client timeout) for a path already indexed is a
+  // success, not new work — check before spending a quota slot or a Vertex
+  // call on tagging/embedding it all over again.
+  const { data: already } = await admin.from('style_images').select('id, path, name, meta').eq('path', path).single();
+  if (already) {
+    return json(200, { style: { ...already, url: `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}` } });
+  }
+
   // Per-user cap.
   const { count, error: countErr } = await admin
     .from('style_images')
