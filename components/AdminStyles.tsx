@@ -6,6 +6,7 @@ interface AdminStyle {
   path: string;
   name: string | null;
   active: boolean;
+  show_in_picker: boolean;
   meta: any;
   url: string;
   created_at: string;
@@ -110,6 +111,28 @@ const AdminStyles: React.FC = () => {
     }
   };
 
+  // Independent of `active` above — this only affects the manual "Styles"
+  // picker. The style stays fully eligible for YouTube auto-matching either
+  // way, since match_styles() never checks show_in_picker.
+  // pendingPickerIds disables a style's own button while its toggle is in
+  // flight — without it, a rapid double-click fires two overlapping updates
+  // that the server can apply out of order, leaving the shown state (which is
+  // purely optimistic, never re-synced after success) wrong.
+  const [pendingPickerIds, setPendingPickerIds] = useState<Set<string>>(new Set());
+  const togglePicker = async (s: AdminStyle) => {
+    const next = !s.show_in_picker;
+    setPendingPickerIds(prev => new Set(prev).add(s.id));
+    setStyles(prev => prev.map(x => x.id === s.id ? { ...x, show_in_picker: next } : x)); // optimistic
+    try {
+      await callAdmin({ action: 'toggle_picker', id: s.id, show_in_picker: next });
+      setStyles(prev => prev.map(x => x.id === s.id ? { ...x, show_in_picker: next } : x)); // reconcile with the confirmed value
+    } catch {
+      refresh(); // revert on failure
+    } finally {
+      setPendingPickerIds(prev => { const n = new Set(prev); n.delete(s.id); return n; });
+    }
+  };
+
   const remove = async (s: AdminStyle) => {
     if (!window.confirm('Delete this style? This cannot be undone.')) return;
     setStyles(prev => prev.filter(x => x.id !== s.id)); // optimistic
@@ -124,8 +147,9 @@ const AdminStyles: React.FC = () => {
     <section className="pt-6 pb-16 max-w-5xl mx-auto">
       <h1 className="text-2xl font-black tracking-tight">Admin — Global styles</h1>
       <p className="text-sm text-thumb-sub mt-1.5">
-        Add, hide, or remove thumbnails in the shared style pool. Every style here is vision-tagged and
+        Add, disable, or remove thumbnails in the shared style pool. Every style here is vision-tagged and
         embedded automatically, so it works in both the manual "Styles" picker and the YouTube auto-match flow.
+        "Hide from picker" only affects the manual picker — the style stays fully eligible for auto-matching.
       </p>
 
       {/* Add new style */}
@@ -191,14 +215,24 @@ const AdminStyles: React.FC = () => {
                 <div className="p-2.5 space-y-1.5">
                   <p className="text-xs font-bold text-thumb-ink truncate" title={s.name || ''}>{s.name || '(untitled)'}</p>
                   {s.meta?.niche && <p className="text-[11px] text-thumb-sub truncate">{s.meta.niche}</p>}
+                  {s.active && !s.show_in_picker && (
+                    <p className="text-[10px] text-thumb-sub">Hidden from picker · still auto-matches</p>
+                  )}
                   <div className="flex gap-1.5">
                     <button onClick={() => toggle(s)} className="flex-1 py-1.5 rounded-lg bg-thumb-soft border border-thumb-line text-[11px] font-bold hover:border-thumb-red/40 transition-colors">
-                      {s.active ? 'Hide' : 'Show'}
+                      {s.active ? 'Disable' : 'Enable'}
                     </button>
                     <button onClick={() => remove(s)} className="flex-1 py-1.5 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 text-[11px] font-bold transition-colors">
                       Delete
                     </button>
                   </div>
+                  <button
+                    onClick={() => togglePicker(s)}
+                    disabled={!s.active || pendingPickerIds.has(s.id)}
+                    className="w-full py-1.5 rounded-lg bg-thumb-soft border border-thumb-line text-[11px] font-bold hover:border-thumb-red/40 transition-colors disabled:opacity-50"
+                  >
+                    {s.show_in_picker ? 'Hide from picker' : 'Show in picker'}
+                  </button>
                 </div>
               </div>
             ))}

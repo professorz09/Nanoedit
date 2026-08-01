@@ -70,6 +70,8 @@ interface EditorViewProps {
   setBrushTool: any;
   brushSize: any;
   setBrushSize: any;
+  brushNote: any;
+  setBrushNote: any;
   annotations: any;
   setAnnotations: any;
   clearBrushSelection: any;
@@ -161,6 +163,8 @@ export default function EditorView(props: EditorViewProps) {
     setBrushTool,
     brushSize,
     setBrushSize,
+    brushNote,
+    setBrushNote,
     annotations,
     setAnnotations,
     clearBrushSelection,
@@ -946,6 +950,14 @@ export default function EditorView(props: EditorViewProps) {
                                       >+</button>
                                   </div>
                                   <p className="text-[10px] text-zinc-400 leading-snug pt-1">Paint a white outline over the area you want changed.</p>
+                                  <label className="text-[11px] text-zinc-300 block pt-2">What should change there?</label>
+                                  <textarea
+                                      value={brushNote}
+                                      onChange={e => setBrushNote(e.target.value)}
+                                      placeholder="e.g. remove this object, change the shirt to blue, add sunglasses"
+                                      rows={3}
+                                      className="w-full bg-white/10 border border-white/15 rounded-lg px-2.5 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-nano-accent resize-none"
+                                  />
                               </div>
                           )}
 

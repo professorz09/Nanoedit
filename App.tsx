@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { saveToIndexedDB, getFromIndexedDB, saveToLocalStorage, getFromLocalStorage, STORAGE_KEYS } from './services/storageService';
 import ThumbnailStudio, { REFERENCE_IMAGES } from './components/ThumbnailStudio';
 import { useStyleImages } from './services/stylesService';
+import { useAuth } from './contexts/AuthContext';
+import { supabase, isSupabaseConfigured } from './services/supabase';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useZoomPan } from './hooks/useZoomPan';
 import { useImageQueue } from './hooks/useImageQueue';
@@ -18,6 +20,19 @@ import RetryImage from './components/RetryImage';
 const EditorView = React.lazy(() => import('./components/EditorView'));
 
 function App() {
+  // The generated-thumbnails gallery is who the user IS, not what device they're
+  // on — the server (generate/index.ts) already persists every result to the
+  // "thumbnails" Storage bucket + a `generations` row. Signed in on a second
+  // device, IndexedDB there is empty (it never leaves the browser it was
+  // written on), so without this, that gallery looks empty even though the
+  // account genuinely has thumbnails. See below for the fetch-and-merge.
+  const { user, ready: authReady } = useAuth();
+  // The gallery's LOCAL cache is scoped per signed-in user (a shared "guest"
+  // key while signed out) — otherwise a second account signing in on the same
+  // browser would see the first account's cached thumbnails, both before
+  // server hydration overwrites them and permanently if it's ever offline.
+  const galleryKey = user ? `${STORAGE_KEYS.GENERATED_IMAGES}:${user.id}` : STORAGE_KEYS.GENERATED_IMAGES;
+
   // Lightweight state persisted to LocalStorage (loads synchronously, no flash).
   const [prompt, setPrompt] = usePersistentState('nano_prompt', '');
   const [isImageMode, setIsImageMode] = usePersistentState('nano_is_image_mode', false);
@@ -71,6 +86,11 @@ function App() {
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const [brushMode, setBrushMode] = useState(false);
   const [brushSize, setBrushSize] = useState(20);
+  // What to change in the brushed (masked) region — same idea as a pin's note,
+  // but for the brush tool, which paints one region rather than dropping
+  // numbered points. Without this the brush tool had no way to say WHAT to do
+  // to the marked area, only THAT an area was marked.
+  const [brushNote, setBrushNote] = useState('');
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushTool, setBrushTool] = useState<'brush' | 'pin'>('brush');
@@ -82,6 +102,7 @@ function App() {
     if (!brushMode) {
       document.body.style.userSelect = '';
       (document.body.style as any).webkitUserSelect = '';
+      setBrushNote('');
     }
   }, [brushMode]);
   // "From styles" picker — pick a ready-made style thumbnail to add as a source layer.
@@ -114,23 +135,63 @@ function App() {
     return () => { if (ric && cancel) cancel(id); else clearTimeout(id); };
   }, []);
 
-  // Restore heavy state from IndexedDB on mount
+  // Source images (in-progress editor state) are always local-only, independent of login.
   useEffect(() => {
-      const restoreState = async () => {
+      let alive = true;
+      (async () => {
           try {
               const savedSource = await getFromIndexedDB(STORAGE_KEYS.SOURCE_IMAGES);
-              if (savedSource) setSourceImages(savedSource);
-
-              const savedGenerated = await getFromIndexedDB(STORAGE_KEYS.GENERATED_IMAGES);
-              if (savedGenerated) setGeneratedImages(savedGenerated);
+              if (alive && savedSource) setSourceImages(savedSource);
           } catch (e) {
-              console.error("Failed to restore app state", e);
-          } finally {
-              setIsRestoring(false);
+              console.error("Failed to restore source images", e);
           }
-      };
-      restoreState();
+      })();
+      return () => { alive = false; };
   }, []);
+
+  // Generated-thumbnails gallery. Waits for auth's initial check (`authReady`)
+  // so it restores under the correct key on first paint instead of the guest
+  // key for an instant before a signed-in user resolves. Runs again on every
+  // later sign-in/out too. Loads the LOCAL cache for the (now-current)
+  // `galleryKey` first — REPLACING whatever was showing, since a different
+  // identity means a different gallery, not more of the same one — then
+  // merges in the server's copy on top in the SAME effect run (not a second,
+  // independently-scheduled effect) so there's no window for a slower local
+  // restore to overwrite a faster server merge or vice versa.
+  useEffect(() => {
+      if (!authReady) return;
+      let alive = true;
+      (async () => {
+          try {
+              const saved = await getFromIndexedDB(galleryKey);
+              if (alive) setGeneratedImages(saved || []);
+          } catch (e) {
+              console.error("Failed to restore gallery", e);
+          } finally {
+              if (alive) setIsRestoring(false);
+          }
+          if (!alive || !user || !isSupabaseConfigured || !supabase) return;
+          const { data, error } = await supabase
+              .from('generations')
+              .select('id, prompt, path, created_at')
+              .order('created_at', { ascending: false })
+              .limit(50);
+          if (!alive || error || !data) return;
+          const serverImages: GeneratedImage[] = data.map((r: any) => ({
+              id: `srv-${r.id}`,
+              url: supabase!.storage.from('thumbnails').getPublicUrl(r.path).data.publicUrl,
+              prompt: r.prompt || '',
+              timestamp: new Date(r.created_at).getTime(),
+          }));
+          setGeneratedImages(prev => {
+              const seenUrls = new Set(prev.map(p => p.url));
+              const merged = [...prev, ...serverImages.filter(s => !seenUrls.has(s.url))];
+              merged.sort((a, b) => b.timestamp - a.timestamp);
+              return merged.slice(0, 50);
+          });
+      })();
+      return () => { alive = false; };
+  }, [authReady, user, galleryKey]);
 
   // Persistence Effects
   useEffect(() => {
@@ -166,11 +227,11 @@ function App() {
   useEffect(() => {
       if (!isRestoring) {
           const timeoutId = setTimeout(() => {
-              saveToIndexedDB(STORAGE_KEYS.GENERATED_IMAGES, generatedImages);
+              saveToIndexedDB(galleryKey, generatedImages);
           }, 500);
           return () => clearTimeout(timeoutId);
       }
-  }, [generatedImages, isRestoring]);
+  }, [generatedImages, isRestoring, galleryKey]);
 
   // Check for API Key on mount
   useEffect(() => {
@@ -536,6 +597,7 @@ function App() {
       }
     }
     setAnnotations([]);
+    setBrushNote('');
   };
 
   // Does the mask canvas actually have any drawn selection? (sampled alpha scan)
@@ -555,15 +617,32 @@ function App() {
   // matching edit instruction, and hand it to the main generator.
   const applyEditorSelection = () => {
     const notes = annotations.filter(a => a.note.trim());
+    const hasMask = maskHasContent();
+    const hasMarks = hasMask || notes.length > 0;
+    const brushInstruction = brushNote.trim();
     const segs: string[] = [];
-    if (maskHasContent()) segs.push('Edit ONLY the white outlined region(s) of the image and leave everything else untouched.');
+    if (hasMask) {
+      segs.push(
+        brushInstruction
+          // The user told us exactly what to do in the brushed region — that's
+          // the actual instruction now, not a generic "just edit this area".
+          ? `Edit ONLY the region outlined in white, leaving everything else unchanged: ${brushInstruction}.`
+          : 'Edit ONLY the white outlined region(s) of the image and leave everything else untouched.'
+      );
+    }
     if (notes.length) {
       segs.push(
         'The image has numbered red circular markers that are annotations ONLY — do NOT render or keep them in the output. Apply the requested change at each marked location, blending seamlessly and keeping the rest of the image unchanged: ' +
         notes.map((a, i) => `(${i + 1}) ${a.note.trim()}`).join('; ') + '.'
       );
     }
-    const editPrompt = segs.length ? segs.join(' ') : 'Edit the image: ';
+    // When anything is marked, the model gets the plain original AND the
+    // marked-up version (below) — this guide tells it how to read the pair
+    // instead of guessing from the outline/pins alone.
+    const guide = hasMarks
+      ? 'You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline and/or numbered red pins marking exactly where to apply the requested change(s). Use the SECOND image only to locate where to edit — never render its outline or pin markers in the output. Produce one edited version of the FIRST image. '
+      : '';
+    const editPrompt = (guide + (segs.length ? segs.join(' ') : 'Edit the image: ')).trim();
     setPrompt(editPrompt);
     setIsImageMode(true);
 
@@ -580,6 +659,7 @@ function App() {
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         let merged = selectedArea;
+        let plain: string | null = null;
         try {
           const tempCanvas = document.createElement('canvas');
           tempCanvas.width = img.width;
@@ -587,6 +667,10 @@ function App() {
           const tctx = tempCanvas.getContext('2d');
           if (tctx) {
             tctx.drawImage(img, 0, 0);
+            // Snapshot the plain, unmarked photo BEFORE drawing the mask/pins on
+            // top — sent alongside the marked version below so the model has an
+            // undistorted view of the original, not just the outlined one.
+            if (hasMarks) plain = tempCanvas.toDataURL('image/png');
             if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
             // Burn numbered markers so the model can see WHERE each note applies.
             notes.forEach((a, i) => {
@@ -607,7 +691,7 @@ function App() {
               tctx.fillText(String(i + 1), x, y);
             });
             merged = tempCanvas.toDataURL('image/png');
-            setSourceImages([merged]);
+            setSourceImages(plain ? [plain, merged] : [merged]);
           }
         } catch (err) {
           console.error('applyEditorSelection merge failed', err);
@@ -620,7 +704,7 @@ function App() {
           id: crypto.randomUUID(),
           prompt: editPrompt,
           settings: { ...settings },
-          sourceImages: [merged],
+          sourceImages: plain ? [plain, merged] : [merged],
           status: 'pending',
           timestamp: Date.now(),
         }]);
@@ -874,6 +958,8 @@ function App() {
         setBrushTool={setBrushTool}
         brushSize={brushSize}
         setBrushSize={setBrushSize}
+        brushNote={brushNote}
+        setBrushNote={setBrushNote}
         annotations={annotations}
         setAnnotations={setAnnotations}
         clearBrushSelection={clearBrushSelection}

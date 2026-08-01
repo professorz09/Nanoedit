@@ -41,6 +41,14 @@ const SHOWCASE_IMAGES = Object.entries(
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([, url]) => url);
 
+// The home showcase marquee (below) shows SHOWCASE_IMAGES in two rows
+// scrolling opposite ways. Splitting into disjoint odd/even sets — rather
+// than both rows drawing from the full array — guarantees the same photo
+// never appears in both rows at once (with a shared pool, a given image
+// legitimately can and did line up in both rows at the same moment).
+const SHOWCASE_ROW_1 = SHOWCASE_IMAGES.length > 1 ? SHOWCASE_IMAGES.filter((_, i) => i % 2 === 0) : SHOWCASE_IMAGES;
+const SHOWCASE_ROW_2 = SHOWCASE_IMAGES.length > 1 ? SHOWCASE_IMAGES.filter((_, i) => i % 2 === 1) : SHOWCASE_IMAGES;
+
 // Real reference thumbnails dropped straight into attached_assets/ (not in a
 // subfolder). These become an image-driven "style" pool: pick one and the AI
 // recreates a thumbnail in its exact look — no text style description needed.
@@ -643,25 +651,34 @@ const ThumbnailStudio: React.FC<Props> = ({
           const styleHint = meta.summary ? `Reference style vibe: ${meta.summary}. ` : '';
           // PERSON: uploaded photo → swap that person in; else the video's own
           // thumbnail's real person, if it has one; else build from the concept
-          // (never reuse the style image's own person).
+          // (never reuse the style image's own person). Stated as a hard
+          // negative constraint, not just a positive instruction — image models
+          // weigh the pixels of a reference image heavily, so "use X" alone is
+          // often not enough to stop it defaulting to the face it can see.
           const faceStyle = hasFace
-            ? "For the main person, use the person from the uploaded photo (the SECOND image) — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. "
+            ? "For the main person, use the person from the uploaded photo (the SECOND image) — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. Do NOT use the FIRST image's person — that is a completely different, unrelated person from someone else's video. "
             : thumbFaceRef
-              ? "The SECOND image is the video's own current thumbnail — if a real person/face appears in it, use THAT exact person as the main subject: preserve their true face, identity and likeness accurately and photorealistically, matching this style's pose, scale and lighting. Take ONLY their identity from it — ignore its layout, background, text and quality entirely. If no clear person appears in it, build the subject from the video's concept instead. "
-              : "Build the main subject from the video's concept; do NOT reuse the style image's specific person or face. ";
+              ? "The SECOND image is the video's own current thumbnail — if a real person/face appears in it, use THAT exact person as the main subject: preserve their true face, identity and likeness accurately and photorealistically, matching this style's pose, scale and lighting. Take ONLY their identity from it — ignore its layout, background, text and quality entirely. If no clear person appears in it, build the subject from the video's concept instead. Either way, do NOT use the FIRST image's person — that is a completely different, unrelated person from someone else's video. "
+              : "Build the main subject from the video's concept. Do NOT reuse the FIRST image's specific person or face under any circumstances — that is a real, different, unrelated person from someone else's video, not a placeholder to fall back on. Invent a new subject that matches the concept instead. ";
           // TEXT: driven by whether THIS style itself uses on-image text.
           const styleTexts = Array.isArray(meta.elements?.texts) ? meta.elements.texts : [];
           const metaKnown = !!(meta.summary || meta.text_density || meta.elements);
           const styleUsesText = styleTexts.length > 0
             || meta.text_density === 'high' || meta.text_density === 'low'
             || (!metaKnown && !!textSeed);
+          // Naming the FIRST image's exact original words (when we know them from
+          // indexing) gives the model something concrete to NOT reproduce — a
+          // generic "don't copy the text" is easy for it to ignore when the exact
+          // words are sitting right there in the pixels it's looking at.
+          const originalWords = styleTexts.map((t: any) => t?.current).filter(Boolean).join('", "');
+          const noOldWords = originalWords ? `Specifically, do NOT render the FIRST image's own original words ("${originalWords}") anywhere — those belong to a different video. ` : '';
           const textStyle = styleUsesText
             ? (textSeed
-                ? `This style shows headline text — REPLACE it with a short punchy headline for THIS video, derived from its title/topic (distil to 2-4 uppercase words, not a full sentence) based on "${textSeed}". Keep the SAME position, size and treatment as the style. Render ONLY this one headline, correctly spelled — no other words, duplicates or gibberish. `
-                : `This style shows headline text — add ONE short punchy 2-4 word uppercase headline capturing THIS video's hook, in the same position/treatment as the style; correctly spelled, no other words or gibberish. `)
+                ? `This style shows headline text — REPLACE it with a short punchy headline for THIS video, derived from its title/topic (distil to 2-4 uppercase words, not a full sentence) based on "${textSeed}". Keep the SAME position, size and treatment as the style. Render ONLY this one new headline, correctly spelled — no other words, duplicates or gibberish. ${noOldWords}`
+                : `This style shows headline text — add ONE short punchy 2-4 word uppercase headline capturing THIS video's hook, in the same position/treatment as the style; correctly spelled, no other words or gibberish. ${noOldWords}`)
             : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
 
-          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. Do NOT copy every element and do NOT reuse its specific subject, people, props or exact wording — take ONLY what's needed and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. CRITICAL: the FIRST image is from a completely different, unrelated video — its specific person/face, its props, and its exact on-image wording all belong to THAT video, not this one. Do NOT copy any of them — take ONLY the visual style and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
           onGenerate(finalize(p), [styleB64, ...faceRefImages], genOpts);
           launched++;
         }
@@ -1653,17 +1670,17 @@ const ThumbnailStudio: React.FC<Props> = ({
             <p className="text-center text-[13px] font-bold uppercase tracking-[0.15em] text-thumb-sub mb-6">Thumbnails people actually clicked</p>
             <div className="relative -mx-5 overflow-hidden space-y-4">
               <div className="flex gap-4 w-max thumb-marquee">
-                {[...SHOWCASE_IMAGES, ...SHOWCASE_IMAGES].map((src, i) => (
+                {[...SHOWCASE_ROW_1, ...SHOWCASE_ROW_1].map((src, i) => (
                   <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
                     <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
                   </div>
                 ))}
               </div>
-              {/* Second row scrolls the opposite way (reversed order so it doesn't
-                  just mirror row one frame-for-frame) — more thumbnails visible
-                  at once, and the crossing directions read as more dynamic. */}
+              {/* Second row scrolls the opposite way AND draws from the other half
+                  of SHOWCASE_IMAGES (see SHOWCASE_ROW_2 above) — distinct photos,
+                  not just a reordering of row one's, so nothing repeats between rows. */}
               <div className="flex gap-4 w-max thumb-marquee-reverse">
-                {[...SHOWCASE_IMAGES.slice().reverse(), ...SHOWCASE_IMAGES.slice().reverse()].map((src, i) => (
+                {[...SHOWCASE_ROW_2.slice().reverse(), ...SHOWCASE_ROW_2.slice().reverse()].map((src, i) => (
                   <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
                     <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
                   </div>
