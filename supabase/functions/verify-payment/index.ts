@@ -59,6 +59,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
+  // Top-level guard, same reasoning as create-order: without it, anything
+  // that throws outside the existing inner try/catches (admin.auth.getUser(),
+  // the ledger claim insert, hmacHex/timingSafeEqual) escapes as a bodyless
+  // platform 502 — the client can't read an `error` out of that and falls
+  // back to a generic "Something went wrong" with nothing to diagnose.
+  try {
   const keyId = Deno.env.get('RAZORPAY_KEY_ID');
   const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
   if (!keyId || !keySecret) return json(500, { error: 'Payments are not configured.' });
@@ -161,4 +167,8 @@ Deno.serve(async (req) => {
   }
 
   return json(200, { ok: true, credits: item.credits, item: order.notes.item });
+  } catch (e: any) {
+    console.error('verify_payment_unhandled', e?.message || String(e));
+    return json(500, { error: 'Payment succeeded but verification failed. Please contact support with your payment reference.' });
+  }
 });

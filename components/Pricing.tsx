@@ -6,22 +6,46 @@ const Check = (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><
 const Wand = (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5" /></svg>);
 
 interface Props {
-  onCheckout: (plan: Plan, cycle: BillingCycle) => void;
-  onBuyAddon: (addonId: string) => void;
+  onCheckout: (plan: Plan, cycle: BillingCycle) => Promise<void>;
+  onBuyAddon: (addonId: string) => Promise<void>;
   onRequireLogin: () => void;
 }
 
 const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) => {
   const { user, profile } = useAuth();
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
+  // Only one checkout (Razorpay only ever has one modal open at a time) can be
+  // in flight — 'plan:<id>' | 'addon:<id>' | null. Also doubles as the click
+  // guard: without it, a click that doesn't visibly react in the ~1s it takes
+  // to create the order + load the Razorpay script reads as "nothing
+  // happened," so an impatient second click fires a second order/checkout
+  // and often surfaces as a confusing "Something went wrong."
+  const [busy, setBusy] = useState<string | null>(null);
 
   // Add-on credit packs are only for paying subscribers (Pro / Studio).
   // Free users must pick a plan first — top-ups aren't offered to them.
   const hasPaidPlan = profile?.plan === 'pro' || profile?.plan === 'studio';
 
-  const handlePick = (plan: Plan) => {
+  const handlePick = async (plan: Plan) => {
     if (!user) { onRequireLogin(); return; }
-    onCheckout(plan, cycle);
+    if (busy) return;
+    setBusy(`plan:${plan.id}`);
+    try {
+      await onCheckout(plan, cycle);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleAddon = async (addonId: string) => {
+    if (!user) { onRequireLogin(); return; }
+    if (busy) return;
+    setBusy(`addon:${addonId}`);
+    try {
+      await onBuyAddon(addonId);
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
@@ -31,13 +55,15 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
         <div className="flex items-center gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl flex-wrap justify-center">
           <button
             onClick={() => setCycle('monthly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            disabled={busy !== null}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap disabled:opacity-60 ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Monthly
           </button>
           <button
             onClick={() => setCycle('yearly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            disabled={busy !== null}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap disabled:opacity-60 ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Yearly
             <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-thumb-green bg-thumb-greenSoft border border-thumb-green/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">2 months free</span>
@@ -77,14 +103,18 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
 
               <button
                 onClick={() => handlePick(plan)}
-                disabled={isCurrent}
-                className={`mt-6 w-full py-3.5 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2 transition-all ${
+                disabled={isCurrent || busy !== null}
+                className={`mt-6 w-full py-3.5 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2 transition-all disabled:opacity-60 ${
                   isCurrent
                     ? 'bg-thumb-soft border border-thumb-line text-thumb-sub cursor-default'
                     : 'thumb-btn text-white'
                 }`}
               >
-                {isCurrent ? 'Current plan' : <><Wand className="w-4 h-4" /> Get {plan.name}</>}
+                {isCurrent
+                  ? 'Current plan'
+                  : busy === `plan:${plan.id}`
+                    ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing…</>
+                    : <><Wand className="w-4 h-4" /> Get {plan.name}</>}
               </button>
             </div>
           );
@@ -104,10 +134,15 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
               {ADDONS.map(a => (
                 <button
                   key={a.id}
-                  onClick={() => (user ? onBuyAddon(a.id) : onRequireLogin())}
-                  className="px-4 py-2.5 rounded-2xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 text-thumb-ink font-bold text-sm transition-colors"
+                  onClick={() => (user ? handleAddon(a.id) : onRequireLogin())}
+                  disabled={busy !== null}
+                  aria-label={busy === `addon:${a.id}` ? `Processing ${a.credits} credits` : undefined}
+                  aria-busy={busy === `addon:${a.id}`}
+                  className="px-4 py-2.5 rounded-2xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 text-thumb-ink font-bold text-sm transition-colors disabled:opacity-60 flex items-center gap-2"
                 >
-                  +{a.credits} <span className="text-thumb-sub font-semibold">· ${a.priceUsd}</span>
+                  {busy === `addon:${a.id}`
+                    ? <><span aria-hidden="true" className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing…</>
+                    : <>+{a.credits} <span className="text-thumb-sub font-semibold">· ${a.priceUsd}</span></>}
                 </button>
               ))}
             </div>

@@ -30,43 +30,49 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
-  const keyId = Deno.env.get('RAZORPAY_KEY_ID');
-  const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
-  if (!keyId || !keySecret) return json(500, { error: 'Payments are not configured.' });
-
-  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-    auth: { persistSession: false },
-  });
-
-  // Require a logged-in user — orders are tagged with their id (verified later).
-  const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').trim();
-  if (!jwt) return json(401, { error: 'Please sign in to continue.' });
-  const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
-  if (userErr || !userData?.user) return json(401, { error: 'Please sign in to continue.' });
-  const uid = userData.user.id;
-
-  let body: any;
-  try { body = await req.json(); } catch { return json(400, { error: 'Invalid request body' }); }
-  const itemId = typeof body?.item === 'string' ? body.item : '';
-  const item = CATALOG[itemId];
-  if (!item) return json(400, { error: 'Unknown item.' });
-
-  // Add-on credit packs are top-ups for existing subscribers only — a 'free'
-  // account can't buy credits without first holding Pro/Studio. Checked here
-  // (not just hidden in the UI) so a direct API call can't bypass it.
-  if (item.kind === 'addon') {
-    const { data: prof, error: profErr } = await admin
-      .from('profiles').select('plan').eq('id', uid).single();
-    if (profErr) return json(500, { error: 'Could not verify your plan.' });
-    if (prof?.plan !== 'pro' && prof?.plan !== 'studio') {
-      return json(403, { error: 'Add-on credits require an active Pro or Studio plan.' });
-    }
-  }
-
-  const amount = inrPaise(item.usd);
-  if (amount < 100) return json(400, { error: 'Amount too small.' }); // Razorpay floor: ₹1
-
+  // Top-level guard: anything below that throws WITHOUT this (a transient
+  // network blip in admin.auth.getUser(), an unexpected supabase-js error,
+  // etc.) escapes as a raw, bodyless 502 from the platform gateway — the
+  // client's json().catch(() => null) then has nothing to read an `error`
+  // out of, and falls back to a generic, undiagnosable "Something went
+  // wrong." Catching it here guarantees a real JSON error body every time.
   try {
+    const keyId = Deno.env.get('RAZORPAY_KEY_ID');
+    const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
+    if (!keyId || !keySecret) return json(500, { error: 'Payments are not configured.' });
+
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+      auth: { persistSession: false },
+    });
+
+    // Require a logged-in user — orders are tagged with their id (verified later).
+    const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').trim();
+    if (!jwt) return json(401, { error: 'Please sign in to continue.' });
+    const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
+    if (userErr || !userData?.user) return json(401, { error: 'Please sign in to continue.' });
+    const uid = userData.user.id;
+
+    let body: any;
+    try { body = await req.json(); } catch { return json(400, { error: 'Invalid request body' }); }
+    const itemId = typeof body?.item === 'string' ? body.item : '';
+    const item = CATALOG[itemId];
+    if (!item) return json(400, { error: 'Unknown item.' });
+
+    // Add-on credit packs are top-ups for existing subscribers only — a 'free'
+    // account can't buy credits without first holding Pro/Studio. Checked here
+    // (not just hidden in the UI) so a direct API call can't bypass it.
+    if (item.kind === 'addon') {
+      const { data: prof, error: profErr } = await admin
+        .from('profiles').select('plan').eq('id', uid).single();
+      if (profErr) return json(500, { error: 'Could not verify your plan.' });
+      if (prof?.plan !== 'pro' && prof?.plan !== 'studio') {
+        return json(403, { error: 'Add-on credits require an active Pro or Studio plan.' });
+      }
+    }
+
+    const amount = inrPaise(item.usd);
+    if (amount < 100) return json(400, { error: 'Amount too small.' }); // Razorpay floor: ₹1
+
     // receipt must be ≤ 40 chars; notes let verify-payment recover item + owner.
     const receipt = `r_${uid.slice(0, 8)}_${Date.now().toString(36)}`.slice(0, 40);
     const resp = await fetch('https://api.razorpay.com/v1/orders', {
@@ -95,7 +101,7 @@ Deno.serve(async (req) => {
       label: item.label,
     });
   } catch (e: any) {
-    console.error('create_order_error', e?.message || String(e));
+    console.error('create_order_unhandled', e?.message || String(e));
     return json(500, { error: 'Could not start checkout. Please try again.' });
   }
 });
