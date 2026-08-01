@@ -76,6 +76,14 @@ function App() {
   const [brushTool, setBrushTool] = useState<'brush' | 'pin'>('brush');
   // Right-side tool panel can be minimized so the full image is visible while editing.
   const [brushPanelMin, setBrushPanelMin] = useState(false);
+  // Failsafe: if brush mode closes mid-stroke (e.g. Cancel while dragging),
+  // never leave the page's text-selection locked off.
+  useEffect(() => {
+    if (!brushMode) {
+      document.body.style.userSelect = '';
+      (document.body.style as any).webkitUserSelect = '';
+    }
+  }, [brushMode]);
   // "From styles" picker — pick a ready-made style thumbnail to add as a source layer.
   const [showStylePicker, setShowStylePicker] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -451,10 +459,15 @@ function App() {
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!brushMode || brushTool === 'pin' || !canvasRef.current) return;
-    // Stop the browser from turning the drag into a text/page selection.
+    // preventDefault on this handler alone doesn't stop the browser's compat
+    // mousedown from still selecting surrounding page text on a fast drag —
+    // lock text-selection at the document level for the whole stroke.
     if ('preventDefault' in e) e.preventDefault();
+    document.body.style.userSelect = 'none';
+    (document.body.style as any).webkitUserSelect = 'none';
+    window.getSelection?.()?.removeAllRanges?.();
     setIsDrawing(true);
-    
+
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
@@ -484,6 +497,7 @@ function App() {
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !brushMode || brushTool === 'pin' || !canvasRef.current) return;
     if ('preventDefault' in e) e.preventDefault();
+    window.getSelection?.()?.removeAllRanges?.();
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -509,6 +523,8 @@ function App() {
 
   const stopDrawing = () => {
     setIsDrawing(false);
+    document.body.style.userSelect = '';
+    (document.body.style as any).webkitUserSelect = '';
   };
 
   const clearBrushSelection = () => {

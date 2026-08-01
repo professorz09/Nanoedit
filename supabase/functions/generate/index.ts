@@ -8,7 +8,7 @@
 //   2. Validate + sanitize the request (prompt / sources / aspect / resolution).
 //   3. Reserve ONE credit via spend_credit() — rejects with 402 at 0 credits.
 //   4. Generate, trying providers in order until one returns an image:
-//        Vertex (Gemini)  →  OpenRouter (Seedream)  →  OpenRouter (GPT)
+//        Vertex Gemini 3 (Pro 2K/4K → Flash)  →  OpenRouter (GPT)
 //      Whoever succeeds, the credit stays spent (edits included). If ALL fail
 //      to produce an image, the reserved credit is REFUNDED — a failure is free.
 //   5. Upload each image to the public "thumbnails" bucket + log a generations row.
@@ -19,9 +19,10 @@
 //   supabase functions deploy generate --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets (supabase secrets set … --project-ref vowgdlbvundorxwjdntu):
 //   VERTEX_API_KEY           = <vertex / gemini key>          (primary)
-//   OPENROUTER_API_KEY       = <openrouter key>               (fallbacks)
+//   VERTEX_PRO_MODEL         = gemini-3-pro-image             (optional override; 2K/4K)
+//   VERTEX_FLASH_MODEL       = gemini-3.1-flash-image         (optional override; 1K/Fast + Pro degrade)
+//   OPENROUTER_API_KEY       = <openrouter key>               (fallback)
 //   OPENROUTER_IMAGE_MODEL   = openai/gpt-5.4-image-2         (optional override; GPT fallback)
-//   OPENROUTER_FALLBACK_MODEL= bytedance-seed/seedream-4.5    (optional override; Seedream fallback)
 //   MAX_THUMBNAILS_PER_USER  = 50                             (optional override)
 //   (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -97,21 +98,29 @@ function makeVertex(): any {
     });
   }
   const key = Deno.env.get('VERTEX_API_KEY');
-  if (key) return new GoogleGenAI({ vertexai: true, apiKey: key });
+  if (key) {
+    // Gemini 3.x image models (gemini-3-pro-image / gemini-3.1-flash-image) are
+    // ONLY served from the `global` location on Vertex — an API-key client that
+    // defaults to a regional endpoint gets a 404 "Publisher model not found".
+    // Pin it explicitly.
+    return new GoogleGenAI({ vertexai: true, apiKey: key, location: Deno.env.get('VERTEX_LOCATION') || 'global' });
+  }
   return null;
 }
 
 // ── Provider 1: Vertex / Gemini (primary) ────────────────────────────────────
-async function viaVertex(prompt: string, sources: string[], aspectRatio: string, resolution?: string): Promise<GenResult> {
+// `model` is passed in so the caller can build a resilient chain: try the
+// hi-res Pro model first, then degrade to the Flash model. BOTH Gemini-3 image
+// models (gemini-3-pro-image / gemini-3.1-flash-image) honour imageConfig's
+// `aspectRatio` AND `imageSize` (1K/2K/4K), so the requested shape + resolution
+// are respected on either tier. The legacy 2.5-flash-image is fixed at 1024px
+// and would reject imageSize, so imageSize is applied only to the Gemini-3 line.
+async function viaVertex(model: string, prompt: string, sources: string[], aspectRatio: string, resolution?: string): Promise<GenResult> {
   const ai = makeVertex();
   if (!ai) throw new Error('vertex_not_configured');
 
-  const isPro = resolution === '2K' || resolution === '4K';
-  // 2K/4K → Gemini 3 Pro Image ("Nano Banana Pro"); Fast/1K → Gemini 3.1 Flash
-  // Image ("Nano Banana 2"). Both are the current model IDs per Google's docs.
-  // (The shut-down `gemini-3-pro-preview` was the TEXT model — NOT this image one;
-  //  the image model is `gemini-3-pro-image-preview` and it honors imageSize 4K.)
-  const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-3.1-flash-image-preview';
+  // Gemini-3 image models support the imageSize control (excludes the Lite tier).
+  const supportsImageSize = model.startsWith('gemini-3') && !model.includes('lite');
 
   const parts: any[] = [];
   for (const s of sources) {
@@ -120,8 +129,9 @@ async function viaVertex(prompt: string, sources: string[], aspectRatio: string,
   }
   parts.push({ text: prompt });
 
+  // aspectRatio is honoured on EVERY tier so the output never defaults to square.
   const config: any = { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio } };
-  if (isPro) config.imageConfig.imageSize = resolution;
+  if (supportsImageSize && resolution) config.imageConfig.imageSize = resolution;
 
   const result: any = await ai.models.generateContent({ model, contents: [{ role: 'user', parts }], config });
 
@@ -133,31 +143,6 @@ async function viaVertex(prompt: string, sources: string[], aspectRatio: string,
   }
   if (!images.length) throw new Error('vertex_no_image');
   return { images, text };
-}
-
-// ── Provider 2: Imagen 4 (text-to-image fallback) ───────────────────────────
-// Imagen 4 (imagen-4.0-generate-001) uses a different API (generateImages) and is
-// TEXT-TO-IMAGE ONLY — it can't edit/merge source images. So we only try it when
-// there are no sources; edits skip straight to the image-capable OpenRouter
-// providers. Imagen supports a limited aspect-ratio set; anything else defaults
-// to 1:1 rather than erroring.
-const IMAGEN_ASPECTS = new Set(['1:1', '3:4', '4:3', '9:16', '16:9']);
-async function viaImagen(prompt: string, aspectRatio: string): Promise<GenResult> {
-  const ai = makeVertex();
-  if (!ai) throw new Error('imagen_not_configured');
-
-  const config: any = { numberOfImages: 1 };
-  if (IMAGEN_ASPECTS.has(aspectRatio)) config.aspectRatio = aspectRatio;
-
-  const result: any = await ai.models.generateImages({ model: 'imagen-4.0-generate-001', prompt, config });
-
-  const images: GenImage[] = [];
-  for (const gi of result?.generatedImages ?? []) {
-    const b64 = gi?.image?.imageBytes;
-    if (b64) images.push({ mime: gi?.image?.mimeType || 'image/png', data: b64 });
-  }
-  if (!images.length) throw new Error('imagen_no_image');
-  return { images, text: '' };
 }
 
 // Exact pixel target for each aspect ratio. Unlike Vertex, the OpenRouter image
@@ -175,7 +160,7 @@ const PIXELS: Record<string, { width: number; height: number }> = {
   '5:4': { width: 1080, height: 864 },
 };
 
-// ── Providers 2 & 3: OpenRouter (GPT, then Seedance/Seedream) ─────────────────
+// ── Provider 2: OpenRouter (GPT image, final fallback) ───────────────────────
 async function viaOpenRouter(model: string, prompt: string, sources: string[], aspectRatio = '16:9'): Promise<GenResult> {
   const key = Deno.env.get('OPENROUTER_API_KEY');
   if (!key) throw new Error('openrouter_not_configured');
@@ -275,18 +260,26 @@ Deno.serve(async (req) => {
 
   // 4) Generate — try each provider until one returns an image. Credit stays
   //    spent on the first success; refunded only if EVERY provider fails.
-  // Fallback chain (primary Gemini image runs on VERTEX, never routed through
-  // OpenRouter): Gemini (Flash 1K / Pro 2K-4K) → Imagen 4 → OpenRouter Seedream
-  // → OpenRouter GPT image. Imagen is text-to-image only, so it's skipped when
-  // editing (sources present).
-  const orSeedreamModel = Deno.env.get('OPENROUTER_FALLBACK_MODEL') || 'bytedance-seed/seedream-4.5';
   const orGptModel = Deno.env.get('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-5.4-image-2';
+  // Vertex model chain — GA (no `-preview`) IDs now that the preview phase ended.
+  // 2K/4K → Gemini 3 Pro Image (only model honouring imageSize 2K/4K); then
+  // degrade to Gemini 3.1 Flash Image so a Pro miss still generates at 1K.
+  // Fast/1K → Gemini 3.1 Flash Image directly. BOTH Gemini-3 image models honour
+  // `imageConfig.aspectRatio` (the older 2.5-flash-image ignored it → square
+  // output), so the requested aspect ratio is respected on every tier.
+  const proModel = Deno.env.get('VERTEX_PRO_MODEL') || 'gemini-3-pro-image';
+  const flashModel = Deno.env.get('VERTEX_FLASH_MODEL') || 'gemini-3.1-flash-image';
+  const isHiRes = resolution === '2K' || resolution === '4K';
+  const vertexModels = isHiRes ? [proModel, flashModel] : [flashModel];
   const attempts: Array<{ name: string; run: () => Promise<GenResult> }> = [
-    { name: 'vertex', run: () => viaVertex(prompt, sources, aspectRatio, resolution) },
-    ...(sources.length === 0
-      ? [{ name: 'imagen', run: () => viaImagen(prompt, aspectRatio) }]
-      : []),
-    { name: `openrouter:${orSeedreamModel}`, run: () => viaOpenRouter(orSeedreamModel, prompt, sources, aspectRatio) },
+    ...vertexModels.map((m) => ({
+      name: `vertex:${m}`,
+      run: () => viaVertex(m, prompt, sources, aspectRatio, resolution),
+    })),
+    // (Imagen 4 removed — deprecated, shuts down 2026-08-17; the Gemini-3 Flash
+    //  model already covers text-to-image and honours aspect ratio. Seedream
+    //  fallback removed too — Gemini-3's Pro→Flash chain covers hi-res, so the
+    //  only remaining fallback needed is a non-Google provider: OpenRouter GPT.)
     { name: `openrouter:${orGptModel}`, run: () => viaOpenRouter(orGptModel, prompt, sources, aspectRatio) },
   ];
 

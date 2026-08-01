@@ -190,6 +190,82 @@ export default function EditorView(props: EditorViewProps) {
     handleViewerRemoveBg,
   } = props;
 
+  // ── Draggable brush panel ──────────────────────────────────────────────────
+  // The edit-tools panel can be grabbed by its header and moved anywhere on
+  // screen (any side), so it never blocks the area you're painting. `panelPos`
+  // null = default docked position; once dragged it holds absolute viewport
+  // coords. Reset to docked each time the brush editor (re)opens.
+  const [panelPos, setPanelPos] = React.useState<{ x: number; y: number } | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const dragOff = React.useRef<{ dx: number; dy: number } | null>(null);
+
+  // Phones don't have room beside a centered, near-full-width image for a
+  // right-docked panel — it would sit on top of the artwork. Below this
+  // width the panel docks as a full-width bottom sheet instead, out of the
+  // way of the image; it's still draggable to any corner from there.
+  const [isNarrow, setIsNarrow] = React.useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  React.useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  React.useEffect(() => { if (!brushMode) setPanelPos(null); }, [brushMode]);
+
+  const dragPointFromEvent = (e: any) => {
+    // Works for both mouse/pen and touch pointer events — pointer events
+    // already report a single clientX/clientY regardless of input type.
+    return { x: e.clientX, y: e.clientY };
+  };
+
+  const onPanelDragStart = (e: any) => {
+    e.stopPropagation();
+    const el = panelRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const p = dragPointFromEvent(e);
+    dragOff.current = { dx: p.x - r.left, dy: p.y - r.top };
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* no-op */ }
+  };
+  const onPanelDragMove = (e: any) => {
+    if (!dragOff.current) return;
+    e.preventDefault?.();
+    const el = panelRef.current;
+    const w = el?.offsetWidth ?? 248;
+    const h = el?.offsetHeight ?? 200;
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+    const p = dragPointFromEvent(e);
+    setPanelPos({
+      x: clamp(p.x - dragOff.current.dx, 4, window.innerWidth - w - 4),
+      y: clamp(p.y - dragOff.current.dy, 4, window.innerHeight - h - 4),
+    });
+  };
+  const onPanelDragEnd = () => { dragOff.current = null; };
+
+  // Default (undragged) panel placement + size — bottom sheet on phones,
+  // right-docked floating panel on larger screens. Once the user drags it
+  // (panelPos set) it always floats at the exact dropped position/size.
+  const panelPositionStyle: React.CSSProperties = panelPos
+    ? { left: panelPos.x, top: panelPos.y, right: 'auto', bottom: 'auto' }
+    : isNarrow
+      ? { left: 8, right: 8, bottom: 8, top: 'auto' }
+      : { right: 12, top: '50%', transform: 'translateY(-50%)' };
+  const panelWidthClass = panelPos || !isNarrow ? 'w-[min(80vw,248px)]' : 'w-auto';
+
+  // ── Canvas-style brush cursor ───────────────────────────────────────────────
+  // A ring that follows the pointer and matches the real brush footprint, so you
+  // can see exactly what you'll paint (the native cursor is hidden over the
+  // canvas). Diameter = brushSize scaled from canvas-native px to on-screen px
+  // (rect already includes the zoom transform).
+  const [brushCursor, setBrushCursor] = React.useState<{ x: number; y: number; d: number } | null>(null);
+  const updateBrushCursor = (e: any) => {
+    const c = canvasRef?.current;
+    if (!c || brushTool !== 'brush') { setBrushCursor(null); return; }
+    const rect = c.getBoundingClientRect();
+    const d = brushSize * (rect.width / (c.width || rect.width));
+    setBrushCursor({ x: e.clientX, y: e.clientY, d });
+  };
+
   return (
     <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans ${theme === 'light' ? 'thumb-light' : ''}`}>
 
@@ -752,7 +828,13 @@ export default function EditorView(props: EditorViewProps) {
 
       {viewedImage && (
           <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4" onClick={() => { setViewedImage(null); setBrushMode(false); setSelectedArea(null); }}>
-              <button className="absolute top-4 right-4 z-[120] p-2 bg-zinc-800/80 hover:bg-zinc-700 rounded-full text-white transition-colors backdrop-blur-sm" onClick={() => { setViewedImage(null); setBrushMode(false); setSelectedArea(null); }}><IconX /></button>
+              {/* Top-right exit. In brush mode it's the ONLY top-bar control: a
+                  single Cancel button — nothing else competes for space up top. */}
+              {brushMode ? (
+                  <button className="absolute top-4 right-4 z-[130] px-4 py-2 bg-zinc-800/85 hover:bg-zinc-700 rounded-full text-white text-sm font-bold transition-colors backdrop-blur-sm flex items-center gap-1.5" onClick={() => { setViewedImage(null); setBrushMode(false); setSelectedArea(null); }}><IconX /> Cancel</button>
+              ) : (
+                  <button className="absolute top-4 right-4 z-[120] p-2 bg-zinc-800/80 hover:bg-zinc-700 rounded-full text-white transition-colors backdrop-blur-sm" onClick={() => { setViewedImage(null); setBrushMode(false); setSelectedArea(null); }}><IconX /></button>
+              )}
 
               {/* Editor toolbar — docked to the RIGHT so it never covers the image, and
                   minimizable so you can see the full frame while working. */}
@@ -764,14 +846,27 @@ export default function EditorView(props: EditorViewProps) {
                   >🖌️</button>
               )}
               {brushMode && !brushPanelMin && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 z-[120] w-[min(80vw,248px)] max-h-[80vh] flex flex-col bg-black/85 backdrop-blur-xl border border-white/15 rounded-2xl p-3 shadow-2xl" onClick={e => e.stopPropagation()}>
-                      {/* Header: title + minimize + close */}
-                      <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs font-black text-white/90 tracking-wide">EDIT TOOLS</span>
-                          <div className="flex items-center gap-1.5">
-                              <button onClick={() => setBrushPanelMin(true)} title="Minimize" className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1">–</button>
-                              <button onClick={() => { setBrushMode(false); setViewedImage(null); }} title="Close editor" className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs">✕</button>
-                          </div>
+                  <div
+                      ref={panelRef}
+                      className={`fixed z-[120] ${panelWidthClass} max-h-[80vh] flex flex-col bg-black/85 backdrop-blur-xl border border-white/15 rounded-2xl p-3 shadow-2xl`}
+                      style={panelPositionStyle}
+                      onClick={e => e.stopPropagation()}
+                  >
+                      {/* Draggable header — grab this to move the panel to any side
+                          (works with touch too — pointer events cover both). A tall
+                          tap target makes it easy to grab with a finger on phones.
+                          Minimize collapses it; exit is handled by the top Cancel button. */}
+                      <div
+                          className="flex items-center justify-between mb-3 -mx-1 px-1 py-2.5 rounded-lg cursor-move touch-none select-none hover:bg-white/5"
+                          onPointerDown={onPanelDragStart}
+                          onPointerMove={onPanelDragMove}
+                          onPointerUp={onPanelDragEnd}
+                          onPointerCancel={onPanelDragEnd}
+                      >
+                          <span className="text-xs font-black text-white/90 tracking-wide flex items-center gap-1.5">
+                              <span className="text-white/40 text-sm leading-none">⠿</span> EDIT TOOLS
+                          </span>
+                          <button onClick={(e) => { e.stopPropagation(); setBrushPanelMin(true); }} title="Minimize" className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1">–</button>
                       </div>
 
                       {/* Tool selection — Brush + Pin only */}
@@ -785,7 +880,21 @@ export default function EditorView(props: EditorViewProps) {
                           {brushTool === 'brush' && (
                               <div className="space-y-1.5">
                                   <label className="text-[11px] text-zinc-300">Brush size · {brushSize}px</label>
-                                  <input type="range" min="5" max="50" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
+                                  <div className="flex items-center gap-2">
+                                      <button
+                                          onClick={() => setBrushSize((s: number) => Math.max(2, s - 2))}
+                                          disabled={brushSize <= 2}
+                                          title="Smaller brush"
+                                          className="w-7 h-7 shrink-0 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white text-lg leading-none flex items-center justify-center"
+                                      >−</button>
+                                      <input type="range" min="2" max="120" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
+                                      <button
+                                          onClick={() => setBrushSize((s: number) => Math.min(120, s + 2))}
+                                          disabled={brushSize >= 120}
+                                          title="Bigger brush"
+                                          className="w-7 h-7 shrink-0 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white text-lg leading-none flex items-center justify-center"
+                                      >+</button>
+                                  </div>
                                   <p className="text-[10px] text-zinc-400 leading-snug pt-1">Paint a white outline over the area you want changed.</p>
                               </div>
                           )}
@@ -889,7 +998,7 @@ export default function EditorView(props: EditorViewProps) {
                       {brushMode && (
                           <canvas
                               ref={canvasRef}
-                              className="absolute top-0 left-0 w-full h-full cursor-crosshair select-none"
+                              className={`absolute top-0 left-0 w-full h-full select-none ${brushTool === 'brush' ? 'cursor-none' : 'cursor-crosshair'}`}
                               style={{
                                   transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                                   transformOrigin: 'center',
@@ -906,6 +1015,9 @@ export default function EditorView(props: EditorViewProps) {
                               onTouchStart={startDrawing}
                               onTouchMove={draw}
                               onTouchEnd={stopDrawing}
+                              onPointerMove={updateBrushCursor}
+                              onPointerEnter={updateBrushCursor}
+                              onPointerLeave={() => setBrushCursor(null)}
                           />
                       )}
                       {/* Annotation pins overlay — same transform as the image so pins
@@ -946,10 +1058,32 @@ export default function EditorView(props: EditorViewProps) {
                  )}
               </div>
 
-              <div className="absolute bottom-4 right-4 z-[120] flex gap-2 transition-opacity duration-300" onClick={e => e.stopPropagation()}>
-                   <button onClick={() => handleViewerRemoveBg(viewedImage!)} className="px-4 py-2 bg-zinc-800 text-zinc-300 text-sm font-medium rounded-lg hover:bg-zinc-700 flex items-center gap-2 transition-colors border border-zinc-700" title="Use to Remove Background"><IconEraser /> Remove BG</button>
-                   <button onClick={() => downloadImage(viewedImage!)} className="px-4 py-2 bg-nano-card/80 backdrop-blur text-white text-sm font-bold rounded-lg hover:bg-zinc-700 flex items-center gap-2 transition-colors border border-zinc-700"><IconDownload /> Save</button>
-              </div>
+              {/* Canvas-style brush cursor — a ring that tracks the pointer and matches
+                  the exact brush footprint. Rendered at the document level (fixed) with
+                  pointer-events:none so it never blocks drawing; hidden off-canvas. */}
+              {brushMode && brushTool === 'brush' && brushCursor && (
+                  <div
+                      className="fixed z-[125] rounded-full pointer-events-none mix-blend-difference"
+                      style={{
+                          left: brushCursor.x,
+                          top: brushCursor.y,
+                          width: Math.max(4, brushCursor.d),
+                          height: Math.max(4, brushCursor.d),
+                          transform: 'translate(-50%, -50%)',
+                          border: '2px solid rgba(255,255,255,0.95)',
+                          boxShadow: '0 0 0 1px rgba(0,0,0,0.55)',
+                      }}
+                  />
+              )}
+
+              {/* Bottom actions — hidden while editing (brush mode) so nothing sits
+                  below the canvas; only shown in the plain image viewer. */}
+              {!brushMode && (
+                  <div className="absolute bottom-4 right-4 z-[120] flex gap-2 transition-opacity duration-300" onClick={e => e.stopPropagation()}>
+                       <button onClick={() => handleViewerRemoveBg(viewedImage!)} className="px-4 py-2 bg-zinc-800 text-zinc-300 text-sm font-medium rounded-lg hover:bg-zinc-700 flex items-center gap-2 transition-colors border border-zinc-700" title="Use to Remove Background"><IconEraser /> Remove BG</button>
+                       <button onClick={() => downloadImage(viewedImage!)} className="px-4 py-2 bg-nano-card/80 backdrop-blur text-white text-sm font-bold rounded-lg hover:bg-zinc-700 flex items-center gap-2 transition-colors border border-zinc-700"><IconDownload /> Save</button>
+                  </div>
+              )}
           </div>
       )}
     </div>

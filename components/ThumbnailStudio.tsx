@@ -231,7 +231,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [uploads, setUploads] = useState<string[]>([]);
   const [sketchData, setSketchData] = useState<string | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
-  const [genCount, setGenCount] = useState(1);
+  const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
   const [genModel, setGenModel] = useState<'fast' | 'pro'>('pro');
@@ -618,6 +618,10 @@ const ThumbnailStudio: React.FC<Props> = ({
 
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
       const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+      // Honour the Variations picker (1-4) instead of a fixed 2 — each slot still
+      // gets its own onGenerate() call (one real image per call), just like every
+      // other mode's variation handling in handleStudioGenerate.
+      const wantCount = Math.max(1, Math.min(4, genCount));
 
       // ── Ground each variant in one of OUR OWN curated styles — NEVER the
       // video's own (often low-res) thumbnail. Vector search finds the styles
@@ -634,14 +638,19 @@ const ThumbnailStudio: React.FC<Props> = ({
         : (await fetchStyleImages()).map(u => ({ url: u }));
 
       if (pool.length) {
-        const candidates = pool.slice(0, Math.min(5, pool.length));
+        // Pull enough distinct candidates to fill every requested slot (plus a
+        // couple of spares in case some style images turn out unreadable).
+        const candidates = pool.slice(0, Math.min(pool.length, Math.max(5, wantCount + 2)));
         for (let i = candidates.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
-        const chosen = [candidates[0], candidates[1] || candidates[0]];
-        const concepts = [conceptA || conceptB, conceptB || conceptA];
+        // Cycle through the shuffled candidates so every slot gets a real
+        // (not necessarily unique, once the pool is smaller than wantCount) style.
+        const chosen = Array.from({ length: wantCount }, (_, i) => candidates[i % candidates.length]);
+        const conceptPair = [conceptA || conceptB, conceptB || conceptA];
+        const concepts = Array.from({ length: wantCount }, (_, i) => conceptPair[i % 2]);
 
         setNoteText('Designing your thumbnails in the best-matching style…', 'info');
         let launched = 0;
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < wantCount; i++) {
           const style = chosen[i];
           const meta = style.meta || {};
           const concept = concepts[i] || '';
@@ -674,10 +683,10 @@ const ThumbnailStudio: React.FC<Props> = ({
       }
 
       // Last resort: not a single style image was readable → build from the
-      // video's concept alone (still NEVER the video's own thumbnail).
-      const variants = (conceptA && conceptB)
-        ? [buildConceptOnly(conceptA), buildConceptOnly(conceptB)]
-        : [buildConceptOnly(conceptA || conceptB)];
+      // video's concept alone (still NEVER the video's own thumbnail). Still
+      // honours the Variations picker, cycling A/B when both concepts exist.
+      const fallbackConcepts = (conceptA && conceptB) ? [conceptA, conceptB] : [conceptA || conceptB];
+      const variants = Array.from({ length: wantCount }, (_, i) => buildConceptOnly(fallbackConcepts[i % fallbackConcepts.length]));
       variants.forEach(v => onGenerate(finalize(v), [...uploads], genOpts));
       setBusy(false);
       setNote(null);
