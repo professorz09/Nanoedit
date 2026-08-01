@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, Suspense } from 'react';
+import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { GeneratedImage, QueueItem, ThumbInputMode, THUMBNAIL_TEMPLATES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
@@ -8,6 +8,7 @@ import { extractYouTubeId, urlToBase64, fetchYouTubeTitle, fetchYouTubeThumb } f
 import AuthModal from './AuthModal';
 import { I } from './ThumbIcons';
 import ResultThumb from './ResultThumb';
+import ChangeFaceModal from './ChangeFaceModal';
 import SketchCanvas from './SketchCanvas';
 import PersonaPicker from './PersonaPicker';
 import SegmentedControl from './SegmentedControl';
@@ -176,42 +177,6 @@ const ThumbnailStudio: React.FC<Props> = ({
   onView, onDownload, onDownloadAll, onDelete, onOpenEditor, onRetry, onCancel,
 }) => {
   const [mode, setMode] = useState<ThumbInputMode>('templates');
-  // Sliding highlight behind the mode tabs — mirrors SegmentedControl's fix
-  // for the same underlying issue: a plain className swap onto the
-  // thumb-liquid gradient can't be CSS-transitioned, so it used to snap
-  // instantly on every tab switch instead of animating (felt glitchy,
-  // especially on mobile with the tab also growing/shrinking at the same time).
-  const tabsGroupRef = useRef<HTMLDivElement>(null);
-  const tabBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [tabRect, setTabRect] = useState<{ left: number; width: number } | null>(null);
-  const measureTab = useCallback(() => {
-    const group = tabsGroupRef.current;
-    const btn = tabBtnRefs.current[mode];
-    if (!group || !btn) return;
-    const g = group.getBoundingClientRect();
-    const b = btn.getBoundingClientRect();
-    setTabRect({ left: b.left - g.left, width: b.width });
-  }, [mode]);
-  useLayoutEffect(() => { measureTab(); }, [measureTab]);
-  useEffect(() => {
-    window.addEventListener('resize', measureTab);
-    return () => window.removeEventListener('resize', measureTab);
-  }, [measureTab]);
-  // A single layout-effect measurement can land before the row's real layout
-  // settles (e.g. the Inter webfont swapping in after first paint changes
-  // the active label's width without changing the row's own outer size) —
-  // that's what made the highlight disappear/misplace intermittently.
-  // Observing both the row and the active button re-measures whenever
-  // either's real layout changes, not just on our own state updates.
-  useEffect(() => {
-    const group = tabsGroupRef.current;
-    const btn = tabBtnRefs.current[mode];
-    if (!group || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measureTab());
-    ro.observe(group);
-    if (btn) ro.observe(btn);
-    return () => ro.disconnect();
-  }, [mode, measureTab]);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -365,14 +330,6 @@ const ThumbnailStudio: React.FC<Props> = ({
   };
   const handlePreviewUpload = (e: React.ChangeEvent<HTMLInputElement>) => readPreviewFile(e, setPreviewImage);
   const handlePreviewUploadB = (e: React.ChangeEvent<HTMLInputElement>) => readPreviewFile(e, setPreviewImageB);
-  // Send a thumbnail into the full-page feed tester (single preview system — no modal)
-  const openPreview = (url: string) => {
-    setPreviewImage(url);
-    setPreviewTitle(prev => prev || titleText || 'This changed everything (I was shocked)');
-    setSection('preview');
-    setSidebarOpen(false);
-    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
-  };
 
   const goHome = () => {
     setSection('home');
@@ -490,6 +447,17 @@ const ThumbnailStudio: React.FC<Props> = ({
     } catch (e: any) {
       setNoteText(e?.message || 'Could not save that face.');
     }
+  };
+
+  // "Change face" — fix a wrong/unwanted face on an already-generated
+  // thumbnail (e.g. one pulled in from a reference-style image) without
+  // redoing the whole generation. Modal builds an edit prompt + sources;
+  // this just queues it like any other generation.
+  const [changeFaceTarget, setChangeFaceTarget] = useState<string | null>(null);
+  const applyChangeFace = (prompt: string, sources: string[]) => {
+    onGenerate(prompt, sources, { count: 1, modelType: genModel === 'pro' ? 'pro' : 'flash' });
+    setChangeFaceTarget(null);
+    scrollToResults();
   };
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1005,23 +973,19 @@ const ThumbnailStudio: React.FC<Props> = ({
             </div>
 
             {/* Tabs */}
-            {/* Expanding-pill selector: the active tab grows to show its label; the
-                rest stay compact (icon only) so five tabs fit one clean line. A
-                sliding highlight (not a class swap onto the gradient) keeps the
-                switch animated instead of snapping. */}
-            <div ref={tabsGroupRef} className="relative flex items-stretch gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
-              {tabRect && (
-                <span
-                  className="thumb-liquid absolute inset-y-1.5 rounded-xl transition-[transform,width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none"
-                  style={{ transform: `translateX(${tabRect.left}px)`, width: tabRect.width }}
-                />
-              )}
+            {/* Every tab is the same fixed-width grid cell at all times (icon +
+                label, always both visible) — nothing ever grows or shrinks on
+                selection, so there's no layout measurement to race against
+                (no delayed/missing highlight on first paint, no reflow jank on
+                switch, and "YouTube" always has exactly as much room as every
+                other tab). The highlight is a plain per-button opacity
+                cross-fade, not a JS-measured sliding box. */}
+            <div className="grid grid-cols-5 gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
               {TABS.map(t => {
                 const active = mode === t.id;
                 return (
                   <button
                     key={t.id}
-                    ref={el => { tabBtnRefs.current[t.id] = el; }}
                     title={t.label}
                     aria-label={t.label}
                     aria-pressed={active}
@@ -1032,12 +996,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                       setMode(t.id);
                       setNote(null);
                     }}
-                    className={`relative z-10 flex flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
-                      active ? 'text-white flex-1 px-3' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-line/50 px-3.5'
+                    className={`relative flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-bold transition-colors duration-150 ${
+                      active ? 'text-white' : 'text-thumb-sub hover:text-thumb-ink'
                     }`}
                   >
-                    <t.icon className="w-4 h-4 shrink-0" />
-                    {active && <span className="whitespace-nowrap animate-fade-in-up">{t.label}</span>}
+                    <span aria-hidden className={`absolute inset-0 rounded-xl thumb-liquid transition-opacity duration-150 pointer-events-none ${active ? 'opacity-100' : 'opacity-0'}`} />
+                    <t.icon className="relative z-10 w-4 h-4 shrink-0" />
+                    <span className="relative z-10 whitespace-nowrap">{t.label}</span>
                   </button>
                 );
               })}
@@ -1355,7 +1320,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       onView={onView}
                       onDownload={onDownload}
                       onOpenEditor={onOpenEditor}
-                      onPreview={openPreview}
+                      onChangeFace={setChangeFaceTarget}
                       onDelete={onDelete}
                     />
                   ))}
@@ -1687,9 +1652,19 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'home' && (SHOWCASE_IMAGES.length > 0 ? (
           <section className="pt-16">
             <p className="text-center text-[13px] font-bold uppercase tracking-[0.15em] text-thumb-sub mb-6">Thumbnails people actually clicked</p>
-            <div className="relative -mx-5 overflow-hidden">
+            <div className="relative -mx-5 overflow-hidden space-y-4">
               <div className="flex gap-4 w-max thumb-marquee">
                 {[...SHOWCASE_IMAGES, ...SHOWCASE_IMAGES].map((src, i) => (
+                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
+                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+              {/* Second row scrolls the opposite way (reversed order so it doesn't
+                  just mirror row one frame-for-frame) — more thumbnails visible
+                  at once, and the crossing directions read as more dynamic. */}
+              <div className="flex gap-4 w-max thumb-marquee-reverse">
+                {[...SHOWCASE_IMAGES.slice().reverse(), ...SHOWCASE_IMAGES.slice().reverse()].map((src, i) => (
                   <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
                     <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
                   </div>
@@ -1959,7 +1934,17 @@ const ThumbnailStudio: React.FC<Props> = ({
       {/* ── Auth (Google-only) modal ── */}
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} reason={authReason} />
 
-      {/* ── YouTube feed preview modal ── */}
+      {/* ── Change face on an existing generated thumbnail ── */}
+      {changeFaceTarget && (
+        <ChangeFaceModal
+          targetUrl={changeFaceTarget}
+          onClose={() => setChangeFaceTarget(null)}
+          onSubmit={applyChangeFace}
+          loggedIn={!configured || !!user}
+          onRequireLogin={() => requireLogin('Log in to change faces.')}
+          personaRefreshKey={personaRefreshKey}
+        />
+      )}
     </div>
   );
 };

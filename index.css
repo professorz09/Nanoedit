@@ -265,6 +265,8 @@ button:active:not(:disabled) { transform: scale(0.97); }
 }
 .thumb-marquee { animation: thumb-marquee 32s linear infinite; }
 .thumb-marquee:hover { animation-play-state: paused; }
+.thumb-marquee-reverse { animation: thumb-marquee 32s linear infinite reverse; }
+.thumb-marquee-reverse:hover { animation-play-state: paused; }
 
 /* Dark scrollbar when studio is active */
 .thumb-scope ::-webkit-scrollbar-track { background: #141419; }

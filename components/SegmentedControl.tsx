@@ -1,12 +1,15 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React from 'react';
 
-// A pill selector (Format / Variations / Quality, ...) with a highlight that
-// SLIDES between options instead of snapping. Plain className-swapping (the
-// old approach) can't transition smoothly because the selected state's
-// background is a gradient, and CSS can't animate between two different
-// gradients — it just jumps, which reads as glitchy. Measuring the active
-// button's real position and sliding one shared highlight behind it fixes
-// that regardless of how many options there are or how wide each one is.
+// A pill selector (Format / Variations / Quality, ...). Every option is an
+// equal-width flex-1 cell at all times, so nothing ever changes size on
+// selection — the highlight is just a per-button opacity cross-fade behind
+// the label, not a JS-measured box sliding to match a button's real
+// position/width. That measurement approach (getBoundingClientRect + a
+// ResizeObserver safety net) still had a real race: on first paint, or right
+// after the active webfont swaps in, the measured rect could be briefly
+// stale — which showed up as "nothing selected" for a moment, or a highlight
+// that didn't quite line up with its own label. An opacity fade has nothing
+// to measure, so there's nothing to race.
 const SegmentedControl = <T extends string>({
   options, value, onChange, className = '',
 }: {
@@ -15,59 +18,23 @@ const SegmentedControl = <T extends string>({
   onChange: (v: T) => void;
   className?: string;
 }) => {
-  const groupRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [rect, setRect] = useState<{ left: number; width: number } | null>(null);
-
-  const measure = () => {
-    const group = groupRef.current;
-    const btn = btnRefs.current[value];
-    if (!group || !btn) return;
-    const g = group.getBoundingClientRect();
-    const b = btn.getBoundingClientRect();
-    setRect({ left: b.left - g.left, width: b.width });
-  };
-
-  useLayoutEffect(() => { measure(); }, [value, options.length]);
-  useEffect(() => {
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [value, options.length]);
-  // A single layout-effect measurement can land before layout truly settles
-  // (e.g. a webfont swapping in after first paint changes label widths) —
-  // that made the highlight disappear/misplace intermittently. Observing the
-  // row and the active button re-measures on any real layout change, not
-  // just on our own state updates.
-  useEffect(() => {
-    const group = groupRef.current;
-    const btn = btnRefs.current[value];
-    if (!group || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measure());
-    ro.observe(group);
-    if (btn) ro.observe(btn);
-    return () => ro.disconnect();
-  }, [value]);
-
   return (
-    <div ref={groupRef} className={`relative flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl ${className}`}>
-      {rect && (
-        <span
-          className="thumb-liquid absolute inset-y-0 rounded-lg transition-[transform,width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none"
-          style={{ transform: `translateX(${rect.left}px)`, width: rect.width }}
-        />
-      )}
-      {options.map(opt => (
-        <button
-          key={opt.value}
-          type="button"
-          ref={el => { btnRefs.current[opt.value] = el; }}
-          onClick={() => onChange(opt.value)}
-          aria-pressed={value === opt.value}
-          className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-bold transition-colors duration-200 ${value === opt.value ? 'text-white' : 'text-thumb-sub hover:text-thumb-ink'}`}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className={`flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl ${className}`}>
+      {options.map(opt => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            aria-pressed={active}
+            className={`relative flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-bold transition-colors duration-150 ${active ? 'text-white' : 'text-thumb-sub hover:text-thumb-ink'}`}
+          >
+            <span aria-hidden className={`absolute inset-0 rounded-lg thumb-liquid transition-opacity duration-150 pointer-events-none ${active ? 'opacity-100' : 'opacity-0'}`} />
+            <span className="relative z-10 flex items-center justify-center gap-1.5">{opt.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 };
