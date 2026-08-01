@@ -1342,8 +1342,17 @@ const ThumbnailStudio: React.FC<Props> = ({
                   ))}
 
                   {visibleCount < generatedImages.length && (
-                    <div ref={loadMoreRef} className="col-span-full flex justify-center py-6">
-                      <span className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" aria-label="Loading more" />
+                    // Skeleton cards instead of a spinner — sized/gridded exactly
+                    // like the real ResultThumb cards above (same grid-cols-1
+                    // sm:grid-cols-2 the parent uses, so it's naturally 1-wide on
+                    // mobile and 2-wide on desktop) so "more thumbnails incoming"
+                    // reads clearly instead of looking like a stalled fetch.
+                    <div ref={loadMoreRef} className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-4" aria-label="Loading more thumbnails">
+                      {Array.from({ length: Math.min(PAGE, generatedImages.length - visibleCount) }).map((_, i) => (
+                        <div key={i} className="aspect-video rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card">
+                          <div className="w-full h-full thumb-skeleton" aria-hidden />
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
