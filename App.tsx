@@ -643,7 +643,12 @@ function App() {
       ? 'You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline and/or numbered red pins marking exactly where to apply the requested change(s). Use the SECOND image only to locate where to edit — never render its outline or pin markers in the output. Produce one edited version of the FIRST image. '
       : '';
     const editPrompt = (guide + (segs.length ? segs.join(' ') : 'Edit the image: ')).trim();
-    setPrompt(editPrompt);
+    // editPrompt (the technical instruction sent to the model, incl. the
+    // TWO-image guide above) is NOT what belongs in the visible Prompt box —
+    // brush/pin edits enqueue directly, they don't need the compose box
+    // filled, and showing the raw internal instruction there just confuses
+    // the user. Clear it instead.
+    setPrompt('');
     setIsImageMode(true);
 
     const merge = () => {
