@@ -3,10 +3,13 @@ import { ASPECT_RATIOS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from '../types';
 import {
   IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette,
   IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip,
-  IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera,
+  IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera, IconUser,
 } from './Icons';
 import LoadedThumb from './LoadedThumb';
 import RetryImage from './RetryImage';
+import AuthModal from './AuthModal';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchPersonas, savePersona, deletePersona, Persona } from '../services/personasService';
 
 // Props are the App-level state/handlers the editor reads. The project ships
 // without @types/react, so precise setter/event types add no real safety here —
@@ -218,6 +221,87 @@ export default function EditorView(props: EditorViewProps) {
 
   React.useEffect(() => { if (!brushMode) setPanelPos(null); }, [brushMode]);
 
+  // Saved faces ("personas") — this editor is a separate component tree from
+  // ThumbnailStudio (which already has this) and was never wired to auth, so
+  // it manages its own sign-in state the same self-contained way
+  // ThumbnailStudio does, rather than threading user/login state down through
+  // App.tsx's props for a single feature.
+  const { user, configured } = useAuth();
+  const loggedIn = !configured || !!user;
+  const [authOpen, setAuthOpen] = React.useState(false);
+  const [showPersonaPicker, setShowPersonaPicker] = React.useState(false);
+  const [personas, setPersonas] = React.useState<Persona[] | null>(null);
+  const [personaAdding, setPersonaAdding] = React.useState(false);
+  const [personaError, setPersonaError] = React.useState<string | null>(null);
+  const personaFileRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!showPersonaPicker || !loggedIn) return;
+    let alive = true;
+    fetchPersonas().then(items => { if (alive) setPersonas(items); });
+    return () => { alive = false; };
+  }, [showPersonaPicker, loggedIn]);
+
+  const openPersonaPicker = () => {
+    if (!loggedIn) { setAuthOpen(true); return; }
+    setShowPersonaPicker(true);
+  };
+
+  const addPersonaFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    setPersonaError(null);
+    setPersonaAdding(true);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const saved = await savePersona(dataUrl);
+      if (saved.url) setPersonas(prev => [saved, ...(prev ?? [])]);
+      addToLayers(dataUrl);
+      setShowPersonaPicker(false);
+    } catch (err: any) {
+      setPersonaError(err?.message || 'Could not save that face.');
+    } finally {
+      setPersonaAdding(false);
+    }
+  };
+
+  // p.url is a 1-day SIGNED Storage URL — not one of our own public URLs, so
+  // it wouldn't even pass the generate function's own source validation, let
+  // alone survive being persisted to IndexedDB past its TTL. Fetch it once
+  // and convert to a data URL before handing it to addToLayers, same as
+  // PersonaPicker.pick() already does for this exact reason.
+  const [personaPicking, setPersonaPicking] = React.useState<string | null>(null);
+  const pickPersona = async (p: Persona) => {
+    setPersonaPicking(p.id);
+    try {
+      const res = await fetch(p.url);
+      if (!res.ok) { fetchPersonas().then(setPersonas); return; }
+      const blob = await res.blob();
+      const dataUrl = await new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onloadend = () => resolve(r.result as string);
+        r.readAsDataURL(blob);
+      });
+      addToLayers(dataUrl);
+      setShowPersonaPicker(false);
+    } finally {
+      setPersonaPicking(null);
+    }
+  };
+
+  const removePersona = async (p: Persona) => {
+    setPersonaError(null);
+    const ok = await deletePersona(p);
+    if (ok) setPersonas(prev => prev?.filter(x => x.id !== p.id) ?? null);
+    else setPersonaError('Could not remove that face. Try again.');
+  };
+
   // panelRef and panelPos are shared between the full panel AND the minimized
   // toggle button (only one is ever mounted at a time) — dragging either one
   // moves both, so a position picked while minimized carries over once you
@@ -378,6 +462,15 @@ export default function EditorView(props: EditorViewProps) {
                                 <span className="text-[10px] font-medium">Styles</span>
                             </button>
                         )}
+                        <button
+                            type="button"
+                            onClick={openPersonaPicker}
+                            className="shrink-0 w-24 h-24 border-2 border-dashed border-thumb-line rounded-xl flex flex-col items-center justify-center gap-1 text-thumb-sub hover:border-nano-accent hover:text-nano-accent transition-all cursor-pointer bg-thumb-soft"
+                            title="Add a saved face"
+                        >
+                            <IconUser />
+                            <span className="text-[10px] font-medium">Persona</span>
+                        </button>
                         {sourceImages.map((img, idx) => (
                             <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-thumb-line animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
                                 <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
@@ -454,43 +547,25 @@ export default function EditorView(props: EditorViewProps) {
                                         <p className="text-xs text-thumb-sub px-4 text-center line-clamp-1 absolute bottom-4 w-full">{item.prompt}</p>
                                     </>
                                 ) : item.status === 'failed' ? (
-                                     <>
-                                        <div className="w-full h-full flex flex-col items-center justify-center p-6 space-y-4 bg-thumb-redSoft">
-                                            <div className="relative">
-                                                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-red-900/40 to-red-950/40 border border-red-800/30 flex items-center justify-center backdrop-blur-sm shadow-lg">
-                                                    <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                    </svg>
-                                                </div>
-                                                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-2 border-thumb-card">
-                                                    ✕
-                                                </div>
-                                            </div>
-                                            <div className="text-center space-y-1.5">
-                                                <h4 className="text-base font-bold text-thumb-ink">Generation Failed</h4>
-                                                {item.error && (
-                                                    <p className="text-[11px] text-red-200/90 line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-2.5 w-full px-2">
-                                                <button 
-                                                    onClick={() => retryQueueItem(item)} 
-                                                    className="flex-1 px-4 py-3 bg-gradient-to-r from-nano-accent via-nano-accent to-nano-accentHover text-white text-sm font-bold rounded-xl hover:shadow-xl hover:shadow-nano-accent/30 transition-all hover:scale-105 active:scale-95"
-                                                >
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <span className="text-base">🔄</span>
-                                                        <span>Try Again</span>
-                                                    </div>
-                                                </button>
-                                                <button 
-                                                    onClick={() => cancelQueueItem(item.id)} 
-                                                    className="w-12 h-12 bg-black/25 hover:bg-red-900/50 border border-white/15 hover:border-red-800 text-red-100 hover:text-white text-sm font-bold rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </div>
+                                    // Same clean, compact failed-card design as the Thumbnail
+                                    // Generator's queue cards — small icon, short label, two
+                                    // small side-by-side buttons, instead of the previous
+                                    // large gradient-icon card.
+                                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-4 text-center">
+                                        <div className="w-10 h-10 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center text-xl">!</div>
+                                        <span className="text-sm font-bold text-thumb-ink">Generation failed</span>
+                                        {item.error && (
+                                            <p className="text-[11px] text-thumb-sub line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
+                                        )}
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <button onClick={() => retryQueueItem(item)} className="thumb-btn px-4 py-2 rounded-xl text-white text-xs font-bold inline-flex items-center gap-1.5">
+                                                <IconSparkles /> Retry
+                                            </button>
+                                            <button onClick={() => cancelQueueItem(item.id)} className="px-4 py-2 rounded-xl text-xs font-bold text-thumb-sub bg-white/5 border border-white/10 hover:text-thumb-ink transition-colors">
+                                                Dismiss
+                                            </button>
                                         </div>
-                                    </>
+                                    </div>
                                 ) : (
                                     <>
                                         <div className="w-8 h-8 rounded-full border-2 border-thumb-line border-dotted animate-pulse"></div>
@@ -829,6 +904,59 @@ export default function EditorView(props: EditorViewProps) {
               </div>
           </div>
       )}
+
+      {showPersonaPicker && (
+          <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPersonaPicker(false)}>
+              <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                      <div>
+                          <h3 className="text-base font-black text-thumb-ink">Add a saved face</h3>
+                          <p className="text-xs text-thumb-sub mt-0.5">Pick a face you've saved before, or add a new one</p>
+                      </div>
+                      <button onClick={() => setShowPersonaPicker(false)} className="w-8 h-8 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><IconX /></button>
+                  </div>
+                  {personaError && <p className="text-xs text-red-400 mb-3">{personaError}</p>}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-1">
+                      <button
+                          type="button"
+                          onClick={() => personaFileRef.current?.click()}
+                          disabled={personaAdding}
+                          className="aspect-square rounded-xl border-2 border-dashed border-thumb-line hover:border-nano-accent text-thumb-sub hover:text-nano-accent flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                      >
+                          {personaAdding
+                              ? <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              : <><IconUpload /><span className="text-[11px] font-bold">Add new</span></>}
+                      </button>
+                      <input ref={personaFileRef} type="file" accept="image/*" className="hidden" onChange={addPersonaFile} />
+                      {personas?.map(p => (
+                          <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
+                              <button
+                                  type="button"
+                                  onClick={() => pickPersona(p)}
+                                  disabled={personaPicking === p.id}
+                                  className="w-full h-full block disabled:opacity-50"
+                              >
+                                  <img src={p.url} alt={p.name || 'Saved face'} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                              </button>
+                              <button
+                                  type="button"
+                                  onClick={() => removePersona(p)}
+                                  aria-label="Remove saved face"
+                                  className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                              >
+                                  <IconX />
+                              </button>
+                          </div>
+                      ))}
+                  </div>
+                  {personas !== null && !personas.length && (
+                      <p className="text-sm text-thumb-sub text-center py-6">No saved faces yet — tap "Add new" to save one.</p>
+                  )}
+              </div>
+          </div>
+      )}
+
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} reason="Log in to save faces." />
 
       {/* Help Panel */}
       {showHelp && uiVisible && (

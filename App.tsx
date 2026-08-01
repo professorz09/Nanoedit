@@ -136,10 +136,27 @@ function App() {
   }, []);
 
   // Source images (in-progress editor state) are always local-only, independent of login.
+  //
+  // A prior version of the brush/pin Apply flow persisted its internal
+  // [original, marked] editor snapshots into sourceImages, so anyone who
+  // used that flow before the fix has them stuck in IndexedDB, restored
+  // forever as if they were Input Layers the user actually added. They're
+  // structurally identical to a real uploaded image (also a plain PNG data
+  // URL) — nothing to detect after the fact — so bump a schema version
+  // instead: the first load after this fix wipes the (purely transient,
+  // in-progress) saved layers once rather than trying to cherry-pick which
+  // entries were legacy snapshots.
+  const SOURCE_IMAGES_SCHEMA_VERSION = '2';
   useEffect(() => {
       let alive = true;
       (async () => {
           try {
+              const seenVersion = getFromLocalStorage('nano_source_images_schema', null);
+              if (seenVersion !== SOURCE_IMAGES_SCHEMA_VERSION) {
+                  saveToLocalStorage('nano_source_images_schema', SOURCE_IMAGES_SCHEMA_VERSION);
+                  await saveToIndexedDB(STORAGE_KEYS.SOURCE_IMAGES, []);
+                  return;
+              }
               const savedSource = await getFromIndexedDB(STORAGE_KEYS.SOURCE_IMAGES);
               if (alive && savedSource) setSourceImages(savedSource);
           } catch (e) {
@@ -613,6 +630,25 @@ function App() {
     return false;
   };
 
+  // Reference images sent to the model don't need full source resolution —
+  // output quality is controlled separately by settings.resolution/imageSize.
+  // A full-res (e.g. 4K) canvas, and especially TWO of them (plain + marked
+  // pair below), risk exceeding the image-gen provider's own request-size
+  // limits, which shows up here as a generic "all providers failed" — this
+  // caps each exported snapshot's longest edge well below that risk while
+  // staying more than sharp enough for the model to read a brush outline or
+  // pin numbers.
+  const MAX_REF_EDGE = 1536;
+  const snapshotCanvas = (src: HTMLCanvasElement): string => {
+    const scale = Math.min(1, MAX_REF_EDGE / Math.max(src.width, src.height));
+    if (scale >= 1) return src.toDataURL('image/png');
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(src.width * scale));
+    out.height = Math.max(1, Math.round(src.height * scale));
+    out.getContext('2d')?.drawImage(src, 0, 0, out.width, out.height);
+    return out.toDataURL('image/png');
+  };
+
   // Merge the source image with the drawn mask + numbered annotation markers, build a
   // matching edit instruction, and hand it to the main generator.
   const applyEditorSelection = () => {
@@ -643,7 +679,6 @@ function App() {
       ? 'You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline and/or numbered red pins marking exactly where to apply the requested change(s). Use the SECOND image only to locate where to edit — never render its outline or pin markers in the output. Produce one edited version of the FIRST image. '
       : '';
     const editPrompt = (guide + (segs.length ? segs.join(' ') : 'Edit the image: ')).trim();
-    setPrompt(editPrompt);
     setIsImageMode(true);
 
     const merge = () => {
@@ -670,7 +705,7 @@ function App() {
             // Snapshot the plain, unmarked photo BEFORE drawing the mask/pins on
             // top — sent alongside the marked version below so the model has an
             // undistorted view of the original, not just the outlined one.
-            if (hasMarks) plain = tempCanvas.toDataURL('image/png');
+            if (hasMarks) plain = snapshotCanvas(tempCanvas);
             if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
             // Burn numbered markers so the model can see WHERE each note applies.
             notes.forEach((a, i) => {
@@ -690,8 +725,13 @@ function App() {
               tctx.textBaseline = 'middle';
               tctx.fillText(String(i + 1), x, y);
             });
-            merged = tempCanvas.toDataURL('image/png');
-            setSourceImages(plain ? [plain, merged] : [merged]);
+            merged = snapshotCanvas(tempCanvas);
+            // Deliberately NOT setSourceImages(...) here — the original/marked
+            // pair is only for THIS generation call (passed directly to the
+            // queue item below). Surfacing it in the visible "Input Layers"
+            // strip would show the internal masked/marked image as if it were
+            // a layer the user added, which isn't useful once Apply has
+            // already queued the edit — it should stay a background detail.
           }
         } catch (err) {
           console.error('applyEditorSelection merge failed', err);
@@ -708,6 +748,10 @@ function App() {
           status: 'pending',
           timestamp: Date.now(),
         }]);
+        // Only clear the visible Prompt box once the edit is actually queued —
+        // clearing it earlier (e.g. before image load/canvas export) would lose
+        // whatever the user had typed there if that step then failed.
+        setPrompt('');
         setBrushMode(false);
         setViewedImage(null);
       };
