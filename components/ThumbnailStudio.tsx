@@ -525,9 +525,14 @@ const ThumbnailStudio: React.FC<Props> = ({
           // Skip while the profile is still loading — totalCredits reads 0
           // until it resolves, which would otherwise redirect a user with
           // plenty of credits to pricing just because they clicked early.
-          if (configured && !creditsLoading && totalCredits < YOUTUBE_IMAGE_COST) {
+          // Check for the FULL batch, not just one image — each of the
+          // wantCount images queued below is its own 3-credit charge, so
+          // under-checking here would let a user with (say) 4 credits queue
+          // 4 variations, watch the first one succeed, and then get 3
+          // "Generation failed" cards instead of a clear message up front.
+          if (configured && !creditsLoading && totalCredits < YOUTUBE_IMAGE_COST * wantCount) {
             setBusy(false);
-            setNoteText(`Each YouTube thumbnail costs ${YOUTUBE_IMAGE_COST} credits. Please top up your plan.`);
+            setNoteText(`This costs ${YOUTUBE_IMAGE_COST} credits per thumbnail — ${YOUTUBE_IMAGE_COST * wantCount} credits for ${wantCount}. Please top up your plan.`);
             goPricing();
             return;
           }
