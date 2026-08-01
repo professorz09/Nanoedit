@@ -9,7 +9,7 @@ import LoadedThumb from './LoadedThumb';
 import RetryImage from './RetryImage';
 import AuthModal from './AuthModal';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchPersonas, savePersona, deletePersona, Persona } from '../services/personasService';
+import { fetchPersonas, deletePersona, Persona } from '../services/personasService';
 
 // Props are the App-level state/handlers the editor reads. The project ships
 // without @types/react, so precise setter/event types add no real safety here —
@@ -231,9 +231,7 @@ export default function EditorView(props: EditorViewProps) {
   const [authOpen, setAuthOpen] = React.useState(false);
   const [showPersonaPicker, setShowPersonaPicker] = React.useState(false);
   const [personas, setPersonas] = React.useState<Persona[] | null>(null);
-  const [personaAdding, setPersonaAdding] = React.useState(false);
   const [personaError, setPersonaError] = React.useState<string | null>(null);
-  const personaFileRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (!showPersonaPicker || !loggedIn) return;
@@ -245,30 +243,6 @@ export default function EditorView(props: EditorViewProps) {
   const openPersonaPicker = () => {
     if (!loggedIn) { setAuthOpen(true); return; }
     setShowPersonaPicker(true);
-  };
-
-  const addPersonaFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !file.type.startsWith('image/')) return;
-    setPersonaError(null);
-    setPersonaAdding(true);
-    try {
-      const reader = new FileReader();
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-      const saved = await savePersona(dataUrl);
-      if (saved.url) setPersonas(prev => [saved, ...(prev ?? [])]);
-      addToLayers(dataUrl);
-      setShowPersonaPicker(false);
-    } catch (err: any) {
-      setPersonaError(err?.message || 'Could not save that face.');
-    } finally {
-      setPersonaAdding(false);
-    }
   };
 
   // p.url is a 1-day SIGNED Storage URL — not one of our own public URLs, so
@@ -911,23 +885,12 @@ export default function EditorView(props: EditorViewProps) {
                   <div className="flex items-center justify-between mb-4">
                       <div>
                           <h3 className="text-base font-black text-thumb-ink">Add a saved face</h3>
-                          <p className="text-xs text-thumb-sub mt-0.5">Pick a face you've saved before, or add a new one</p>
+                          <p className="text-xs text-thumb-sub mt-0.5">Pick a face you've saved before — manage your saved faces from your Profile</p>
                       </div>
                       <button onClick={() => setShowPersonaPicker(false)} className="w-8 h-8 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><IconX /></button>
                   </div>
                   {personaError && <p className="text-xs text-red-400 mb-3">{personaError}</p>}
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-1">
-                      <button
-                          type="button"
-                          onClick={() => personaFileRef.current?.click()}
-                          disabled={personaAdding}
-                          className="aspect-square rounded-xl border-2 border-dashed border-thumb-line hover:border-nano-accent text-thumb-sub hover:text-nano-accent flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
-                      >
-                          {personaAdding
-                              ? <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                              : <><IconUpload /><span className="text-[11px] font-bold">Add new</span></>}
-                      </button>
-                      <input ref={personaFileRef} type="file" accept="image/*" className="hidden" onChange={addPersonaFile} />
                       {personas?.map(p => (
                           <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
                               <button
@@ -950,7 +913,7 @@ export default function EditorView(props: EditorViewProps) {
                       ))}
                   </div>
                   {personas !== null && !personas.length && (
-                      <p className="text-sm text-thumb-sub text-center py-6">No saved faces yet — tap "Add new" to save one.</p>
+                      <p className="text-sm text-thumb-sub text-center py-6">No saved faces yet — add one from your Profile.</p>
                   )}
               </div>
           </div>

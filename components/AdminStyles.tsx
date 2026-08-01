@@ -88,13 +88,13 @@ const AdminStyles: React.FC = () => {
     setAdding(true);
     setAddNote(null);
     try {
-      await callAdmin({ action: 'add', imageBase64: preview, title: title.trim() || undefined, name: name.trim() || undefined });
+      const data = await callAdmin({ action: 'add', imageBase64: preview, title: title.trim() || undefined, name: name.trim() || undefined });
+      if (data?.style) setStyles(prev => [data.style, ...prev]); // no full refresh/refetch — avoids the whole grid flashing to "Loading…"
       setFile(null);
       setPreview(null);
       setTitle('');
       setName('');
       setAddNote('Style added.');
-      refresh();
     } catch (e: any) {
       setAddNote(e?.message || 'Could not add the style.');
     } finally {
