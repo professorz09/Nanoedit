@@ -28,7 +28,7 @@ const PanelFallback = () => (
 );
 import { getFromLocalStorage, saveToLocalStorage } from '../services/storageService';
 import { fetchTranscript, segmentsToText, generateText } from '../services/textService';
-import { useStyleImages } from '../services/stylesService';
+import { useStyleImages, matchStyles, fetchStyleImages } from '../services/stylesService';
 
 // Auto-load any real thumbnails dropped into attached_assets/showcase/ (16:9 jpg/png/webp).
 // No code changes needed — just add image files and they appear in the showcase gallery.
@@ -240,10 +240,12 @@ const ThumbnailStudio: React.FC<Props> = ({
   type Note = { text: string; kind: 'error' | 'success' | 'info' };
   const [note, setNote] = useState<Note | null>(null);
   const setNoteText = (text: string, kind: Note['kind'] = 'error') => setNote({ text, kind });
-  // Per-video-id cache of the analysed YouTube inputs (thumbnail, title, AI concept).
-  // Once a link is analysed, regenerating from the SAME link reuses this — the
-  // transcript is never re-fetched and no second analysis call is made.
-  const ytCache = useRef<Record<string, { thumb: string | null; title: string | null; concept: string }>>({});
+  // Per-video-id cache of the analysed YouTube inputs (thumbnail, title, two AI
+  // concepts + a headline). Once a link is analysed, regenerating from the SAME
+  // link reuses this — the transcript is never re-fetched and no second
+  // analysis call is made (so YOUTUBE_ANALYSIS_COST is only ever charged once
+  // per link, matching the "regenerating is free" cost model).
+  const ytCache = useRef<Record<string, { thumb: string | null; title: string | null; conceptA: string; conceptB: string; headline: string }>>({});
   // Raw fetch (thumbnail/title/transcript) cached separately from the AI concept
   // above — insufficient credits or a failed generateText call stop the concept
   // step, but the fetch itself already happened and burned a transcript-fetch
@@ -523,9 +525,10 @@ const ThumbnailStudio: React.FC<Props> = ({
       const id = extractYouTubeId(youtubeUrl);
       if (!id) return;
 
-      // Analyse the video ONCE per link: thumbnail + title + transcript → an AI concept.
-      // Result is cached by video id, so re-generating from the SAME link is instant and
-      // NEVER re-fetches the transcript or re-runs the analysis.
+      // Analyse the video ONCE per link: thumbnail + title + transcript → TWO
+      // distinct AI concepts + a headline. Result is cached by video id, so
+      // re-generating from the SAME link reuses it — the transcript is never
+      // re-fetched and YOUTUBE_ANALYSIS_COST is never charged twice for one link.
       let analysis = ytCache.current[id];
       if (!analysis) {
         setBusy(true);
@@ -537,11 +540,10 @@ const ThumbnailStudio: React.FC<Props> = ({
         ]);
         ytFetchCache.current[id] = fetched;
         const [thumb, title, segments] = fetched;
-        // Turn the title + transcript into a concrete visual thumbnail concept.
-        // Best-effort — if the text model is unavailable we still generate from the
-        // title and the original thumbnail. Charged once per new video (cached
-        // above); insufficient credits stop here instead of silently degrading.
-        let concept = '';
+        // Best-effort — if the text model is unavailable we still generate from
+        // the title and the original thumbnail. Charged once per new video
+        // (cached above); insufficient credits stop here instead of degrading.
+        let conceptA = '', conceptB = '', headline = '';
         const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
         if (title || transcriptText) {
           // Skip while the profile is still loading — totalCredits reads 0
@@ -554,50 +556,133 @@ const ThumbnailStudio: React.FC<Props> = ({
             return;
           }
           try {
-            concept = (await generateText(
-              `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
+            setNoteText('Designing two fresh thumbnail concepts…', 'info');
+            const raw = await generateText(
+              `You are a world-class YouTube thumbnail art director. Analyse the video below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
+              `Rules:\n` +
+              `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
+              `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
+              `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+              `- HEADLINE: a punchy 2-4 word uppercase hook that captures the video's core topic (viewers must instantly get what it's about).\n\n` +
+              `Reply in EXACTLY this format, nothing else:\n` +
+              `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+              `TITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
               'concept'
-            )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
+            );
+            const grab = (label: string) => {
+              const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
+              return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+            };
+            conceptA = grab('CONCEPT_A').slice(0, 400);
+            conceptB = grab('CONCEPT_B').slice(0, 400);
+            headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+            // If the model ignored the format, treat the whole reply as one concept.
+            if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
             await refreshProfile(); // credits were charged server-side — sync the header count
           } catch (e: any) {
             const msg = e?.message || '';
             if (/credit/i.test(msg)) { setBusy(false); setNoteText(msg); goPricing(); return; }
-            /* otherwise concept stays empty — fall back to title + thumbnail */
+            /* otherwise concepts stay empty — fall back further below */
           }
         }
-        analysis = { thumb, title, concept };
+        analysis = { thumb, title, conceptA, conceptB, headline };
         ytCache.current[id] = analysis;
         setBusy(false);
         setNote(null);
       }
 
-      const { thumb, title, concept } = analysis;
+      const { thumb, title, conceptA, conceptB, headline } = analysis;
+      if (!thumb && !title && !conceptA && !conceptB && !promptText.trim()) {
+        setNoteText('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
+        return;
+      }
+
       // Optional "Advanced" inputs: extra direction + a person's photo.
       const dir = promptText.trim() ? `Extra direction: ${promptText.trim().slice(0, 400)}. ` : '';
       const hasFace = uploads.length > 0;
       const faceDir = hasFace ? 'Feature the person from the uploaded photo as the main subject and preserve their likeness. ' : '';
       const titleLine = title ? `The video is titled "${title}". ` : '';
-      const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
       const topicSeed = [title, promptText].filter(v => v && v.trim()).join('. ');
       // Premium + instantly-legible direction so the result matches the reference-style thumbnails.
       const ytPremium = "The thumbnail should communicate the video's topic at a glance — a viewer should quickly grasp what it's about — using a clear, expressive focal subject and topic-relevant visual cues. Make it look genuinely premium and high-end, on par with the best top-creator thumbnails: bold, polished, richly detailed and click-worthy. ";
+      const realFootage = "Render it as authentic real-footage-style photography — like a genuine photo/still captured on a professional camera for THIS exact topic, with real depth of field and natural lighting; not an illustration, cartoon or generic stock art. ";
+      const textSeed = promptText.trim() || headline;
 
-      if (thumb) {
-        sources = [thumb, ...sources];
-        // If the original thumbnail already shows a real person, keep THAT person (unless the
-        // user uploaded their own photo). If it has no person, build the scene from the concept
-        // without inventing one.
-        const personDir = hasFace
-          ? ''
-          : 'If the original thumbnail features a real person, keep that SAME person as the main subject and faithfully preserve their face and likeness. If it has no person, build the scene from the concept and do not invent a person. ';
-        prompt = `Using the uploaded original YouTube thumbnail (FIRST image) as reference for the subject and topic, create a FRESH, far more click-worthy thumbnail for this video that captures its core hook. ${titleLine}${conceptLine}${ytPremium}${personDir}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
-      } else {
-        if (!title && !concept && !promptText.trim()) {
-          setNoteText('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
-          return;
+      // Concept-only prompt — the last resort if NOT A SINGLE style image is
+      // readable. Builds from the video's topic/concept, NEVER from the video's
+      // own (often low-res) thumbnail — recreating that is exactly what to avoid.
+      const buildConceptOnly = (concept: string) => {
+        const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
+        return `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
+      };
+
+      const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
+      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+
+      // ── Ground each variant in one of OUR OWN curated styles — NEVER the
+      // video's own (often low-res) thumbnail. Vector search finds the styles
+      // that best fit THIS video's topic; if that's unavailable (not signed in,
+      // no embedding credits) fall back to the loaded style pool — still never
+      // the source thumbnail. A little per-run randomness among the top matches
+      // keeps repeat generations on the same link visually fresh.
+      setBusy(true);
+      setNoteText('Finding the best-matching style…', 'info');
+      const matchQuery = [title, conceptA, conceptB, promptText].filter(v => v && v.trim()).join('. ').slice(0, 4000);
+      const matched = await matchStyles(matchQuery, 8);
+      const pool: { url: string; meta?: any }[] = matched.length
+        ? matched.map(m => ({ url: m.url, meta: m.meta }))
+        : (await fetchStyleImages()).map(u => ({ url: u }));
+
+      if (pool.length) {
+        const candidates = pool.slice(0, Math.min(5, pool.length));
+        for (let i = candidates.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
+        const chosen = [candidates[0], candidates[1] || candidates[0]];
+        const concepts = [conceptA || conceptB, conceptB || conceptA];
+
+        setNoteText('Designing your thumbnails in the best-matching style…', 'info');
+        let launched = 0;
+        for (let i = 0; i < 2; i++) {
+          const style = chosen[i];
+          const meta = style.meta || {};
+          const concept = concepts[i] || '';
+          const styleB64 = await urlToBase64(style.url);
+          if (!styleB64) continue; // skip an unreadable style rather than recreating the video's thumbnail
+
+          const styleHint = meta.summary ? `Reference style vibe: ${meta.summary}. ` : '';
+          // PERSON: uploaded photo → swap that person in; otherwise build the
+          // subject from the video's concept (never reuse the style's own person).
+          const faceStyle = hasFace
+            ? "For the main person, use the person from the uploaded photo (the SECOND image) — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. "
+            : "Build the main subject from the video's concept; do NOT reuse the style image's specific person or face. ";
+          // TEXT: driven by whether THIS style itself uses on-image text.
+          const styleTexts = Array.isArray(meta.elements?.texts) ? meta.elements.texts : [];
+          const metaKnown = !!(meta.summary || meta.text_density || meta.elements);
+          const styleUsesText = styleTexts.length > 0
+            || meta.text_density === 'high' || meta.text_density === 'low'
+            || (!metaKnown && !!textSeed);
+          const textStyle = styleUsesText
+            ? (textSeed
+                ? `This style shows headline text — REPLACE it with a short punchy headline for THIS video, derived from its title/topic (distil to 2-4 uppercase words, not a full sentence) based on "${textSeed}". Keep the SAME position, size and treatment as the style. Render ONLY this one headline, correctly spelled — no other words, duplicates or gibberish. `
+                : `This style shows headline text — add ONE short punchy 2-4 word uppercase headline capturing THIS video's hook, in the same position/treatment as the style; correctly spelled, no other words or gibberish. `)
+            : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
+
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. Do NOT copy every element and do NOT reuse its specific subject, people, props or exact wording — take ONLY what's needed and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
+          onGenerate(finalize(p), [styleB64, ...uploads], genOpts);
+          launched++;
         }
-        prompt = `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
+        if (launched) { setBusy(false); setNote(null); scrollToResults(); return; }
       }
+
+      // Last resort: not a single style image was readable → build from the
+      // video's concept alone (still NEVER the video's own thumbnail).
+      const variants = (conceptA && conceptB)
+        ? [buildConceptOnly(conceptA), buildConceptOnly(conceptB)]
+        : [buildConceptOnly(conceptA || conceptB)];
+      variants.forEach(v => onGenerate(finalize(v), [...uploads], genOpts));
+      setBusy(false);
+      setNote(null);
+      scrollToResults();
+      return;
     } else if (mode === 'templates') {
       const topic = titleText.trim();
       const hasFace = uploads.length > 0;
