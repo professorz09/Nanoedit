@@ -5,9 +5,12 @@ import { I } from './ThumbIcons';
 // A row of the user's saved faces, shown above the upload area so a face
 // uploaded once can be reused on later generations without re-uploading. The
 // leading "Add" tile saves a new face directly (skips the old flow of
-// uploading elsewhere first, then starring the thumbnail to save it).
-// Only fetches while `enabled` (the tab that shows it is actually open) and
-// re-fetches when `refreshKey` changes (bumped after a new face is saved).
+// uploading elsewhere first, then starring the thumbnail to save it). A
+// matching "Pick" tile sits right beside it — same size/design as Add —
+// opening a bigger grid to browse every saved face at once instead of
+// scrolling a thin strip. Only fetches while `enabled` (the tab that shows it
+// is actually open) and re-fetches when `refreshKey` changes (bumped after a
+// new face is saved).
 const PersonaPicker: React.FC<{
   enabled: boolean;
   refreshKey: number;
@@ -23,6 +26,7 @@ const PersonaPicker: React.FC<{
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,6 +89,7 @@ const PersonaPicker: React.FC<{
         r.readAsDataURL(blob);
       });
       onPick(dataUrl);
+      setPickerOpen(false);
     } finally {
       setBusyId(null);
     }
@@ -118,6 +123,17 @@ const PersonaPicker: React.FC<{
                 : <><I.Upload className="w-4 h-4" /><span className="text-[10px] font-bold">Add</span></>}
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={addNew} />
+
+            {/* Same size/design as Add — opens a bigger grid to browse every
+                saved face instead of scrolling this thin strip. */}
+            <button
+              type="button"
+              onClick={() => { if (!loggedIn) { onRequireLogin(); return; } setPickerOpen(true); }}
+              aria-label="Pick a saved face"
+              className="shrink-0 w-16 h-16 rounded-xl border-2 border-dashed border-white/12 hover:border-thumb-red text-thumb-sub hover:text-thumb-red flex flex-col items-center justify-center gap-0.5 transition-colors"
+            >
+              <I.Grid className="w-4 h-4" /><span className="text-[10px] font-bold">Pick</span>
+            </button>
           </>
         )}
         {personas?.map(p => (
@@ -142,6 +158,44 @@ const PersonaPicker: React.FC<{
           </div>
         ))}
       </div>
+
+      {pickerOpen && (
+        <div className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setPickerOpen(false)}>
+          <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-black text-thumb-ink">Pick a saved face</h3>
+              <button onClick={() => setPickerOpen(false)} aria-label="Close" className="w-8 h-8 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><I.X className="w-4 h-4" /></button>
+            </div>
+            {personas?.length ? (
+              <div className="grid grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-0.5">
+                {personas.map(p => (
+                  <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
+                    <button
+                      type="button"
+                      onClick={() => pick(p)}
+                      disabled={busyId === p.id}
+                      aria-label={p.name || 'Use this saved face'}
+                      className="w-full h-full block disabled:opacity-50"
+                    >
+                      <img src={p.url} alt={p.name || 'Saved face'} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(p)}
+                      aria-label="Remove saved face"
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                    >
+                      <I.X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-thumb-sub text-center py-8">No saved faces yet — tap Add to save one first.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
