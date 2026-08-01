@@ -33,6 +33,34 @@ const EMBED_DIMS = 768; // must match the style_images.embedding vector(768) col
 const BUCKET = 'styles';
 const MAX_TEXT = 8000;
 
+// This is free (see the file header) — without SOME bound, a caller could
+// skip the YouTube UI flow entirely and hammer this + "text" op:concept
+// directly to farm free style-matched prompts, then hand them to "generate"
+// without sourceMode: 'youtube' to pay 1 credit instead of the 3 that
+// pipeline is supposed to cost. This doesn't close that gap outright (a
+// determined caller can still pace themselves under the limit) but it
+// bounds the abuse to a rate a genuine multi-video session would never hit.
+// Same rolling-window pattern "transcript" already uses.
+const FREE_LIMIT = 20;
+const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+async function checkFreeRateLimit(admin: any, uid: string): Promise<boolean> {
+  const since = new Date(Date.now() - FREE_WINDOW_MS).toISOString();
+  const { count, error } = await admin
+    .from('tool_usage')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', uid)
+    .eq('tool', 'match-style')
+    .gte('created_at', since);
+  if (error) return true; // fail open — don't block the tool over a logging hiccup
+  if ((count ?? 0) >= FREE_LIMIT) return false;
+  // supabase-js's .from() builder is PromiseLike, not a real Promise — it has
+  // no .catch(), so chaining one here throws a synchronous TypeError instead
+  // of swallowing a failed insert (this is a fire-and-forget usage log).
+  try { await admin.from('tool_usage').insert({ user_id: uid, tool: 'match-style' }); } catch (_) { /* best-effort */ }
+  return true;
+}
+
 function makeVertex(): any {
   const saRaw = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
   if (saRaw) {
@@ -63,6 +91,9 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
   if (userErr || !userData?.user) return json(401, { error: 'Please sign in.' });
   const uid = userData.user.id;
+
+  const rateOk = await checkFreeRateLimit(admin, uid);
+  if (!rateOk) return json(429, { error: 'Too many requests. Please wait a bit and try again.' });
 
   let body: any;
   try { body = await req.json(); } catch { return json(400, { error: 'Invalid request body' }); }

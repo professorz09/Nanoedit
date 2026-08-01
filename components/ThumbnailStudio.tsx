@@ -208,17 +208,12 @@ const ThumbnailStudio: React.FC<Props> = ({
   type Note = { text: string; kind: 'error' | 'success' | 'info' };
   const [note, setNote] = useState<Note | null>(null);
   const setNoteText = (text: string, kind: Note['kind'] = 'error') => setNote({ text, kind });
-  // Per-video-id cache of the analysed YouTube inputs (thumbnail, title, two AI
-  // concepts + a headline). Once a link is analysed, regenerating from the SAME
-  // link reuses this — the transcript is never re-fetched and no second
-  // analysis call is made (so YOUTUBE_ANALYSIS_COST is only ever charged once
-  // per link, matching the "regenerating is free" cost model).
-  const ytCache = useRef<Record<string, { thumb: string | null; title: string | null; conceptA: string; conceptB: string; headline: string }>>({});
-  // Raw fetch (thumbnail/title/transcript) cached separately from the AI concept
-  // above — insufficient credits or a failed generateText call stop the concept
-  // step, but the fetch itself already happened and burned a transcript-fetch
-  // rate-limit slot; without this, retrying (e.g. after buying credits) would
-  // re-fetch the transcript from scratch and could exhaust that limit.
+  // Raw fetch (thumbnail/title/transcript) cached per video id — this data never
+  // changes for a given video, and the transcript fetch is separately
+  // rate-limited (Supadata-backed), so re-generating from the SAME link reuses
+  // it instead of re-fetching. The AI concept (conceptA/conceptB/headline) is
+  // NOT cached here — it's a free (0-credit) operation, so it's regenerated
+  // fresh on every Generate click for more variety instead of going stale.
   const ytFetchCache = useRef<Record<string, [string | null, string | null, Awaited<ReturnType<typeof fetchTranscript>>]>>({});
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [legal, setLegal] = useState<null | 'about' | 'privacy' | 'terms'>(null);
@@ -501,73 +496,71 @@ const ThumbnailStudio: React.FC<Props> = ({
       if (!id) return;
       const wantCount = Math.max(1, Math.min(4, genCount));
 
-      // Analyse the video ONCE per link: thumbnail + title + transcript → TWO
-      // distinct AI concepts + a headline. Result is cached by video id, so
-      // re-generating from the SAME link reuses it — the transcript is never
-      // re-fetched. The analysis itself is free; only the images cost credits.
-      let analysis = ytCache.current[id];
-      if (!analysis) {
-        setBusy(true);
-        setNoteText('Analysing the video — thumbnail, title and transcript…', 'info');
-        const fetched = ytFetchCache.current[id] ?? await Promise.all([
-          fetchYouTubeThumb(id),
-          fetchYouTubeTitle(id),
-          fetchTranscript(id),
-        ]);
-        ytFetchCache.current[id] = fetched;
-        const [thumb, title, segments] = fetched;
-        // Best-effort — if the text model is unavailable we still generate from
-        // the title and the original thumbnail. The concept step is free; the
-        // credit check below is for the images that follow it.
-        let conceptA = '', conceptB = '', headline = '';
-        const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
-        if (title || transcriptText) {
-          // Skip while the profile is still loading — totalCredits reads 0
-          // until it resolves, which would otherwise redirect a user with
-          // plenty of credits to pricing just because they clicked early.
-          if (configured && !creditsLoading && totalCredits < YOUTUBE_IMAGE_COST) {
-            setBusy(false);
-            setNoteText(`Each YouTube thumbnail costs ${YOUTUBE_IMAGE_COST} credits. Please top up your plan.`);
-            goPricing();
-            return;
-          }
-          try {
-            setNoteText('Designing two fresh thumbnail concepts…', 'info');
-            const raw = await generateText(
-              `You are a world-class YouTube thumbnail art director. Analyse the video below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
-              `Rules:\n` +
-              `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
-              `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
-              `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
-              `- HEADLINE: a punchy 2-4 word uppercase hook that captures the video's core topic (viewers must instantly get what it's about).\n\n` +
-              `Reply in EXACTLY this format, nothing else:\n` +
-              `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
-              `TITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
-              'concept'
-            );
-            const grab = (label: string) => {
-              const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
-              return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
-            };
-            conceptA = grab('CONCEPT_A').slice(0, 400);
-            conceptB = grab('CONCEPT_B').slice(0, 400);
-            headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
-            // If the model ignored the format, treat the whole reply as one concept.
-            if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
-            await refreshProfile(); // credits were charged server-side — sync the header count
-          } catch (e: any) {
-            const msg = e?.message || '';
-            if (/credit/i.test(msg)) { setBusy(false); setNoteText(msg); goPricing(); return; }
-            /* otherwise concepts stay empty — fall back further below */
-          }
+      // Thumbnail + title + transcript are fetched once per link and cached
+      // (see ytFetchCache above). The concept — TWO distinct AI thumbnail
+      // ideas + a headline — is designed FRESH on every Generate click: it's
+      // a free (0-credit) operation, so there's no cost reason to reuse a
+      // stale concept, and regenerating gives different angles each time.
+      setBusy(true);
+      setNoteText('Analysing the video — thumbnail, title and transcript…', 'info');
+      const fetched = ytFetchCache.current[id] ?? await Promise.all([
+        fetchYouTubeThumb(id),
+        fetchYouTubeTitle(id),
+        fetchTranscript(id),
+      ]);
+      ytFetchCache.current[id] = fetched;
+      const [thumb, title, segments] = fetched;
+      // Best-effort — if the text model is unavailable we still generate from
+      // the title and the original thumbnail. The concept step is free; the
+      // credit check below is for the images that follow it.
+      let conceptA = '', conceptB = '', headline = '';
+      const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
+      if (title || transcriptText) {
+        // Skip while the profile is still loading — totalCredits reads 0
+        // until it resolves, which would otherwise redirect a user with
+        // plenty of credits to pricing just because they clicked early.
+        // Check for the FULL batch, not just one image — each of the
+        // wantCount images queued below is its own 3-credit charge, so
+        // under-checking here would let a user with (say) 4 credits queue
+        // 4 variations, watch the first one succeed, and then get 3
+        // "Generation failed" cards instead of a clear message up front.
+        if (configured && !creditsLoading && totalCredits < YOUTUBE_IMAGE_COST * wantCount) {
+          setBusy(false);
+          setNoteText(`This costs ${YOUTUBE_IMAGE_COST} credits per thumbnail — ${YOUTUBE_IMAGE_COST * wantCount} credits for ${wantCount}. Please top up your plan.`);
+          goPricing();
+          return;
         }
-        analysis = { thumb, title, conceptA, conceptB, headline };
-        ytCache.current[id] = analysis;
-        setBusy(false);
-        setNote(null);
+        try {
+          setNoteText('Designing two fresh thumbnail concepts…', 'info');
+          const raw = await generateText(
+            `You are a world-class YouTube thumbnail art director. Analyse the video below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
+            `Rules:\n` +
+            `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
+            `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
+            `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+            `- HEADLINE: a punchy 2-4 word uppercase hook that captures the video's core topic (viewers must instantly get what it's about).\n\n` +
+            `Reply in EXACTLY this format, nothing else:\n` +
+            `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+            `TITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
+            'concept'
+          );
+          const grab = (label: string) => {
+            const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
+            return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+          };
+          conceptA = grab('CONCEPT_A').slice(0, 400);
+          conceptB = grab('CONCEPT_B').slice(0, 400);
+          headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+          // If the model ignored the format, treat the whole reply as one concept.
+          if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
+        } catch (_e) {
+          /* concept generation is free and best-effort — on failure it just stays
+             empty and we fall back to the title/thumbnail further below */
+        }
       }
+      setBusy(false);
+      setNote(null);
 
-      const { thumb, title, conceptA, conceptB, headline } = analysis;
       if (!thumb && !title && !conceptA && !conceptB && !promptText.trim()) {
         setNoteText('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
         return;
