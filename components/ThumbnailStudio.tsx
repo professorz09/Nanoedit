@@ -600,7 +600,17 @@ const ThumbnailStudio: React.FC<Props> = ({
       // Optional "Advanced" inputs: extra direction + a person's photo.
       const dir = promptText.trim() ? `Extra direction: ${promptText.trim().slice(0, 400)}. ` : '';
       const hasFace = uploads.length > 0;
-      const faceDir = hasFace ? 'Feature the person from the uploaded photo as the main subject and preserve their likeness. ' : '';
+      // No uploaded photo? Fall back to the REAL person from the video's own
+      // current thumbnail (already fetched as a base64 data URL — no extra
+      // fetch needed) so the result features the actual host, not an invented
+      // face. We take ONLY their identity from it — never its layout, quality
+      // or text — the new design is still grounded in our own style library.
+      const thumbFaceRef = !hasFace && thumb ? thumb : null;
+      const faceDir = hasFace
+        ? 'Feature the person from the uploaded photo as the main subject and preserve their likeness. '
+        : thumbFaceRef
+          ? "An additional reference photo (the video's own current thumbnail) is provided — if a real person/face appears in it, feature THAT exact person as the main subject and preserve their true likeness accurately and photorealistically; take ONLY their identity from it, ignoring its layout, background, text and quality. If no clear person appears in it, invent the subject from the concept instead. "
+          : '';
       const titleLine = title ? `The video is titled "${title}". ` : '';
       const topicSeed = [title, promptText].filter(v => v && v.trim()).join('. ');
       // Premium + instantly-legible direction so the result matches the reference-style thumbnails.
@@ -609,8 +619,9 @@ const ThumbnailStudio: React.FC<Props> = ({
       const textSeed = promptText.trim() || headline;
 
       // Concept-only prompt — the last resort if NOT A SINGLE style image is
-      // readable. Builds from the video's topic/concept, NEVER from the video's
-      // own (often low-res) thumbnail — recreating that is exactly what to avoid.
+      // readable. Builds from the video's topic/concept, NEVER recreating the
+      // video's own (often low-res) thumbnail's layout — faceDir above still
+      // carries over the real person from it, if any, via thumbFaceRef.
       const buildConceptOnly = (concept: string) => {
         const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
         return `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
@@ -657,12 +668,19 @@ const ThumbnailStudio: React.FC<Props> = ({
           const styleB64 = await urlToBase64(style.url);
           if (!styleB64) continue; // skip an unreadable style rather than recreating the video's thumbnail
 
+          // Any face reference beyond the style image itself — uploaded photo takes
+          // priority; otherwise fall back to the video's own current thumbnail so
+          // the real host's face carries over instead of an invented one.
+          const faceRefImages = hasFace ? uploads : (thumbFaceRef ? [thumbFaceRef] : []);
           const styleHint = meta.summary ? `Reference style vibe: ${meta.summary}. ` : '';
-          // PERSON: uploaded photo → swap that person in; otherwise build the
-          // subject from the video's concept (never reuse the style's own person).
+          // PERSON: uploaded photo → swap that person in; else the video's own
+          // thumbnail's real person, if it has one; else build from the concept
+          // (never reuse the style image's own person).
           const faceStyle = hasFace
             ? "For the main person, use the person from the uploaded photo (the SECOND image) — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. "
-            : "Build the main subject from the video's concept; do NOT reuse the style image's specific person or face. ";
+            : thumbFaceRef
+              ? "The SECOND image is the video's own current thumbnail — if a real person/face appears in it, use THAT exact person as the main subject: preserve their true face, identity and likeness accurately and photorealistically, matching this style's pose, scale and lighting. Take ONLY their identity from it — ignore its layout, background, text and quality entirely. If no clear person appears in it, build the subject from the video's concept instead. "
+              : "Build the main subject from the video's concept; do NOT reuse the style image's specific person or face. ";
           // TEXT: driven by whether THIS style itself uses on-image text.
           const styleTexts = Array.isArray(meta.elements?.texts) ? meta.elements.texts : [];
           const metaKnown = !!(meta.summary || meta.text_density || meta.elements);
@@ -676,18 +694,20 @@ const ThumbnailStudio: React.FC<Props> = ({
             : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
 
           const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. Do NOT copy every element and do NOT reuse its specific subject, people, props or exact wording — take ONLY what's needed and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
-          onGenerate(finalize(p), [styleB64, ...uploads], genOpts);
+          onGenerate(finalize(p), [styleB64, ...faceRefImages], genOpts);
           launched++;
         }
         if (launched) { setBusy(false); setNote(null); scrollToResults(); return; }
       }
 
       // Last resort: not a single style image was readable → build from the
-      // video's concept alone (still NEVER the video's own thumbnail). Still
-      // honours the Variations picker, cycling A/B when both concepts exist.
+      // video's concept alone, still never copying the video's own thumbnail's
+      // layout — only (via faceDir/thumbFaceRef above) the real person in it, if
+      // any. Still honours the Variations picker, cycling A/B when both concepts exist.
       const fallbackConcepts = (conceptA && conceptB) ? [conceptA, conceptB] : [conceptA || conceptB];
       const variants = Array.from({ length: wantCount }, (_, i) => buildConceptOnly(fallbackConcepts[i % fallbackConcepts.length]));
-      variants.forEach(v => onGenerate(finalize(v), [...uploads], genOpts));
+      const fallbackFaceRefs = hasFace ? uploads : (thumbFaceRef ? [thumbFaceRef] : []);
+      variants.forEach(v => onGenerate(finalize(v), [...fallbackFaceRefs], genOpts));
       setBusy(false);
       setNote(null);
       scrollToResults();
@@ -1247,7 +1267,14 @@ const ThumbnailStudio: React.FC<Props> = ({
                 className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70 mt-1"
               >
                 {busy ? (
-                  <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Fetching…</>
+                  <>
+                    <span className="flex items-center gap-1 h-5">
+                      <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                    Fetching…
+                  </>
                 ) : (
                   <><I.Wand className="w-5 h-5" /> Generate Thumbnails</>
                 )}
@@ -1263,11 +1290,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <h2 className="text-2xl font-black flex items-center gap-2">
                     {isProcessing ? <><span className="w-4 h-4 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" /> Generating…</> : 'Your thumbnails'}
                   </h2>
-                  {generatedImages.length > 0 && (
-                    <button onClick={onDownloadAll} className="text-sm font-bold text-thumb-red flex items-center gap-1.5 hover:underline">
-                      <I.Download className="w-4 h-4" /> Download all
-                    </button>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
