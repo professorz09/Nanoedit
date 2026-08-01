@@ -86,6 +86,20 @@ Deno.serve(async (req) => {
       return json(200, { ok: true });
     }
 
+    // Defense in depth — never grant credits purely on the strength of the
+    // itemId in metadata. Re-confirm the amount Dodo actually says was paid
+    // matches what that item should cost (metadata is set by us at checkout
+    // creation and can't be forged without DODO_PAYMENTS_API_KEY, but this
+    // still guards against a future bug in create-checkout, or Dodo's
+    // checkout unexpectedly allowing the amount to be edited).
+    const expectedCents = Math.round(item.usd * 100);
+    const paidCents = event.data?.total_amount;
+    const paidCurrency = String(event.data?.currency ?? '').toUpperCase();
+    if (paidCents !== expectedCents || paidCurrency !== 'USD') {
+      console.error('dodo_amount_mismatch', paymentId, itemId, paidCents, paidCurrency, expectedCents);
+      return json(400, { error: 'Payment amount does not match the item.' });
+    }
+
     // Idempotency — claim the ledger row FIRST (atomically, via the unique
     // index on (user_id, reason) for purchase:* reasons — see migration
     // 0015). A retried/duplicate webhook delivery for the same payment can no
