@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { saveToIndexedDB, getFromIndexedDB, saveToLocalStorage, getFromLocalStorage, STORAGE_KEYS } from './services/storageService';
 import ThumbnailStudio, { REFERENCE_IMAGES } from './components/ThumbnailStudio';
 import { useStyleImages } from './services/stylesService';
+import { useAuth } from './contexts/AuthContext';
+import { supabase, isSupabaseConfigured } from './services/supabase';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useZoomPan } from './hooks/useZoomPan';
 import { useImageQueue } from './hooks/useImageQueue';
@@ -18,6 +20,14 @@ import RetryImage from './components/RetryImage';
 const EditorView = React.lazy(() => import('./components/EditorView'));
 
 function App() {
+  // The generated-thumbnails gallery is who the user IS, not what device they're
+  // on — the server (generate/index.ts) already persists every result to the
+  // "thumbnails" Storage bucket + a `generations` row. Signed in on a second
+  // device, IndexedDB there is empty (it never leaves the browser it was
+  // written on), so without this, that gallery looks empty even though the
+  // account genuinely has thumbnails. See below for the fetch-and-merge.
+  const { user } = useAuth();
+
   // Lightweight state persisted to LocalStorage (loads synchronously, no flash).
   const [prompt, setPrompt] = usePersistentState('nano_prompt', '');
   const [isImageMode, setIsImageMode] = usePersistentState('nano_is_image_mode', false);
@@ -131,6 +141,40 @@ function App() {
       };
       restoreState();
   }, []);
+
+  // Hydrate the gallery from the SERVER once signed in — merges in thumbnails
+  // generated on other devices/sessions (IndexedDB above is local-only and
+  // never syncs). Runs whenever `user` resolves to signed-in, which covers
+  // both a fresh sign-in and reopening the app already-authenticated on a
+  // device that has never generated anything locally before. Merges rather
+  // than replaces so anything already showing (including an item generated
+  // moments ago on THIS device, before its own row is necessarily readable
+  // back) is never dropped.
+  useEffect(() => {
+      if (!user || !isSupabaseConfigured || !supabase) return;
+      let alive = true;
+      (async () => {
+          const { data, error } = await supabase!
+              .from('generations')
+              .select('id, prompt, path, created_at')
+              .order('created_at', { ascending: false })
+              .limit(50);
+          if (!alive || error || !data) return;
+          const serverImages: GeneratedImage[] = data.map((r: any) => ({
+              id: `srv-${r.id}`,
+              url: supabase!.storage.from('thumbnails').getPublicUrl(r.path).data.publicUrl,
+              prompt: r.prompt || '',
+              timestamp: new Date(r.created_at).getTime(),
+          }));
+          setGeneratedImages(prev => {
+              const seenUrls = new Set(prev.map(p => p.url));
+              const merged = [...prev, ...serverImages.filter(s => !seenUrls.has(s.url))];
+              merged.sort((a, b) => b.timestamp - a.timestamp);
+              return merged.slice(0, 50);
+          });
+      })();
+      return () => { alive = false; };
+  }, [user]);
 
   // Persistence Effects
   useEffect(() => {
