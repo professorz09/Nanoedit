@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText, formatTime } from '../services/textService';
-import { extractYouTubeId } from '../services/youtubeService';
+import { extractYouTubeId, fetchYouTubeTitle } from '../services/youtubeService';
 import { useAuth } from '../contexts/AuthContext';
 import { getFromLocalStorage, saveToLocalStorage, STORAGE_KEYS } from '../services/storageService';
 import { I } from './ThumbIcons';
 
 const CHAPTERS_COST = 1; // credits charged per chapters run
+const MAX_HISTORY = 30; // keep the list from growing unbounded in localStorage
 
 const Ic = {
   List: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>),
@@ -13,6 +14,7 @@ const Ic = {
   Check: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 6 9 17l-5-5" /></svg>),
   Wand: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5" /></svg>),
   Clock: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>),
+  Chevron: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m6 9 6 6 6-6" /></svg>),
 };
 
 const DETAIL = [
@@ -29,6 +31,8 @@ const cleanChapters = (raw: string): string => {
   return lines.join('\n');
 };
 
+interface ChapterRun { id: string; title: string; createdAt: number; lines: string[]; }
+
 const ChapterMaker: React.FC = () => {
   const [url, setUrl] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -36,11 +40,21 @@ const ChapterMaker: React.FC = () => {
   const [detail, setDetail] = useState('balanced');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  // Persisted across reloads/tab switches, same as generated thumbnails.
-  const [chapters, setChaptersState] = useState(() => getFromLocalStorage(STORAGE_KEYS.CHAPTER_RESULTS, ''));
-  const setChapters = (val: string) => { setChaptersState(val); saveToLocalStorage(STORAGE_KEYS.CHAPTER_RESULTS, val); };
-  const removeChapter = (i: number) => setChapters(lines.filter((_, x) => x !== i).join('\n'));
-  const [copied, setCopied] = useState(false);
+  // Every generate() prepends a new saved run instead of overwriting the
+  // previous one, grouped under the video's title and collapsed by default —
+  // expand any past run to see (and still edit/copy) its chapters.
+  const [history, setHistoryState] = useState<ChapterRun[]>(() => getFromLocalStorage(STORAGE_KEYS.CHAPTER_HISTORY, []));
+  const setHistory = (list: ChapterRun[]) => { setHistoryState(list); saveToLocalStorage(STORAGE_KEYS.CHAPTER_HISTORY, list); };
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => setExpandedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const removeChapterLine = (runId: string, lineIdx: number) =>
+    setHistory(history.map(r => r.id === runId ? { ...r, lines: r.lines.filter((_, i) => i !== lineIdx) } : r).filter(r => r.lines.length > 0));
+  const deleteRun = (runId: string) => setHistory(history.filter(r => r.id !== runId));
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const { user, totalCredits, configured, refreshProfile } = useAuth();
 
   const run = useCallback(async () => {
@@ -89,7 +103,16 @@ ${context}`;
       if (!cleaned) {
         setNote('Could not build chapters. Try again or paste a fuller transcript.');
       } else {
-        setChapters(cleaned);
+        // Free, uncredited lookup — just for a human-readable group label.
+        const videoTitle = await fetchYouTubeTitle(id).catch(() => null);
+        const newRun: ChapterRun = {
+          id: crypto.randomUUID(),
+          title: videoTitle || `Chapters · ${new Date().toLocaleDateString()}`,
+          createdAt: Date.now(),
+          lines: cleaned.split('\n'),
+        };
+        setHistory([newRun, ...history].slice(0, MAX_HISTORY));
+        setExpandedIds(prev => new Set(prev).add(newRun.id));
       }
     } catch (e: any) {
       setNote(e?.message?.slice(0, 140) || 'Something went wrong. Try again.');
@@ -97,15 +120,13 @@ ${context}`;
       setBusy(false);
       refreshProfile(); // credits may have been charged server-side even on a failed request — sync the header count
     }
-  }, [url, transcript, detail, user, totalCredits, configured, refreshProfile]);
+  }, [url, transcript, detail, user, totalCredits, configured, refreshProfile, history]);
 
-  const copyAll = () => {
-    navigator.clipboard?.writeText(chapters);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
+  const copyRun = (r: ChapterRun) => {
+    navigator.clipboard?.writeText(r.lines.join('\n'));
+    setCopiedId(r.id);
+    setTimeout(() => setCopiedId(c => (c === r.id ? null : c)), 1600);
   };
-
-  const lines = chapters ? chapters.split('\n') : [];
 
   return (
     <div className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 lg:gap-8 items-start max-w-6xl mx-auto">
@@ -160,33 +181,58 @@ ${context}`;
         <p className="text-center text-[12px] text-thumb-sub -mt-1">Uses {CHAPTERS_COST} credits per generation</p>
       </div>
 
-      {/* ── Results ── */}
+      {/* ── Results — saved runs, grouped by video title, collapsed by default ── */}
       <div className="thumb-glass rounded-3xl p-5 sm:p-6 min-h-[420px]">
-        {lines.length > 0 ? (
+        {history.length > 0 ? (
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-thumb-ink uppercase tracking-wider">Chapters <span className="text-thumb-sub font-bold">· {lines.length}</span></h3>
-              <button onClick={copyAll} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${copied ? 'bg-thumb-greenSoft text-thumb-green border border-thumb-green/30' : 'bg-thumb-soft border border-thumb-line text-thumb-ink hover:border-thumb-red/40'}`}>
-                {copied ? <><Ic.Check className="w-3.5 h-3.5" /> Copied</> : <><Ic.Copy className="w-3.5 h-3.5" /> Copy all</>}
-              </button>
-            </div>
-            <div className="space-y-0.5">
-              {lines.map((l, i) => {
-                const m = l.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.*)$/);
-                const time = m ? m[1] : '';
-                const title = m ? m[2] : l;
-                return (
-                  <div key={i} className="group flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-thumb-soft/60 transition-colors">
-                    <span className="shrink-0 font-mono text-[13px] font-bold text-thumb-red tabular-nums pt-0.5 flex items-center gap-1.5"><Ic.Clock className="w-3.5 h-3.5 opacity-70" />{time}</span>
-                    <span className="text-[15px] text-thumb-ink font-medium leading-snug flex-1">{title}</span>
-                    <button onClick={() => removeChapter(i)} aria-label={`Remove chapter ${i + 1}`} title="Remove" className="shrink-0 p-1 rounded-lg text-thumb-sub hover:text-thumb-red opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                      <I.Trash className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-[12px] text-thumb-sub pt-1">Paste these straight into your video description — YouTube turns them into clickable chapters.</p>
+            {history.map(r => {
+              const expanded = expandedIds.has(r.id);
+              return (
+                <div key={r.id} className="border border-thumb-line rounded-2xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(r.id)}
+                    aria-expanded={expanded}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-thumb-soft hover:bg-thumb-line/40 transition-colors text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-thumb-ink truncate">{r.title}</p>
+                      <p className="text-[11px] text-thumb-sub">{r.lines.length} chapter{r.lines.length === 1 ? '' : 's'} · {new Date(r.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <Ic.Chevron className={`w-4 h-4 shrink-0 text-thumb-sub transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expanded && (
+                    <div className="p-3 space-y-2 animate-fade-in-up">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => copyRun(r)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${copiedId === r.id ? 'bg-thumb-greenSoft text-thumb-green border border-thumb-green/30' : 'bg-thumb-soft border border-thumb-line text-thumb-ink hover:border-thumb-red/40'}`}>
+                          {copiedId === r.id ? <><Ic.Check className="w-3.5 h-3.5" /> Copied</> : <><Ic.Copy className="w-3.5 h-3.5" /> Copy all</>}
+                        </button>
+                        <button onClick={() => deleteRun(r.id)} aria-label="Delete this saved run" title="Delete" className="p-1.5 rounded-lg text-thumb-sub hover:text-thumb-red hover:bg-thumb-redSoft transition-colors">
+                          <I.Trash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="space-y-0.5">
+                        {r.lines.map((l, i) => {
+                          const m = l.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.*)$/);
+                          const time = m ? m[1] : '';
+                          const title = m ? m[2] : l;
+                          return (
+                            <div key={i} className="group flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-thumb-soft/60 transition-colors">
+                              <span className="shrink-0 font-mono text-[13px] font-bold text-thumb-red tabular-nums pt-0.5 flex items-center gap-1.5"><Ic.Clock className="w-3.5 h-3.5 opacity-70" />{time}</span>
+                              <span className="text-[15px] text-thumb-ink font-medium leading-snug flex-1">{title}</span>
+                              <button onClick={() => removeChapterLine(r.id, i)} aria-label={`Remove chapter ${i + 1}`} title="Remove" className="shrink-0 p-1 rounded-lg text-thumb-sub hover:text-thumb-red opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                <I.Trash className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[12px] text-thumb-sub pt-1">Paste these straight into your video description — YouTube turns them into clickable chapters.</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="h-full min-h-[380px] flex flex-col items-center justify-center text-center px-6">

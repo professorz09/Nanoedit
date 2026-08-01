@@ -828,22 +828,19 @@ const ThumbnailStudio: React.FC<Props> = ({
             <button onClick={() => setSidebarOpen(false)} className="p-1.5 text-thumb-sub hover:text-thumb-ink" aria-label="Close menu"><I.X className="w-5 h-5" /></button>
           </div>
 
-          {/* Theme switch */}
+          {/* Theme switch — same solid pill used for Format/Variations/Quality
+              elsewhere, instead of the translucent nav-pill style (that one's
+              built for the bordered list items below, not a compact toggle;
+              it read as a barely-visible, mismatched highlight here). */}
           <div className="px-3 pt-3 shrink-0">
-            <div className="flex items-center gap-1 p-1 bg-black/25 border border-white/[0.06] rounded-2xl">
-              <button
-                onClick={() => setTheme('dark')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[13px] font-bold transition-all ${theme === 'dark' ? 'thumb-nav-active text-thumb-red' : 'text-thumb-sub hover:text-thumb-ink'}`}
-              >
-                <I.Moon className="w-4 h-4" /> Dark
-              </button>
-              <button
-                onClick={() => setTheme('light')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[13px] font-bold transition-all ${theme === 'light' ? 'thumb-nav-active text-thumb-red' : 'text-thumb-sub hover:text-thumb-ink'}`}
-              >
-                <I.Sun className="w-4 h-4" /> Light
-              </button>
-            </div>
+            <SegmentedControl
+              value={theme}
+              onChange={setTheme}
+              options={[
+                { value: 'dark', label: <><I.Moon className="w-4 h-4" /> Dark</> },
+                { value: 'light', label: <><I.Sun className="w-4 h-4" /> Light</> },
+              ]}
+            />
           </div>
 
           <nav className="flex-1 overflow-y-auto p-3 space-y-2">

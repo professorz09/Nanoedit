@@ -1,11 +1,12 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText } from '../services/textService';
-import { extractYouTubeId } from '../services/youtubeService';
+import { extractYouTubeId, fetchYouTubeTitle } from '../services/youtubeService';
 import { useAuth } from '../contexts/AuthContext';
 import { getFromLocalStorage, saveToLocalStorage, STORAGE_KEYS } from '../services/storageService';
 import { I } from './ThumbIcons';
 
 const TITLE_COST = 1; // credits charged per title-generation run
+const MAX_HISTORY = 30; // keep the list from growing unbounded in localStorage
 
 const Ic = {
   Type: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 7V5h16v2M9 19h6M12 5v14" /></svg>),
@@ -14,6 +15,7 @@ const Ic = {
   Copy: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>),
   Check: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 6 9 17l-5-5" /></svg>),
   Wand: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5" /></svg>),
+  Chevron: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m6 9 6 6 6-6" /></svg>),
 };
 
 const VIBES = [
@@ -25,6 +27,8 @@ const VIBES = [
 const cleanTitle = (line: string) =>
   line.replace(/^\s*(?:\d+[.)\]]|[-*•])\s*/, '').replace(/^["'“”]+|["'“”]+$/g, '').trim();
 
+interface TitleRun { id: string; title: string; createdAt: number; titles: string[]; }
+
 const TitleGenerator: React.FC = () => {
   const [tab, setTab] = useState<'youtube' | 'transcript'>('youtube');
   const [url, setUrl] = useState('');
@@ -34,11 +38,21 @@ const TitleGenerator: React.FC = () => {
   const [count, setCount] = useState(8);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  // Persisted across reloads/tab switches, same as generated thumbnails.
-  const [titles, setTitlesState] = useState<string[]>(() => getFromLocalStorage(STORAGE_KEYS.TITLE_RESULTS, []));
-  const setTitles = (list: string[]) => { setTitlesState(list); saveToLocalStorage(STORAGE_KEYS.TITLE_RESULTS, list); };
-  const removeTitle = (i: number) => setTitles(titles.filter((_, x) => x !== i));
-  const [copied, setCopied] = useState<number | null>(null);
+  // Every generate() prepends a new saved run instead of overwriting the
+  // previous one, grouped under the video's title and collapsed by default —
+  // expand any past run to see (and still edit/copy) its suggestions.
+  const [history, setHistoryState] = useState<TitleRun[]>(() => getFromLocalStorage(STORAGE_KEYS.TITLE_HISTORY, []));
+  const setHistory = (list: TitleRun[]) => { setHistoryState(list); saveToLocalStorage(STORAGE_KEYS.TITLE_HISTORY, list); };
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => setExpandedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const removeTitleLine = (runId: string, idx: number) =>
+    setHistory(history.map(r => r.id === runId ? { ...r, titles: r.titles.filter((_, i) => i !== idx) } : r).filter(r => r.titles.length > 0));
+  const deleteRun = (runId: string) => setHistory(history.filter(r => r.id !== runId));
+  const [copied, setCopied] = useState<string | null>(null); // `${runId}:${index}`
   const fileRef = useRef<HTMLInputElement>(null);
   const { user, totalCredits, configured, refreshProfile } = useAuth();
 
@@ -59,13 +73,14 @@ const TitleGenerator: React.FC = () => {
       if (totalCredits < TITLE_COST) { setNote(`You need ${TITLE_COST} credits to generate titles. Please top up your plan.`); return; }
     }
     let context = '';
+    let videoId: string | null = null;
 
     if (tab === 'youtube') {
-      const id = extractYouTubeId(url.trim());
-      if (!id) { setNote('Paste a valid YouTube link.'); return; }
+      videoId = extractYouTubeId(url.trim());
+      if (!videoId) { setNote('Paste a valid YouTube link.'); return; }
       setBusy(true);
       // 1) try captions
-      const segs = await fetchTranscript(id).catch(() => null);
+      const segs = await fetchTranscript(videoId).catch(() => null);
       if (segs && segs.length) {
         context = segmentsToText(segs).slice(0, 12000);
         setNeedPaste(false);
@@ -74,7 +89,7 @@ const TitleGenerator: React.FC = () => {
       } else {
         // 2) fall back to the video's own title/description via oEmbed
         try {
-          const o = await fetch(`https://www.youtube.com/oembed?url=https://youtu.be/${id}&format=json`).then(r => r.json());
+          const o = await fetch(`https://www.youtube.com/oembed?url=https://youtu.be/${videoId}&format=json`).then(r => r.json());
           if (o?.title) context = `Video title: ${o.title}\nChannel: ${o.author_name || ''}`;
         } catch { /* ignore */ }
         if (!context) {
@@ -105,7 +120,12 @@ ${context}`;
       if (!list.length) {
         setNote('Could not generate titles. Try again.');
       } else {
-        setTitles(list);
+        // Free, uncredited lookup — just for a human-readable group label.
+        let label: string | null = videoId ? await fetchYouTubeTitle(videoId).catch(() => null) : null;
+        if (!label) label = transcript.trim() ? transcript.trim().slice(0, 60) : `Titles · ${new Date().toLocaleDateString()}`;
+        const newRun: TitleRun = { id: crypto.randomUUID(), title: label, createdAt: Date.now(), titles: list };
+        setHistory([newRun, ...history].slice(0, MAX_HISTORY));
+        setExpandedIds(prev => new Set(prev).add(newRun.id));
       }
       refreshProfile(); // credits were charged server-side — sync the header count
     } catch (e: any) {
@@ -113,12 +133,12 @@ ${context}`;
     } finally {
       setBusy(false);
     }
-  }, [tab, url, transcript, vibe, count, configured, user, totalCredits, refreshProfile]);
+  }, [tab, url, transcript, vibe, count, configured, user, totalCredits, refreshProfile, history]);
 
-  const copy = (t: string, i: number) => {
+  const copy = (t: string, key: string) => {
     navigator.clipboard?.writeText(t);
-    setCopied(i);
-    setTimeout(() => setCopied(c => (c === i ? null : c)), 1500);
+    setCopied(key);
+    setTimeout(() => setCopied(c => (c === key ? null : c)), 1500);
   };
 
   return (
@@ -211,27 +231,54 @@ ${context}`;
         <p className="text-center text-[12px] text-thumb-sub -mt-1">Uses {TITLE_COST} credits per generation</p>
       </div>
 
-      {/* ── Results ── */}
+      {/* ── Results — saved runs, grouped by video title, collapsed by default ── */}
       <div className="thumb-glass rounded-3xl p-5 sm:p-6 min-h-[420px]">
-        {titles.length > 0 ? (
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-thumb-ink uppercase tracking-wider">Suggested titles</h3>
-              <span className="text-xs text-thumb-sub">{titles.length}</span>
-            </div>
-            {titles.map((t, i) => (
-              <div key={i} className="group w-full flex items-start gap-1 bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 rounded-xl pl-4 pr-2 py-3 transition-colors">
-                <button onClick={() => copy(t, i)} className="flex-1 text-left flex items-start gap-3 min-w-0">
-                  <span className="text-[15px] font-semibold text-thumb-ink flex-1 leading-snug">{t}</span>
-                  <span className={`shrink-0 mt-0.5 ${copied === i ? 'text-thumb-green' : 'text-thumb-sub group-hover:text-thumb-red'}`}>
-                    {copied === i ? <Ic.Check className="w-4 h-4" /> : <Ic.Copy className="w-4 h-4" />}
-                  </span>
-                </button>
-                <button onClick={() => removeTitle(i)} aria-label={`Remove title ${i + 1}`} title="Remove" className="shrink-0 p-1.5 mt-0.5 rounded-lg text-thumb-sub hover:text-thumb-red hover:bg-thumb-redSoft transition-colors">
-                  <I.Trash className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+        {history.length > 0 ? (
+          <div className="space-y-3">
+            {history.map(r => {
+              const expanded = expandedIds.has(r.id);
+              return (
+                <div key={r.id} className="border border-thumb-line rounded-2xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(r.id)}
+                    aria-expanded={expanded}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-thumb-soft hover:bg-thumb-line/40 transition-colors text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-thumb-ink truncate">{r.title}</p>
+                      <p className="text-[11px] text-thumb-sub">{r.titles.length} title{r.titles.length === 1 ? '' : 's'} · {new Date(r.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <Ic.Chevron className={`w-4 h-4 shrink-0 text-thumb-sub transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expanded && (
+                    <div className="p-3 space-y-2.5 animate-fade-in-up">
+                      <div className="flex items-center justify-end">
+                        <button onClick={() => deleteRun(r.id)} aria-label="Delete this saved run" title="Delete" className="p-1.5 rounded-lg text-thumb-sub hover:text-thumb-red hover:bg-thumb-redSoft transition-colors">
+                          <I.Trash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {r.titles.map((t, i) => {
+                        const key = `${r.id}:${i}`;
+                        return (
+                          <div key={i} className="group w-full flex items-start gap-1 bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 rounded-xl pl-4 pr-2 py-3 transition-colors">
+                            <button onClick={() => copy(t, key)} className="flex-1 text-left flex items-start gap-3 min-w-0">
+                              <span className="text-[15px] font-semibold text-thumb-ink flex-1 leading-snug">{t}</span>
+                              <span className={`shrink-0 mt-0.5 ${copied === key ? 'text-thumb-green' : 'text-thumb-sub group-hover:text-thumb-red'}`}>
+                                {copied === key ? <Ic.Check className="w-4 h-4" /> : <Ic.Copy className="w-4 h-4" />}
+                              </span>
+                            </button>
+                            <button onClick={() => removeTitleLine(r.id, i)} aria-label={`Remove title ${i + 1}`} title="Remove" className="shrink-0 p-1.5 mt-0.5 rounded-lg text-thumb-sub hover:text-thumb-red hover:bg-thumb-redSoft transition-colors">
+                              <I.Trash className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="h-full min-h-[380px] flex flex-col items-center justify-center text-center px-6">

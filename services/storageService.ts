@@ -8,6 +8,10 @@ export const STORAGE_KEYS = {
   GENERATED_IMAGES: 'generated_images',
   TITLE_RESULTS: 'title_generator_results',
   CHAPTER_RESULTS: 'chapter_maker_results',
+  // Saved runs list — each generate() prepends a new entry instead of
+  // overwriting the single previous result, grouped under the video's title.
+  TITLE_HISTORY: 'title_generator_history',
+  CHAPTER_HISTORY: 'chapter_maker_history',
 };
 
 const openDB = (): Promise<IDBDatabase> => {
