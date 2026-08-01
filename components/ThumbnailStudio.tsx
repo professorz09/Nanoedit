@@ -196,7 +196,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   // its exact look for your topic. Default to the first one so a style is always set.
   // The pool comes from the DB (falls back to the bundled REFERENCE_IMAGES) — only
   // fetched once this tab is actually opened, not on every visit to the studio.
-  const styleImages = useStyleImages(REFERENCE_IMAGES, mode === 'templates');
+  const styleImages = useStyleImages(REFERENCE_IMAGES, mode === 'templates' || mode === 'youtube');
   const [selectedRef, setSelectedRef] = useState<string | null>(REFERENCE_IMAGES[0] ?? null);
   // Keep a valid default selected as the DB pool loads / changes.
   useEffect(() => {
@@ -207,6 +207,10 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [uploads, setUploads] = useState<string[]>([]);
   const [sketchData, setSketchData] = useState<string | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
+  // YouTube mode normally auto-matches a style per video (vector search over
+  // the style pool) — this lets a user override that and force one specific
+  // style instead, same picker as the Styles tab. null = keep auto-matching.
+  const [selectedYtStyle, setSelectedYtStyle] = useState<string | null>(null);
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
@@ -617,12 +621,21 @@ const ThumbnailStudio: React.FC<Props> = ({
       // the source thumbnail. A little per-run randomness among the top matches
       // keeps repeat generations on the same link visually fresh.
       setBusy(true);
-      setNoteText('Finding the best-matching style…', 'info');
-      const matchQuery = [title, conceptA, conceptB, promptText].filter(v => v && v.trim()).join('. ').slice(0, 4000);
-      const matched = await matchStyles(matchQuery, 8);
-      const pool: { url: string; meta?: any }[] = matched.length
-        ? matched.map(m => ({ url: m.url, meta: m.meta }))
-        : (await fetchStyleImages()).map(u => ({ url: u }));
+      // A manually picked style (Advanced → "Pick a style") skips auto-match
+      // entirely — every variation slot uses that one style. No `meta` for
+      // it (it's a plain pool URL, not a vector-search hit), which the prompt
+      // builder below already handles via its `metaKnown` fallback.
+      let pool: { url: string; meta?: any }[];
+      if (selectedYtStyle) {
+        pool = [{ url: selectedYtStyle }];
+      } else {
+        setNoteText('Finding the best-matching style…', 'info');
+        const matchQuery = [title, conceptA, conceptB, promptText].filter(v => v && v.trim()).join('. ').slice(0, 4000);
+        const matched = await matchStyles(matchQuery, 8);
+        pool = matched.length
+          ? matched.map(m => ({ url: m.url, meta: m.meta }))
+          : (await fetchStyleImages()).map(u => ({ url: u }));
+      }
 
       if (pool.length) {
         // Pull enough distinct candidates to fill every requested slot (plus a
@@ -1086,6 +1099,35 @@ const ThumbnailStudio: React.FC<Props> = ({
                             </button>
                           )}
                           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Pick a style (optional)</label>
+                            {selectedYtStyle && (
+                              <button type="button" onClick={() => setSelectedYtStyle(null)} className="text-[11px] font-bold text-thumb-red hover:underline">
+                                Auto-match instead
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-thumb-sub -mt-1">Leave unpicked to auto-match the best style for this video, or force one yourself.</p>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[220px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
+                            {styleImages.map(src => {
+                              const active = selectedYtStyle === src;
+                              return (
+                                <button
+                                  key={src}
+                                  type="button"
+                                  onClick={() => setSelectedYtStyle(active ? null : src)}
+                                  className={`relative rounded-xl overflow-hidden border-2 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
+                                >
+                                  <div className="aspect-video overflow-hidden bg-black/40">
+                                    <img src={src} alt="Style reference" loading="lazy" className="w-full h-full object-cover" />
+                                  </div>
+                                  {active && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-thumb-red text-white flex items-center justify-center text-[10px] font-bold">✓</div>}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     )}

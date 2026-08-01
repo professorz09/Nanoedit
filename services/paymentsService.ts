@@ -29,8 +29,17 @@ const authedFetch = async (path: string, body: unknown) => {
   const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   if (!supaUrl) throw new Error('Payments are not configured. Please contact support.');
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  // getSession() can itself throw (corrupted/expired local session, a network
+  // blip refreshing the token) instead of just returning a null session —
+  // left unguarded, that raw library error leaked straight into the
+  // checkout's error toast instead of a clean, actionable message.
+  let token: string | undefined;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    token = session?.access_token;
+  } catch {
+    throw new Error('Please sign in to continue.');
+  }
   if (!token) throw new Error('Please sign in to continue.');
 
   const resp = await fetch(`${supaUrl}/functions/v1/${path}`, {
@@ -42,9 +51,29 @@ const authedFetch = async (path: string, body: unknown) => {
     },
     body: JSON.stringify(body),
   });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(data?.error || 'Something went wrong. Please try again.');
+  // A bare non-2xx with no parseable JSON body (edge-function cold-start
+  // timeout, gateway hiccup) is exactly what produced the unhelpful
+  // "Something went wrong" — tag it as retryable so the caller below can
+  // transparently retry once instead of surfacing it immediately.
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    if (!data) { const err: any = new Error('Could not reach the server. Please try again.'); err.retryable = true; throw err; }
+    throw new Error(data?.error || 'Something went wrong. Please try again.');
+  }
   return data;
+};
+
+// create-order is a single idempotent-enough GET-like operation (it just asks
+// Razorpay to mint a fresh order — retrying on a transient failure costs
+// nothing but a redundant, unused order). One retry covers the same class of
+// transient blips verify-payment already retries for.
+const authedFetchWithRetry = async (path: string, body: unknown) => {
+  try {
+    return await authedFetch(path, body);
+  } catch (e: any) {
+    if (!e?.retryable) throw e;
+    return authedFetch(path, body);
+  }
 };
 
 /**
@@ -54,7 +83,7 @@ const authedFetch = async (path: string, body: unknown) => {
  * once the purchase is confirmed and credited; rejects if cancelled or failed.
  */
 export const buyItem = async (itemId: string): Promise<void> => {
-  const order = await authedFetch('create-order', { item: itemId }) as OrderResponse;
+  const order = await authedFetchWithRetry('create-order', { item: itemId }) as OrderResponse;
   await loadRazorpayScript();
 
   return new Promise((resolve, reject) => {

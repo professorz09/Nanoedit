@@ -55,13 +55,15 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
         <div className="flex items-center gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl flex-wrap justify-center">
           <button
             onClick={() => setCycle('monthly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            disabled={busy !== null}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap disabled:opacity-60 ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Monthly
           </button>
           <button
             onClick={() => setCycle('yearly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            disabled={busy !== null}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap disabled:opacity-60 ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Yearly
             <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-thumb-green bg-thumb-greenSoft border border-thumb-green/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">2 months free</span>
@@ -134,10 +136,12 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
                   key={a.id}
                   onClick={() => (user ? handleAddon(a.id) : onRequireLogin())}
                   disabled={busy !== null}
+                  aria-label={busy === `addon:${a.id}` ? `Processing ${a.credits} credits` : undefined}
+                  aria-busy={busy === `addon:${a.id}`}
                   className="px-4 py-2.5 rounded-2xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 text-thumb-ink font-bold text-sm transition-colors disabled:opacity-60 flex items-center gap-2"
                 >
                   {busy === `addon:${a.id}`
-                    ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ? <><span aria-hidden="true" className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing…</>
                     : <>+{a.credits} <span className="text-thumb-sub font-semibold">· ${a.priceUsd}</span></>}
                 </button>
               ))}

@@ -252,8 +252,18 @@ export const editImageWithGemini = async (
   const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   if (!supaUrl || !supabase) throw new Error("Sign-in is required to generate. Please log in.");
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  // getSession() can itself throw (corrupted/expired local session, a
+  // network blip refreshing the token) rather than just returning a null
+  // session — left unguarded, that raw library error (e.g. "Authentication
+  // failed") used to leak straight into the failed-card UI instead of this
+  // file's normal human-readable messages.
+  let token: string | undefined;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    token = session?.access_token;
+  } catch {
+    throw new Error('Please log in to generate.');
+  }
   if (!token) throw new Error("Please log in to generate.");
 
   try {
