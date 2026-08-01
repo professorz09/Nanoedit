@@ -1898,7 +1898,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <li><button onClick={() => setLegal('about')} className="text-thumb-ink hover:text-thumb-red transition-colors">About</button></li>
                   <li><button onClick={() => setLegal('privacy')} className="text-thumb-ink hover:text-thumb-red transition-colors">Privacy Policy</button></li>
                   <li><button onClick={() => setLegal('terms')} className="text-thumb-ink hover:text-thumb-red transition-colors">Terms of Service</button></li>
-                  <li><a href="mailto:hello@podcastflux.com" className="text-thumb-ink hover:text-thumb-red transition-colors">Contact</a></li>
+                  <li><a href="mailto:support@rmind.com" className="text-thumb-ink hover:text-thumb-red transition-colors">Contact</a></li>
                 </ul>
               </div>
             </div>
@@ -1928,7 +1928,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <>
                   <p>PodcastFlux is an AI thumbnail maker built for YouTube creators. Describe your idea, upload a photo, or paste a video link, and our AI designs high-converting HD 16:9 thumbnails in seconds — no design skills or editing software required.</p>
                   <p>Our goal is simple: help creators get more clicks with less effort. We combine state-of-the-art image models with creator-tested templates so every result is upload-ready.</p>
-                  <p>Questions or feedback? Email us at <a href="mailto:hello@podcastflux.com" className="text-thumb-red font-semibold">hello@podcastflux.com</a>.</p>
+                  <p>Questions or feedback? Email us at <a href="mailto:support@rmind.com" className="text-thumb-red font-semibold">support@rmind.com</a>.</p>
                 </>
               )}
               {legal === 'privacy' && (
@@ -1937,8 +1937,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <p><strong className="text-thumb-ink">Information we collect.</strong> When you sign in with Google, we receive your name, email address, and profile image to create your account. We store the thumbnails you generate and basic usage data (such as credit balance) to run the service.</p>
                   <p><strong className="text-thumb-ink">How we use it.</strong> To provide the thumbnail-generation service, manage your plan and credits, and improve the product. We do not sell your personal data.</p>
                   <p><strong className="text-thumb-ink">Storage & processing.</strong> Data is stored with our infrastructure providers (including Supabase and cloud AI providers) solely to operate the service. Images you upload as references are used only to produce your requested results.</p>
-                  <p><strong className="text-thumb-ink">Your choices.</strong> You can delete generated thumbnails at any time, and you may request account deletion by emailing <a href="mailto:hello@podcastflux.com" className="text-thumb-red font-semibold">hello@podcastflux.com</a>.</p>
-                  <p><strong className="text-thumb-ink">Contact.</strong> For any privacy question, reach us at hello@podcastflux.com.</p>
+                  <p><strong className="text-thumb-ink">Your choices.</strong> You can delete generated thumbnails at any time, and you may request account deletion by emailing <a href="mailto:support@rmind.com" className="text-thumb-red font-semibold">support@rmind.com</a>.</p>
+                  <p><strong className="text-thumb-ink">Contact.</strong> For any privacy question, reach us at support@rmind.com.</p>
                 </>
               )}
               {legal === 'terms' && (
@@ -1948,7 +1948,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <p><strong className="text-thumb-ink">Credits & plans.</strong> Generating thumbnails consumes credits included with paid plans. Add-on credit packs are one-time purchases and do not expire. A generation that fails does not consume a credit.</p>
                   <p><strong className="text-thumb-ink">Acceptable use.</strong> Do not use the service to create illegal, infringing, hateful, or deceptive content, or to abuse the API. We may suspend accounts that violate these terms.</p>
                   <p><strong className="text-thumb-ink">Content ownership.</strong> You own the thumbnails you generate and may use them on your channels. The service is provided "as is" without warranties.</p>
-                  <p><strong className="text-thumb-ink">Contact.</strong> Questions? Email hello@podcastflux.com.</p>
+                  <p><strong className="text-thumb-ink">Contact.</strong> Questions? Email support@rmind.com.</p>
                 </>
               )}
             </div>
