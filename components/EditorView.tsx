@@ -454,43 +454,25 @@ export default function EditorView(props: EditorViewProps) {
                                         <p className="text-xs text-thumb-sub px-4 text-center line-clamp-1 absolute bottom-4 w-full">{item.prompt}</p>
                                     </>
                                 ) : item.status === 'failed' ? (
-                                     <>
-                                        <div className="w-full h-full flex flex-col items-center justify-center p-6 space-y-4 bg-thumb-redSoft">
-                                            <div className="relative">
-                                                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-red-900/40 to-red-950/40 border border-red-800/30 flex items-center justify-center backdrop-blur-sm shadow-lg">
-                                                    <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                    </svg>
-                                                </div>
-                                                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-2 border-thumb-card">
-                                                    ✕
-                                                </div>
-                                            </div>
-                                            <div className="text-center space-y-1.5">
-                                                <h4 className="text-base font-bold text-thumb-ink">Generation Failed</h4>
-                                                {item.error && (
-                                                    <p className="text-[11px] text-red-200/90 line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-2.5 w-full px-2">
-                                                <button 
-                                                    onClick={() => retryQueueItem(item)} 
-                                                    className="flex-1 px-4 py-3 bg-gradient-to-r from-nano-accent via-nano-accent to-nano-accentHover text-white text-sm font-bold rounded-xl hover:shadow-xl hover:shadow-nano-accent/30 transition-all hover:scale-105 active:scale-95"
-                                                >
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <span className="text-base">🔄</span>
-                                                        <span>Try Again</span>
-                                                    </div>
-                                                </button>
-                                                <button 
-                                                    onClick={() => cancelQueueItem(item.id)} 
-                                                    className="w-12 h-12 bg-black/25 hover:bg-red-900/50 border border-white/15 hover:border-red-800 text-red-100 hover:text-white text-sm font-bold rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </div>
+                                    // Same clean, compact failed-card design as the Thumbnail
+                                    // Generator's queue cards — small icon, short label, two
+                                    // small side-by-side buttons, instead of the previous
+                                    // large gradient-icon card.
+                                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-4 text-center">
+                                        <div className="w-10 h-10 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center text-xl">!</div>
+                                        <span className="text-sm font-bold text-thumb-ink">Generation failed</span>
+                                        {item.error && (
+                                            <p className="text-[11px] text-thumb-sub line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
+                                        )}
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <button onClick={() => retryQueueItem(item)} className="thumb-btn px-4 py-2 rounded-xl text-white text-xs font-bold inline-flex items-center gap-1.5">
+                                                <IconSparkles /> Retry
+                                            </button>
+                                            <button onClick={() => cancelQueueItem(item.id)} className="px-4 py-2 rounded-xl text-xs font-bold text-thumb-sub bg-white/5 border border-white/10 hover:text-thumb-ink transition-colors">
+                                                Dismiss
+                                            </button>
                                         </div>
-                                    </>
+                                    </div>
                                 ) : (
                                     <>
                                         <div className="w-8 h-8 rounded-full border-2 border-thumb-line border-dotted animate-pulse"></div>

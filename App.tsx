@@ -613,6 +613,25 @@ function App() {
     return false;
   };
 
+  // Reference images sent to the model don't need full source resolution —
+  // output quality is controlled separately by settings.resolution/imageSize.
+  // A full-res (e.g. 4K) canvas, and especially TWO of them (plain + marked
+  // pair below), risk exceeding the image-gen provider's own request-size
+  // limits, which shows up here as a generic "all providers failed" — this
+  // caps each exported snapshot's longest edge well below that risk while
+  // staying more than sharp enough for the model to read a brush outline or
+  // pin numbers.
+  const MAX_REF_EDGE = 1536;
+  const snapshotCanvas = (src: HTMLCanvasElement): string => {
+    const scale = Math.min(1, MAX_REF_EDGE / Math.max(src.width, src.height));
+    if (scale >= 1) return src.toDataURL('image/png');
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(src.width * scale));
+    out.height = Math.max(1, Math.round(src.height * scale));
+    out.getContext('2d')?.drawImage(src, 0, 0, out.width, out.height);
+    return out.toDataURL('image/png');
+  };
+
   // Merge the source image with the drawn mask + numbered annotation markers, build a
   // matching edit instruction, and hand it to the main generator.
   const applyEditorSelection = () => {
@@ -675,7 +694,7 @@ function App() {
             // Snapshot the plain, unmarked photo BEFORE drawing the mask/pins on
             // top — sent alongside the marked version below so the model has an
             // undistorted view of the original, not just the outlined one.
-            if (hasMarks) plain = tempCanvas.toDataURL('image/png');
+            if (hasMarks) plain = snapshotCanvas(tempCanvas);
             if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
             // Burn numbered markers so the model can see WHERE each note applies.
             notes.forEach((a, i) => {
@@ -695,7 +714,7 @@ function App() {
               tctx.textBaseline = 'middle';
               tctx.fillText(String(i + 1), x, y);
             });
-            merged = tempCanvas.toDataURL('image/png');
+            merged = snapshotCanvas(tempCanvas);
             // Deliberately NOT setSourceImages(...) here — the original/marked
             // pair is only for THIS generation call (passed directly to the
             // queue item below). Surfacing it in the visible "Input Layers"
