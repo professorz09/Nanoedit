@@ -696,7 +696,12 @@ function App() {
               tctx.fillText(String(i + 1), x, y);
             });
             merged = tempCanvas.toDataURL('image/png');
-            setSourceImages(plain ? [plain, merged] : [merged]);
+            // Deliberately NOT setSourceImages(...) here — the original/marked
+            // pair is only for THIS generation call (passed directly to the
+            // queue item below). Surfacing it in the visible "Input Layers"
+            // strip would show the internal masked/marked image as if it were
+            // a layer the user added, which isn't useful once Apply has
+            // already queued the edit — it should stay a background detail.
           }
         } catch (err) {
           console.error('applyEditorSelection merge failed', err);
