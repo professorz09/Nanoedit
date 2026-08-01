@@ -91,7 +91,12 @@ Deno.serve(async (req) => {
         return_url: `${appUrl}/?dodo_checkout=return&item=${encodeURIComponent(itemId)}`,
         // Read back by dodo-webhook to know who to credit and for what.
         metadata: { uid, item: itemId },
-        confirm: true,
+        // NOT confirm:true — that requires complete billing/customer info
+        // supplied upfront (we only know the email), and was rejected
+        // outright without it. Leaving this unconfirmed lets Dodo's own
+        // hosted checkout page collect the billing address itself before
+        // moving the customer to payment — simpler and more robust than us
+        // trying to pre-fill it.
       }),
     });
     const data: any = await resp.json().catch(() => ({}));
