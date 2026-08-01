@@ -40,13 +40,16 @@ const refundOnce = async (admin: any, uid: string) => {
 const MAX_PROMPT_CHARS = 32000; // chapters can include a long transcript
 
 // The ONLY source of truth for what each operation costs — matches
-// TITLE_COST (TitleGenerator.tsx), CHAPTERS_COST (ChapterMaker.tsx) and
-// YOUTUBE_ANALYSIS_COST (ThumbnailStudio.tsx). The client picks the op;
-// the server picks the price.
+// TITLE_COST (TitleGenerator.tsx) and CHAPTERS_COST (ChapterMaker.tsx). The
+// client picks the op; the server picks the price.
+// `concept` (the YouTube-mode thumbnail/transcript analysis step in
+// ThumbnailStudio.tsx) is free — its cost is folded into the higher
+// per-image price ("generate"'s IMAGE_COST.youtube) that pipeline's actual
+// generated images already charge, so it isn't billed twice.
 const COSTS: Record<string, number> = {
   title: 1,
   chapters: 1,
-  concept: 3,
+  concept: 0,
 };
 
 // Vertex client from EITHER a service-account JSON or a Vertex Express key.

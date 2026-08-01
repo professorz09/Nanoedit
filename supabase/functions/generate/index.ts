@@ -6,7 +6,10 @@
 // Flow per request:
 //   1. Verify the caller (user JWT).
 //   2. Validate + sanitize the request (prompt / sources / aspect / resolution).
-//   3. Reserve ONE credit via spend_credit() — rejects with 402 at 0 credits.
+//   3. Reserve credits via spend_credit() — 1 normally, 3 for sourceMode:
+//      'youtube' (that pipeline does real extra work per image). Rejects
+//      with 402, refunding any partial reservation, if the full cost isn't
+//      available.
 //   4. Generate, trying providers in order until one returns an image:
 //        Vertex Gemini 3 (Pro 2K/4K → Flash)  →  OpenRouter (GPT)
 //      Whoever succeeds, the credit stays spent (edits included). If ALL fail
@@ -53,6 +56,13 @@ const MAX_SOURCES = 6;
 const MAX_SOURCE_B64_CHARS = 12_000_000; // ~9 MB decoded, per source image
 const ALLOWED_ASPECTS = new Set(['16:9', '1:1', '9:16', '4:3', '3:4', '21:9', '4:5', '5:4']);
 const ALLOWED_RES = new Set(['1K', '2K', '4K']);
+
+// The ONLY source of truth for what an image costs — the client's
+// `sourceMode` just picks which price applies, same pattern as "text"'s
+// op → COSTS table. A YouTube-mode image costs more because that pipeline
+// does real extra work per image (transcript fetch, concept LLM call,
+// style-match embedding call) on top of the generation itself.
+const IMAGE_COST: Record<string, number> = { default: 1, youtube: 3 };
 
 type GenImage = { mime: string; data: string }; // data = raw base64 (no data: prefix)
 type GenResult = { images: GenImage[]; text: string };
@@ -252,11 +262,25 @@ Deno.serve(async (req) => {
 
   const aspectRatio = ALLOWED_ASPECTS.has(body?.aspectRatio) ? body.aspectRatio : '16:9';
   const resolution = ALLOWED_RES.has(body?.resolution) ? body.resolution : undefined;
+  const sourceMode = body?.sourceMode === 'youtube' ? 'youtube' : 'default';
+  const cost = IMAGE_COST[sourceMode];
 
-  // 3) Reserve one credit (atomic; monthly first, then add-on). 402 at zero.
-  const { data: spent, error: spendErr } = await admin.rpc('spend_credit', { p_user: user.id });
-  if (spendErr) return json(500, { error: 'Credit check failed. Please try again.' });
-  if (!spent) return json(402, { error: 'No credits left. Please upgrade your plan to generate.' });
+  // 3) Reserve `cost` credits, one at a time (atomic per call; monthly first,
+  //    then add-on). 402 at zero, refunding whatever was already reserved if
+  //    the full amount isn't available.
+  let reserved = 0;
+  for (let i = 0; i < cost; i++) {
+    const { data: spent, error: spendErr } = await admin.rpc('spend_credit', { p_user: user.id });
+    if (spendErr) {
+      for (let j = 0; j < reserved; j++) await refundOnce(admin, user.id);
+      return json(500, { error: 'Credit check failed. Please try again.' });
+    }
+    if (!spent) {
+      for (let j = 0; j < reserved; j++) await refundOnce(admin, user.id);
+      return json(402, { error: `No credits left. This costs ${cost} credit${cost === 1 ? '' : 's'} — please upgrade your plan to generate.` });
+    }
+    reserved++;
+  }
 
   // 4) Generate — try each provider until one returns an image. Credit stays
   //    spent on the first success; refunded only if EVERY provider fails.
@@ -298,7 +322,7 @@ Deno.serve(async (req) => {
 
   if (!gen || !gen.images.length) {
     // Total failure across all providers → refund. A failed generation is free.
-    await refundOnce(admin, user.id);
+    for (let j = 0; j < cost; j++) await refundOnce(admin, user.id);
     console.error('all_providers_failed', errors.join(' | '));
     return json(502, { error: 'Could not generate an image right now. Please try again.' });
   }
@@ -321,7 +345,7 @@ Deno.serve(async (req) => {
   } catch (storeErr: any) {
     // The user DID get an image from the model; a storage hiccup shouldn't
     // silently eat the credit AND the result. Refund and report.
-    await refundOnce(admin, user.id);
+    for (let j = 0; j < cost; j++) await refundOnce(admin, user.id);
     console.error('storage_failed', storeErr?.message || storeErr);
     return json(502, { error: 'Generated, but saving failed. Please try again.' });
   }

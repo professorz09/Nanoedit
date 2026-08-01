@@ -212,6 +212,7 @@ export const editImageWithGemini = async (
           sources,
           aspectRatio: settings.aspectRatio,
           resolution: settings.resolution,
+          sourceMode: settings.sourceMode,
         }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -268,6 +269,7 @@ export const editImageWithGemini = async (
         sources,
         aspectRatio: settings.aspectRatio,
         resolution: settings.resolution,
+        sourceMode: settings.sourceMode,
       }),
     });
     const data = await resp.json().catch(() => ({}));
