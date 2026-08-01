@@ -199,28 +199,58 @@ export default function EditorView(props: EditorViewProps) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const dragOff = React.useRef<{ dx: number; dy: number } | null>(null);
 
+  // Phones don't have room beside a centered, near-full-width image for a
+  // right-docked panel — it would sit on top of the artwork. Below this
+  // width the panel docks as a full-width bottom sheet instead, out of the
+  // way of the image; it's still draggable to any corner from there.
+  const [isNarrow, setIsNarrow] = React.useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  React.useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   React.useEffect(() => { if (!brushMode) setPanelPos(null); }, [brushMode]);
+
+  const dragPointFromEvent = (e: any) => {
+    // Works for both mouse/pen and touch pointer events — pointer events
+    // already report a single clientX/clientY regardless of input type.
+    return { x: e.clientX, y: e.clientY };
+  };
 
   const onPanelDragStart = (e: any) => {
     e.stopPropagation();
     const el = panelRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    dragOff.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    const p = dragPointFromEvent(e);
+    dragOff.current = { dx: p.x - r.left, dy: p.y - r.top };
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* no-op */ }
   };
   const onPanelDragMove = (e: any) => {
     if (!dragOff.current) return;
+    e.preventDefault?.();
     const el = panelRef.current;
     const w = el?.offsetWidth ?? 248;
     const h = el?.offsetHeight ?? 200;
     const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+    const p = dragPointFromEvent(e);
     setPanelPos({
-      x: clamp(e.clientX - dragOff.current.dx, 4, window.innerWidth - w - 4),
-      y: clamp(e.clientY - dragOff.current.dy, 4, window.innerHeight - h - 4),
+      x: clamp(p.x - dragOff.current.dx, 4, window.innerWidth - w - 4),
+      y: clamp(p.y - dragOff.current.dy, 4, window.innerHeight - h - 4),
     });
   };
   const onPanelDragEnd = () => { dragOff.current = null; };
+
+  // Default (undragged) panel placement + size — bottom sheet on phones,
+  // right-docked floating panel on larger screens. Once the user drags it
+  // (panelPos set) it always floats at the exact dropped position/size.
+  const panelPositionStyle: React.CSSProperties = panelPos
+    ? { left: panelPos.x, top: panelPos.y, right: 'auto', bottom: 'auto' }
+    : isNarrow
+      ? { left: 8, right: 8, bottom: 8, top: 'auto' }
+      : { right: 12, top: '50%', transform: 'translateY(-50%)' };
+  const panelWidthClass = panelPos || !isNarrow ? 'w-[min(80vw,248px)]' : 'w-auto';
 
   // ── Canvas-style brush cursor ───────────────────────────────────────────────
   // A ring that follows the pointer and matches the real brush footprint, so you
@@ -818,14 +848,16 @@ export default function EditorView(props: EditorViewProps) {
               {brushMode && !brushPanelMin && (
                   <div
                       ref={panelRef}
-                      className="fixed z-[120] w-[min(80vw,248px)] max-h-[80vh] flex flex-col bg-black/85 backdrop-blur-xl border border-white/15 rounded-2xl p-3 shadow-2xl"
-                      style={panelPos ? { left: panelPos.x, top: panelPos.y } : { right: 12, top: '50%', transform: 'translateY(-50%)' }}
+                      className={`fixed z-[120] ${panelWidthClass} max-h-[80vh] flex flex-col bg-black/85 backdrop-blur-xl border border-white/15 rounded-2xl p-3 shadow-2xl`}
+                      style={panelPositionStyle}
                       onClick={e => e.stopPropagation()}
                   >
-                      {/* Draggable header — grab this to move the panel to any side.
+                      {/* Draggable header — grab this to move the panel to any side
+                          (works with touch too — pointer events cover both). A tall
+                          tap target makes it easy to grab with a finger on phones.
                           Minimize collapses it; exit is handled by the top Cancel button. */}
                       <div
-                          className="flex items-center justify-between mb-3 -mx-1 px-1 py-1 rounded-lg cursor-move touch-none select-none hover:bg-white/5"
+                          className="flex items-center justify-between mb-3 -mx-1 px-1 py-2.5 rounded-lg cursor-move touch-none select-none hover:bg-white/5"
                           onPointerDown={onPanelDragStart}
                           onPointerMove={onPanelDragMove}
                           onPointerUp={onPanelDragEnd}
@@ -834,7 +866,7 @@ export default function EditorView(props: EditorViewProps) {
                           <span className="text-xs font-black text-white/90 tracking-wide flex items-center gap-1.5">
                               <span className="text-white/40 text-sm leading-none">⠿</span> EDIT TOOLS
                           </span>
-                          <button onClick={(e) => { e.stopPropagation(); setBrushPanelMin(true); }} title="Minimize" className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1">–</button>
+                          <button onClick={(e) => { e.stopPropagation(); setBrushPanelMin(true); }} title="Minimize" className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1">–</button>
                       </div>
 
                       {/* Tool selection — Brush + Pin only */}
