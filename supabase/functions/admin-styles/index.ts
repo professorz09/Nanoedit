@@ -10,12 +10,16 @@
 // 0013), only ever set directly by the project owner.
 //
 // Actions (POST { action, ... }):
-//   list    — recent global styles (id, name, active, meta, url, created_at)
-//   add     — { imageBase64 (data: URL), name?, title? } → vision-tag + embed
-//             (same pipeline as index-style / scripts/tag-styles.mjs) + upload
-//             + insert as a global style (user_id null)
-//   toggle  — { id, active } → show/hide a global style without deleting it
-//   delete  — { id } → remove a global style's row + Storage object
+//   list          — recent global styles (id, name, active, show_in_picker, meta, url, created_at)
+//   add           — { imageBase64 (data: URL), name?, title? } → vision-tag + embed
+//                   (same pipeline as index-style / scripts/tag-styles.mjs) + upload
+//                   + insert as a global style (user_id null)
+//   toggle        — { id, active } → fully enable/disable a style EVERYWHERE (the
+//                   manual picker AND YouTube auto-matching) without deleting it
+//   toggle_picker — { id, show_in_picker } → show/hide a style in the manual
+//                   "Styles" picker ONLY — it stays fully eligible for YouTube
+//                   auto-matching either way (match_styles() never checks this)
+//   delete        — { id } → remove a global style's row + Storage object
 //
 // Deploy:  supabase functions deploy admin-styles --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text" / "index-style").
@@ -38,9 +42,16 @@ const BUCKET = 'styles';
 const MAX_IMAGE_B64_CHARS = 12_000_000; // ~9 MB decoded, matches the "generate" function's cap
 
 // Same schema index-style / scripts/tag-styles.mjs use — kept in sync so every
-// style (global or per-user) carries identical metadata.
-const PROMPT =
+// style (global or per-user) carries identical metadata. Building the prompt
+// as a function (not a constant) lets the caller's video title — when known —
+// steer `niche`/`keywords`: the image ALONE is often ambiguous (e.g. two
+// people talking in a studio could be a podcast, an interview or a news
+// segment), but the title tells the tagger the real topic directly.
+const buildPrompt = (title?: string | null) =>
   `You are indexing a YouTube thumbnail so a matching engine can later pick it for a video on the same topic. ` +
+  (title
+    ? `The video this thumbnail is from is titled "${title}" — use that to inform "niche" and "keywords" (the image alone can be ambiguous about the exact category; the title tells you the real topic). Still describe only what's visually true of the image for every other field. `
+    : '') +
   `Look at the image and describe ONLY what you actually see. Reply with STRICT JSON, no markdown, exactly these keys:\n` +
   `{\n` +
   `  "niche": "one lowercase word/short phrase for the video category this thumbnail suits (e.g. gaming, finance, podcast, tech, fitness, food, travel, horror, education, vlog, news, motivation)",\n` +
@@ -127,7 +138,7 @@ Deno.serve(async (req) => {
   if (action === 'list') {
     const { data, error } = await admin
       .from('style_images')
-      .select('id, path, name, active, meta, sort, created_at')
+      .select('id, path, name, active, show_in_picker, meta, sort, created_at')
       .is('user_id', null)
       .order('created_at', { ascending: false })
       .limit(200);
@@ -142,6 +153,15 @@ Deno.serve(async (req) => {
     const active = !!body?.active;
     if (!id) return json(400, { error: 'Missing id' });
     const { error } = await admin.from('style_images').update({ active }).eq('id', id).is('user_id', null);
+    if (error) return json(500, { error: 'Could not update the style.' });
+    return json(200, { ok: true });
+  }
+
+  if (action === 'toggle_picker') {
+    const id = typeof body?.id === 'string' ? body.id : '';
+    const show_in_picker = !!body?.show_in_picker;
+    if (!id) return json(400, { error: 'Missing id' });
+    const { error } = await admin.from('style_images').update({ show_in_picker }).eq('id', id).is('user_id', null);
     if (error) return json(500, { error: 'Could not update the style.' });
     return json(200, { ok: true });
   }
@@ -176,7 +196,7 @@ Deno.serve(async (req) => {
     try {
       const result: any = await ai.models.generateContent({
         model: TAG_MODEL,
-        contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data } }, { text: PROMPT }] }],
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data } }, { text: buildPrompt(title) }] }],
       });
       let text = '';
       for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
@@ -222,10 +242,11 @@ Deno.serve(async (req) => {
         embedding: JSON.stringify(embedding),
         tagged_at: new Date().toISOString(),
         active: true,
+        show_in_picker: true,
         sort: 0,
         user_id: null,
       })
-      .select('id, path, name, meta, active, created_at')
+      .select('id, path, name, meta, active, show_in_picker, created_at')
       .single();
     if (insErr) { console.error('insert_failed', insErr.message); return json(500, { error: 'Could not save the style.' }); }
 

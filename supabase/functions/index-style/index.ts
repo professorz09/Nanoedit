@@ -38,9 +38,18 @@ const MAX_PER_USER = 20; // per-user cap on custom styles (quota / abuse guard)
 const MAX_IMAGE_BYTES = 9_000_000; // matches admin-styles' ~9MB decoded cap
 
 // Same schema tag-styles.mjs asks for — kept in sync so custom + global styles
-// carry identical metadata (incl. the editable `elements` breakdown).
-const PROMPT =
+// carry identical metadata (incl. the editable `elements` breakdown). Building
+// the prompt as a function (not a constant) lets the caller's video title —
+// when known — steer `niche`/`keywords`: the image ALONE is often ambiguous
+// (e.g. two people talking in a studio could be a podcast, an interview or a
+// news segment), but the title tells the tagger the real topic directly.
+// Without this, a style could get tagged into the wrong niche purely because
+// its visuals don't scream that category on their own.
+const buildPrompt = (title?: string | null) =>
   `You are indexing a YouTube thumbnail so a matching engine can later pick it for a video on the same topic. ` +
+  (title
+    ? `The video this thumbnail is from is titled "${title}" — use that to inform "niche" and "keywords" (the image alone can be ambiguous about the exact category; the title tells you the real topic). Still describe only what's visually true of the image for every other field. `
+    : '') +
   `Look at the image and describe ONLY what you actually see. Reply with STRICT JSON, no markdown, exactly these keys:\n` +
   `{\n` +
   `  "niche": "one lowercase word/short phrase for the video category this thumbnail suits (e.g. gaming, finance, podcast, tech, fitness, food, travel, horror, education, vlog, news, motivation)",\n` +
@@ -181,7 +190,7 @@ Deno.serve(async (req) => {
   try {
     const result: any = await ai.models.generateContent({
       model: TAG_MODEL,
-      contents: [{ role: 'user', parts: [{ inlineData: inline }, { text: PROMPT }] }],
+      contents: [{ role: 'user', parts: [{ inlineData: inline }, { text: buildPrompt(title) }] }],
     });
     let text = '';
     for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;

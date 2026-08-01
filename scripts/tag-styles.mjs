@@ -63,9 +63,16 @@ function makeVertex() {
 }
 
 // Same schema the "index-style" Edge Function asks for, so global and
-// user-uploaded custom styles carry identical metadata.
-const PROMPT =
+// user-uploaded custom styles carry identical metadata. Built as a function
+// (not a constant) so the manifest title — when known — can steer
+// `niche`/`keywords`: the image ALONE is often ambiguous (two people talking
+// in a studio could be a podcast, an interview or a news segment), but the
+// title tells the tagger the real topic directly.
+const buildPrompt = (title) =>
   `You are indexing a YouTube thumbnail so a matching engine can later pick it for a video on the same topic. ` +
+  (title
+    ? `The video this thumbnail is from is titled "${title}" — use that to inform "niche" and "keywords" (the image alone can be ambiguous about the exact category; the title tells you the real topic). Still describe only what's visually true of the image for every other field. `
+    : '') +
   `Look at the image and describe ONLY what you actually see. Reply with STRICT JSON, no markdown, exactly these keys:\n` +
   `{\n` +
   `  "niche": "one lowercase word/short phrase for the video category this thumbnail suits (e.g. gaming, finance, podcast, tech, fitness, food, travel, horror, education, vlog, news, motivation)",\n` +
@@ -137,11 +144,15 @@ const { data: existingRows, error: exErr } = await admin
   .from('style_images').select('path, embedding').not('embedding', 'is', null);
 if (exErr) { console.error('Could not read style_images:', exErr.message); process.exit(1); }
 const alreadyEmbedded = new Set((existingRows || []).map((r) => r.path));
+// RETAG=1 forces re-tagging + re-embedding of files that already have an
+// embedding too — use this after improving the tagging prompt (e.g. to add
+// title-aware niche detection to styles indexed before that fix existed).
+const forceRetag = process.env.RETAG === '1';
 
 let tagged = 0, skipped = 0, failed = 0;
 for (const name of files) {
   const objectPath = `seed/${name}`;
-  if (alreadyEmbedded.has(objectPath)) { console.log(`skip (already embedded): ${name}`); skipped++; continue; }
+  if (!forceRetag && alreadyEmbedded.has(objectPath)) { console.log(`skip (already embedded): ${name}`); skipped++; continue; }
 
   const title = manifest[name] || null;
   const bytes = readFileSync(join(dir, name));
@@ -151,7 +162,7 @@ for (const name of files) {
     // 1) Vision-tag the thumbnail.
     const tagResult = await ai.models.generateContent({
       model: TAG_MODEL,
-      contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: bytes.toString('base64') } }, { text: PROMPT }] }],
+      contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: bytes.toString('base64') } }, { text: buildPrompt(title) }] }],
     });
     let text = '';
     for (const p of tagResult?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
