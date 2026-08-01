@@ -33,6 +33,20 @@ const SegmentedControl = <T extends string>({
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, [value, options.length]);
+  // A single layout-effect measurement can land before layout truly settles
+  // (e.g. a webfont swapping in after first paint changes label widths) —
+  // that made the highlight disappear/misplace intermittently. Observing the
+  // row and the active button re-measures on any real layout change, not
+  // just on our own state updates.
+  useEffect(() => {
+    const group = groupRef.current;
+    const btn = btnRefs.current[value];
+    if (!group || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(group);
+    if (btn) ro.observe(btn);
+    return () => ro.disconnect();
+  }, [value]);
 
   return (
     <div ref={groupRef} className={`relative flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl ${className}`}>

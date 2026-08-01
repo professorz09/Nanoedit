@@ -197,6 +197,21 @@ const ThumbnailStudio: React.FC<Props> = ({
     window.addEventListener('resize', measureTab);
     return () => window.removeEventListener('resize', measureTab);
   }, [measureTab]);
+  // A single layout-effect measurement can land before the row's real layout
+  // settles (e.g. the Inter webfont swapping in after first paint changes
+  // the active label's width without changing the row's own outer size) —
+  // that's what made the highlight disappear/misplace intermittently.
+  // Observing both the row and the active button re-measures whenever
+  // either's real layout changes, not just on our own state updates.
+  useEffect(() => {
+    const group = tabsGroupRef.current;
+    const btn = tabBtnRefs.current[mode];
+    if (!group || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureTab());
+    ro.observe(group);
+    if (btn) ro.observe(btn);
+    return () => ro.disconnect();
+  }, [mode, measureTab]);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -446,6 +461,17 @@ const ThumbnailStudio: React.FC<Props> = ({
       };
       r.readAsDataURL(file);
     });
+  };
+
+  // Ask for login before opening the file picker (or accepting a drop) when
+  // signed out, instead of letting someone upload photos they can't use yet.
+  const triggerUpload = () => {
+    if (configured && !user) { requireLogin('Log in to upload photos.'); return; }
+    fileRef.current?.click();
+  };
+  const dropFiles = (files: File[]) => {
+    if (configured && !user) { requireLogin('Log in to upload photos.'); return; }
+    readFiles(files);
   };
 
   // Saved faces ("personas") — reuse a face across generations without
@@ -946,7 +972,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Add a person's photo</label>
-                          <PersonaPicker enabled={mode === 'youtube' && ytAdvanced} refreshKey={personaRefreshKey} onPick={pickPersona} />
+                          <PersonaPicker enabled={mode === 'youtube' && ytAdvanced} refreshKey={personaRefreshKey} onPick={pickPersona} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} />
                           {uploads.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {uploads.map((u, i) => (
@@ -960,7 +986,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           ) : (
                             <button
                               type="button"
-                              onClick={() => fileRef.current?.click()}
+                              onClick={triggerUpload}
                               className="w-full border-2 border-dashed border-white/12 rounded-2xl p-4 flex items-center justify-center gap-2.5 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
                             >
                               <I.Upload className="w-4 h-4" />
@@ -1019,9 +1045,9 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <div className="space-y-2.5 animate-fade-in-up">
                   <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Upload reference or your photo</label>
                   <div
-                    onClick={() => fileRef.current?.click()}
+                    onClick={triggerUpload}
                     onDragOver={e => e.preventDefault()}
-                    onDrop={e => { e.preventDefault(); readFiles(Array.from(e.dataTransfer.files)); }}
+                    onDrop={e => { e.preventDefault(); dropFiles(Array.from(e.dataTransfer.files)); }}
                     className="border-2 border-dashed border-white/12 rounded-2xl p-7 flex flex-col items-center justify-center gap-2.5 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
                   >
                     <div className="w-11 h-11 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center"><I.Upload className="w-5 h-5" /></div>
@@ -1048,7 +1074,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
               {/* Saved faces (shared for templates + reference + prompt + sketch) */}
               {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && (
-                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} />
+                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} />
               )}
 
               {/* Uploaded thumbnails preview (shared for templates + reference + prompt + sketch) */}
@@ -1066,7 +1092,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
               {/* Optional add-photo for templates + prompt + sketch */}
               {(mode === 'templates' || mode === 'prompt' || mode === 'sketch') && uploads.length === 0 && (
-                <button onClick={() => fileRef.current?.click()} className="text-xs font-semibold text-thumb-red hover:underline flex items-center gap-1.5">
+                <button onClick={triggerUpload} className="text-xs font-semibold text-thumb-red hover:underline flex items-center gap-1.5">
                   <I.Upload className="w-3.5 h-3.5" /> Add your face/photo (optional)
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
                 </button>

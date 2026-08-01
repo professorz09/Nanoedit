@@ -12,7 +12,9 @@ const PersonaPicker: React.FC<{
   enabled: boolean;
   refreshKey: number;
   onPick: (dataUrl: string) => void;
-}> = ({ enabled, refreshKey, onPick }) => {
+  loggedIn: boolean;
+  onRequireLogin: () => void;
+}> = ({ enabled, refreshKey, onPick, loggedIn, onRequireLogin }) => {
   const [personas, setPersonas] = useState<Persona[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -87,7 +89,7 @@ const PersonaPicker: React.FC<{
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => { if (!loggedIn) { onRequireLogin(); return; } fileRef.current?.click(); }}
           disabled={adding}
           aria-label="Add a face"
           className="shrink-0 w-14 h-14 rounded-xl border-2 border-dashed border-white/12 hover:border-thumb-red text-thumb-sub hover:text-thumb-red flex flex-col items-center justify-center gap-0.5 transition-colors disabled:opacity-50"
