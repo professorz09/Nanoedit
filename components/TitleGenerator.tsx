@@ -2,6 +2,8 @@ import React, { useState, useRef, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText } from '../services/textService';
 import { extractYouTubeId } from '../services/youtubeService';
 import { useAuth } from '../contexts/AuthContext';
+import { getFromLocalStorage, saveToLocalStorage, STORAGE_KEYS } from '../services/storageService';
+import { I } from './ThumbIcons';
 
 const TITLE_COST = 1; // credits charged per title-generation run
 
@@ -32,7 +34,10 @@ const TitleGenerator: React.FC = () => {
   const [count, setCount] = useState(8);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [titles, setTitles] = useState<string[]>([]);
+  // Persisted across reloads/tab switches, same as generated thumbnails.
+  const [titles, setTitlesState] = useState<string[]>(() => getFromLocalStorage(STORAGE_KEYS.TITLE_RESULTS, []));
+  const setTitles = (list: string[]) => { setTitlesState(list); saveToLocalStorage(STORAGE_KEYS.TITLE_RESULTS, list); };
+  const removeTitle = (i: number) => setTitles(titles.filter((_, x) => x !== i));
   const [copied, setCopied] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { user, totalCredits, configured, refreshProfile } = useAuth();
@@ -97,8 +102,11 @@ ${context}`;
     try {
       const out = await generateText(prompt, TITLE_COST);
       const list = out.split('\n').map(cleanTitle).filter(Boolean).slice(0, count);
-      if (!list.length) { setNote('Could not generate titles. Try again.'); }
-      setTitles(list);
+      if (!list.length) {
+        setNote('Could not generate titles. Try again.');
+      } else {
+        setTitles(list);
+      }
       refreshProfile(); // credits were charged server-side — sync the header count
     } catch (e: any) {
       setNote(e?.message?.slice(0, 140) || 'Something went wrong. Try again.');
@@ -212,12 +220,17 @@ ${context}`;
               <span className="text-xs text-thumb-sub">{titles.length}</span>
             </div>
             {titles.map((t, i) => (
-              <button key={i} onClick={() => copy(t, i)} className="group w-full text-left flex items-start gap-3 bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 rounded-xl px-4 py-3 transition-colors">
-                <span className="text-[15px] font-semibold text-thumb-ink flex-1 leading-snug">{t}</span>
-                <span className={`shrink-0 mt-0.5 ${copied === i ? 'text-thumb-green' : 'text-thumb-sub group-hover:text-thumb-red'}`}>
-                  {copied === i ? <Ic.Check className="w-4 h-4" /> : <Ic.Copy className="w-4 h-4" />}
-                </span>
-              </button>
+              <div key={i} className="group w-full flex items-start gap-1 bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 rounded-xl pl-4 pr-2 py-3 transition-colors">
+                <button onClick={() => copy(t, i)} className="flex-1 text-left flex items-start gap-3 min-w-0">
+                  <span className="text-[15px] font-semibold text-thumb-ink flex-1 leading-snug">{t}</span>
+                  <span className={`shrink-0 mt-0.5 ${copied === i ? 'text-thumb-green' : 'text-thumb-sub group-hover:text-thumb-red'}`}>
+                    {copied === i ? <Ic.Check className="w-4 h-4" /> : <Ic.Copy className="w-4 h-4" />}
+                  </span>
+                </button>
+                <button onClick={() => removeTitle(i)} aria-label={`Remove title ${i + 1}`} title="Remove" className="shrink-0 p-1.5 mt-0.5 rounded-lg text-thumb-sub hover:text-thumb-red hover:bg-thumb-redSoft transition-colors">
+                  <I.Trash className="w-4 h-4" />
+                </button>
+              </div>
             ))}
           </div>
         ) : (

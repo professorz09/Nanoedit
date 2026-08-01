@@ -2,6 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText, formatTime } from '../services/textService';
 import { extractYouTubeId } from '../services/youtubeService';
 import { useAuth } from '../contexts/AuthContext';
+import { getFromLocalStorage, saveToLocalStorage, STORAGE_KEYS } from '../services/storageService';
+import { I } from './ThumbIcons';
 
 const CHAPTERS_COST = 1; // credits charged per chapters run
 
@@ -34,7 +36,10 @@ const ChapterMaker: React.FC = () => {
   const [detail, setDetail] = useState('balanced');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [chapters, setChapters] = useState('');
+  // Persisted across reloads/tab switches, same as generated thumbnails.
+  const [chapters, setChaptersState] = useState(() => getFromLocalStorage(STORAGE_KEYS.CHAPTER_RESULTS, ''));
+  const setChapters = (val: string) => { setChaptersState(val); saveToLocalStorage(STORAGE_KEYS.CHAPTER_RESULTS, val); };
+  const removeChapter = (i: number) => setChapters(lines.filter((_, x) => x !== i).join('\n'));
   const [copied, setCopied] = useState(false);
   const { user, totalCredits, configured, refreshProfile } = useAuth();
 
@@ -81,8 +86,11 @@ ${context}`;
     try {
       const out = await generateText(prompt, CHAPTERS_COST);
       const cleaned = cleanChapters(out);
-      if (!cleaned) { setNote('Could not build chapters. Try again or paste a fuller transcript.'); }
-      setChapters(cleaned || '');
+      if (!cleaned) {
+        setNote('Could not build chapters. Try again or paste a fuller transcript.');
+      } else {
+        setChapters(cleaned);
+      }
     } catch (e: any) {
       setNote(e?.message?.slice(0, 140) || 'Something went wrong. Try again.');
     } finally {
@@ -168,9 +176,12 @@ ${context}`;
                 const time = m ? m[1] : '';
                 const title = m ? m[2] : l;
                 return (
-                  <div key={i} className="flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-thumb-soft/60 transition-colors">
+                  <div key={i} className="group flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-thumb-soft/60 transition-colors">
                     <span className="shrink-0 font-mono text-[13px] font-bold text-thumb-red tabular-nums pt-0.5 flex items-center gap-1.5"><Ic.Clock className="w-3.5 h-3.5 opacity-70" />{time}</span>
-                    <span className="text-[15px] text-thumb-ink font-medium leading-snug">{title}</span>
+                    <span className="text-[15px] text-thumb-ink font-medium leading-snug flex-1">{title}</span>
+                    <button onClick={() => removeChapter(i)} aria-label={`Remove chapter ${i + 1}`} title="Remove" className="shrink-0 p-1 rounded-lg text-thumb-sub hover:text-thumb-red opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <I.Trash className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 );
               })}

@@ -6,6 +6,8 @@ const STORE_NAME = 'app_state';
 export const STORAGE_KEYS = {
   SOURCE_IMAGES: 'source_images',
   GENERATED_IMAGES: 'generated_images',
+  TITLE_RESULTS: 'title_generator_results',
+  CHAPTER_RESULTS: 'chapter_maker_results',
 };
 
 const openDB = (): Promise<IDBDatabase> => {
