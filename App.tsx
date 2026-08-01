@@ -9,6 +9,7 @@ import { usePersistentState } from './hooks/usePersistentState';
 import { useZoomPan } from './hooks/useZoomPan';
 import { useImageQueue } from './hooks/useImageQueue';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { deleteGenerationOnServer } from './services/geminiService';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
 import RetryImage from './components/RetryImage';
@@ -499,8 +500,14 @@ function App() {
   };
 
   const deleteGeneratedImage = (id: string) => {
+      if (!window.confirm('Delete this thumbnail? This cannot be undone.')) return;
+      const target = generatedImages.find(img => img.id === id);
       setGeneratedImages(prev => prev.filter(img => img.id !== id));
       if (viewedImage) setViewedImage(null);
+      // Best-effort server-side cleanup so it doesn't come back on refresh
+      // (see deleteGenerationOnServer) — local state above is already updated
+      // regardless of whether this succeeds.
+      if (target) deleteGenerationOnServer(target.url);
   };
   
   const clearAllGeneratedImages = () => {
