@@ -941,9 +941,9 @@ function App() {
                       <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setViewedImage(null)}><IconX /></button>
                       <RetryImage key={viewedImage} url={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
                       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => handleOpenEditorWithBrush(viewedImage!)} title="Brush out unwanted parts" className="h-12 w-12 shrink-0 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center text-lg backdrop-blur-sm transition-colors">🖌️</button>
-                          <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
-                          <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-full hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
+                          <button onClick={() => handleOpenEditorWithBrush(viewedImage!)} title="Brush out unwanted parts" className="h-12 w-12 shrink-0 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center text-lg backdrop-blur-sm transition-colors">🖌️</button>
+                          <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
+                          <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
                       </div>
                   </div>
               )}
