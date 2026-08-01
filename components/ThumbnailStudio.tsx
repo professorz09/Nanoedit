@@ -73,11 +73,14 @@ const SHOWCASE_TEMPLATE_PREVIEWS: Record<string, string> = {
 };
 
 // ── Prompt composition ────────────────────────────────────────────
-// Credits charged for the one-time-per-video YouTube analysis (transcript
-// fetch + LLM concept step) in "youtube" mode. Cached per video id (see
-// ytCache below), so re-generating from the SAME link never re-charges this —
-// only the normal per-image credit applies after the first analysis.
-const YOUTUBE_ANALYSIS_COST = 3;
+// Every YouTube-mode image costs 3 credits instead of the normal 1 — that
+// pipeline does real extra work per image (transcript fetch, concept LLM
+// call, style-match embedding call, on top of the actual generation), so
+// each result is priced to reflect that. The analysis itself (transcript +
+// concepts) is free and still cached per video id — regenerating from the
+// SAME link never re-runs it, but every image, cached-analysis or not,
+// costs 3 credits; the server enforces this (sourceMode: 'youtube').
+const YOUTUBE_IMAGE_COST = 3;
 
 const BASE_THUMB = 'Design a top-tier, agency-grade, scroll-stopping YouTube thumbnail in 16:9 landscape — match the production quality, polish and click-worthiness of the best viral thumbnails from the biggest creators. Unless a specific art style is explicitly requested, lean photorealistic and lifelike — real-camera depth of field, natural skin texture, and a sharp, detailed, expressive face with realistic lighting. Compose it in whatever way best suits the topic — a bold real scene, a dramatic environment, or a clean backdrop — with a strong, clear focal point and real depth; just avoid random, meaningless clutter. Depict the subject and topic accurately. Use dramatic lighting, punchy vibrant colors and strong contrast so it pops even at small sizes. Render at high fidelity — crisp, detailed and clean, with no blur, noise, artifacts, warping or distorted anatomy. Do not add extra text, letters, captions, subtitles, watermarks or gibberish beyond any text that is explicitly requested.';
 
@@ -122,7 +125,7 @@ const textDirective = (t: string) => {
 };
 
 interface Props {
-  onGenerate: (prompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; aspect?: string }) => void;
+  onGenerate: (prompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; aspect?: string; sourceMode?: 'youtube' }) => void;
   generatedImages: GeneratedImage[];
   queue: QueueItem[];
   isProcessing: boolean;
@@ -496,11 +499,12 @@ const ThumbnailStudio: React.FC<Props> = ({
     if (mode === 'youtube') {
       const id = extractYouTubeId(youtubeUrl);
       if (!id) return;
+      const wantCount = Math.max(1, Math.min(4, genCount));
 
       // Analyse the video ONCE per link: thumbnail + title + transcript → TWO
       // distinct AI concepts + a headline. Result is cached by video id, so
       // re-generating from the SAME link reuses it — the transcript is never
-      // re-fetched and YOUTUBE_ANALYSIS_COST is never charged twice for one link.
+      // re-fetched. The analysis itself is free; only the images cost credits.
       let analysis = ytCache.current[id];
       if (!analysis) {
         setBusy(true);
@@ -513,17 +517,17 @@ const ThumbnailStudio: React.FC<Props> = ({
         ytFetchCache.current[id] = fetched;
         const [thumb, title, segments] = fetched;
         // Best-effort — if the text model is unavailable we still generate from
-        // the title and the original thumbnail. Charged once per new video
-        // (cached above); insufficient credits stop here instead of degrading.
+        // the title and the original thumbnail. The concept step is free; the
+        // credit check below is for the images that follow it.
         let conceptA = '', conceptB = '', headline = '';
         const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
         if (title || transcriptText) {
           // Skip while the profile is still loading — totalCredits reads 0
           // until it resolves, which would otherwise redirect a user with
           // plenty of credits to pricing just because they clicked early.
-          if (configured && !creditsLoading && totalCredits < YOUTUBE_ANALYSIS_COST) {
+          if (configured && !creditsLoading && totalCredits < YOUTUBE_IMAGE_COST) {
             setBusy(false);
-            setNoteText(`Analyzing a new video needs ${YOUTUBE_ANALYSIS_COST} credits. Please top up your plan.`);
+            setNoteText(`Each YouTube thumbnail costs ${YOUTUBE_IMAGE_COST} credits. Please top up your plan.`);
             goPricing();
             return;
           }
@@ -600,11 +604,10 @@ const ThumbnailStudio: React.FC<Props> = ({
       };
 
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
-      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
-      // Honour the Variations picker (1-4) instead of a fixed 2 — each slot still
-      // gets its own onGenerate() call (one real image per call), just like every
-      // other mode's variation handling in handleStudioGenerate.
-      const wantCount = Math.max(1, Math.min(4, genCount));
+      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9', sourceMode: 'youtube' as const };
+      // wantCount (Variations picker, 1-4) computed above — each slot still
+      // gets its own onGenerate() call (one real image per call), just like
+      // every other mode's variation handling in handleStudioGenerate.
 
       // ── Ground each variant in one of OUR OWN curated styles — NEVER the
       // video's own (often low-res) thumbnail. Vector search finds the styles
@@ -1253,9 +1256,11 @@ const ThumbnailStudio: React.FC<Props> = ({
             {(generatedImages.length > 0 || queue.length > 0) ? (
               <>
                 <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-2xl font-black flex items-center gap-2">
-                    {isProcessing ? <><span className="w-4 h-4 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" /> Generating…</> : 'Your thumbnails'}
-                  </h2>
+                  {/* Each queue card already shows its own progress (spinner,
+                      elapsed time, step list) — a separate "Generating…"
+                      heading up here was redundant, floating text disconnected
+                      from any card. Keep this a plain, constant section title. */}
+                  <h2 className="text-2xl font-black">Your thumbnails</h2>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

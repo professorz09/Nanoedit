@@ -8,11 +8,10 @@
 // the closest styles by cosine similarity. Returns their public URLs + tags so
 // the client can recreate the best-fitting styles.
 //
-// Auth: requires a logged-in user (JWT). Unlike "text"/"transcript" (free,
-// rate-limited helpers), this spends MATCH_COST credits via the same
-// spend_credit()/refund_credit() RPCs "generate" uses — so it's only usable
-// within whatever credit balance the caller actually has, the same as any
-// other metered action, not a free-standing unlimited helper.
+// Auth: requires a logged-in user (JWT), same as "text"/"transcript" — but
+// like those, this is free. Its cost is folded into the higher per-image
+// price the YouTube pipeline's actual generated images already charge
+// ("generate"'s IMAGE_COST.youtube), so it isn't billed twice.
 //
 // Deploy:  supabase functions deploy match-style --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
@@ -29,19 +28,10 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-// supabase-js's .rpc() builder is PromiseLike, not a real Promise — it
-// implements .then() but NOT .catch(), so `await admin.rpc(...).catch(fn)`
-// throws a synchronous "catch is not a function" TypeError instead of ever
-// reaching `fn`. try/catch is the only safe way to swallow a failed RPC.
-const refundOnce = async (admin: any, uid: string) => {
-  try { await admin.rpc('refund_credit', { p_user: uid }); } catch (_) { /* best-effort */ }
-};
-
 const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
 const EMBED_DIMS = 768; // must match the style_images.embedding vector(768) column
 const BUCKET = 'styles';
 const MAX_TEXT = 8000;
-const MATCH_COST = 1; // credits spent per match call, refunded if it fails
 
 function makeVertex(): any {
   const saRaw = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
@@ -83,15 +73,7 @@ Deno.serve(async (req) => {
   const ai = makeVertex();
   if (!ai) return json(500, { error: 'Match service is not configured.' });
 
-  // Reserve credits up front — bounded strictly by whatever balance the
-  // caller actually has, same atomic RPC "generate" uses. 402 at zero.
-  const { data: spent, error: spendErr } = await admin.rpc('spend_credit', { p_user: uid });
-  if (spendErr) return json(500, { error: 'Credit check failed. Please try again.' });
-  if (!spent) return json(402, { error: 'No credits left. Please upgrade your plan to use style matching.' });
-
   // 1) Embed the query topic (same model + dims as the offline index).
-  // Bounded with a timeout — a credit is already reserved, so a hung upstream
-  // call shouldn't be able to hold it indefinitely before the refund below.
   let embedding: number[] | null = null;
   try {
     const r: any = await Promise.race([
@@ -108,7 +90,6 @@ Deno.serve(async (req) => {
     console.error('embed_failed', e?.message || String(e));
   }
   if (!embedding?.length) {
-    await refundOnce(admin, uid);
     return json(502, { error: 'Could not analyse the topic. Please try again.' });
   }
 
@@ -121,7 +102,6 @@ Deno.serve(async (req) => {
   });
   if (error) {
     console.error('match_styles_failed', error.message);
-    await refundOnce(admin, uid);
     return json(502, { error: 'Style search failed.' });
   }
 

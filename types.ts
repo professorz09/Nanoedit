@@ -5,6 +5,10 @@ export interface EditorSettings {
   modelType: 'flash' | 'pro';
   style: string;
   cameraAngle: string;
+  // Set for YouTube-mode generations — the server charges a higher, fixed
+  // credit cost for these (covers the transcript/concept/style-match calls
+  // that only that pipeline does). Undefined/omitted = the normal 1-credit price.
+  sourceMode?: 'youtube';
 }
 
 export interface GeneratedImage {

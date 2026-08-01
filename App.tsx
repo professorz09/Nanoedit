@@ -343,7 +343,7 @@ function App() {
 
   // ── Thumbnail Studio bridge ──────────────────────────────────────
   // Generate straight into the shared queue, forcing 16:9 HD (Pro) output.
-  const handleStudioGenerate = useCallback((studioPrompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; aspect?: string }) => {
+  const handleStudioGenerate = useCallback((studioPrompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; aspect?: string; sourceMode?: 'youtube' }) => {
       if (!studioPrompt.trim()) return;
       const modelType = opts?.modelType ?? 'flash';
       const count = Math.max(1, Math.min(4, opts?.count ?? 1));
@@ -352,6 +352,7 @@ function App() {
           aspectRatio: opts?.aspect === '9:16' ? '9:16' : '16:9',
           modelType,
           resolution: modelType === 'pro' ? '2K' : '1K',
+          sourceMode: opts?.sourceMode,
       };
       for (let i = 0; i < count; i++) {
           setTimeout(() => {
