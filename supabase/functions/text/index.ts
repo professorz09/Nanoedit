@@ -39,6 +39,34 @@ const refundOnce = async (admin: any, uid: string) => {
 
 const MAX_PROMPT_CHARS = 32000; // chapters can include a long transcript
 
+// `concept` costs 0 credits (see COSTS below) — without SOME bound, a caller
+// could skip the YouTube UI flow entirely and hammer this + match-style
+// directly to farm free style-matched prompts, then hand them to "generate"
+// without sourceMode: 'youtube' to pay the normal 1-credit price instead of
+// the 3 credits that pipeline is supposed to cost. This doesn't close that
+// gap outright (a determined caller can still pace themselves under the
+// limit) but it bounds the abuse to a rate a genuine multi-video session
+// would never hit. Same rolling-window pattern "transcript" already uses.
+const FREE_LIMIT = 20;
+const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+async function checkFreeRateLimit(admin: any, uid: string, tool: string): Promise<boolean> {
+  const since = new Date(Date.now() - FREE_WINDOW_MS).toISOString();
+  const { count, error } = await admin
+    .from('tool_usage')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', uid)
+    .eq('tool', tool)
+    .gte('created_at', since);
+  if (error) return true; // fail open — don't block the tool over a logging hiccup
+  if ((count ?? 0) >= FREE_LIMIT) return false;
+  // supabase-js's .from() builder is PromiseLike, not a real Promise — it has
+  // no .catch(), so chaining one here throws a synchronous TypeError instead
+  // of swallowing a failed insert (this is a fire-and-forget usage log).
+  try { await admin.from('tool_usage').insert({ user_id: uid, tool }); } catch (_) { /* best-effort */ }
+  return true;
+}
+
 // The ONLY source of truth for what each operation costs — matches
 // TITLE_COST (TitleGenerator.tsx) and CHAPTERS_COST (ChapterMaker.tsx). The
 // client picks the op; the server picks the price.
@@ -94,6 +122,12 @@ Deno.serve(async (req) => {
   if (cost === undefined) return json(400, { error: 'Unknown operation.' });
 
   const uid = userData.user.id;
+
+  if (cost === 0) {
+    const ok = await checkFreeRateLimit(admin, uid, `text:${op}`);
+    if (!ok) return json(429, { error: 'Too many requests. Please wait a bit and try again.' });
+  }
+
   const refundAll = async () => { for (let i = 0; i < cost; i++) await refundOnce(admin, uid); };
 
   let done = 0;
