@@ -268,6 +268,19 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .thumb-marquee-reverse { animation: thumb-marquee 32s linear infinite reverse; }
 .thumb-marquee-reverse:hover { animation-play-state: paused; }
 
+/* Hero demo connecting lines — draws in on each cycle. pathLength={1} on the
+   <path> makes stroke-dasharray/dashoffset work in path-length-independent
+   units, so this doesn't need to match the SVG's actual geometry. */
+@keyframes thumb-line-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.thumb-line-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: thumb-line-draw 0.7s ease-out 0.15s forwards;
+}
+
 /* Dark scrollbar when studio is active */
 .thumb-scope ::-webkit-scrollbar-track { background: #141419; }
 .thumb-scope ::-webkit-scrollbar-thumb { background: #33333c; border-radius: 99px; }

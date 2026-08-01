@@ -49,6 +49,21 @@ const SHOWCASE_IMAGES = Object.entries(
 const SHOWCASE_ROW_1 = SHOWCASE_IMAGES.length > 1 ? SHOWCASE_IMAGES.filter((_, i) => i % 2 === 0) : SHOWCASE_IMAGES;
 const SHOWCASE_ROW_2 = SHOWCASE_IMAGES.length > 1 ? SHOWCASE_IMAGES.filter((_, i) => i % 2 === 1) : SHOWCASE_IMAGES;
 
+// Hero demo sets ("one photo in, thumbnails out") — grouped into triples
+// (one "source", two "outputs") from the SAME showcase pool above, no
+// separate demo assets needed. Falls back to reusing whatever's available if
+// there aren't enough images for a clean split into threes.
+const HERO_DEMO_SETS: { source: string; outputs: string[] }[] = (() => {
+  const sets: { source: string; outputs: string[] }[] = [];
+  for (let i = 0; i + 2 < SHOWCASE_IMAGES.length; i += 3) {
+    sets.push({ source: SHOWCASE_IMAGES[i], outputs: [SHOWCASE_IMAGES[i + 1], SHOWCASE_IMAGES[i + 2]] });
+  }
+  if (!sets.length && SHOWCASE_IMAGES.length >= 2) {
+    sets.push({ source: SHOWCASE_IMAGES[0], outputs: SHOWCASE_IMAGES.slice(1, 3) });
+  }
+  return sets;
+})();
+
 // Real reference thumbnails dropped straight into attached_assets/ (not in a
 // subfolder). These become an image-driven "style" pool: pick one and the AI
 // recreates a thumbnail in its exact look — no text style description needed.
@@ -191,6 +206,16 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
+  // Cycles the hero demo ("one photo in, thumbnails out") through
+  // HERO_DEMO_SETS every few seconds — purely decorative, so it's fine to
+  // keep running even off-screen; the cost is a state flip + CSS transition,
+  // no network/data work.
+  const [heroDemoIndex, setHeroDemoIndex] = useState(0);
+  useEffect(() => {
+    if (HERO_DEMO_SETS.length < 2) return;
+    const id = setInterval(() => setHeroDemoIndex(i => (i + 1) % HERO_DEMO_SETS.length), 4200);
+    return () => clearInterval(id);
+  }, []);
   const [selectedTemplate, setSelectedTemplate] = useState<string>(THUMBNAIL_TEMPLATES[0].id);
   // The Styles tab has a single picker: pick a REAL thumbnail and the AI recreates
   // its exact look for your topic. Default to the first one so a style is always set.
@@ -969,6 +994,43 @@ const ThumbnailStudio: React.FC<Props> = ({
               <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Cancel anytime</span>
             </div>
           </div>
+
+          {/* Animated "one photo in, thumbnails out" demo — cycles through
+              HERO_DEMO_SETS every ~4s. Reuses the existing showcase pool, no
+              separate demo assets. Connecting lines use percentage-based SVG
+              coordinates (not real pixel math) so they fan out reasonably at
+              any width; `key`-ing each swapped element by heroDemoIndex
+              replays the fade/draw-in animation on every cycle. */}
+          {HERO_DEMO_SETS.length > 0 && (
+            <div className="mt-12 max-w-md mx-auto">
+              <div className="thumb-glass rounded-[28px] p-6 sm:p-7 flex flex-col items-center">
+                <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-thumb-sub mb-4">One thumbnail in. Fresh variations out.</p>
+                {/* Video-aspect, same as the outputs below — a forced square
+                    crop looked wrong on wide split-panel showcase images
+                    (e.g. a before/after comparison), and this is honestly a
+                    more accurate picture of what the product actually does
+                    (turn one input into several thumbnail variations). */}
+                <div key={`hero-src-${heroDemoIndex}`} className="w-40 sm:w-48 aspect-video rounded-2xl overflow-hidden border-2 border-thumb-red shadow-[0_0_24px_-4px_rgba(255,45,85,0.5)] animate-fade-in-up">
+                  <img src={HERO_DEMO_SETS[heroDemoIndex].source} alt="" className="w-full h-full object-cover" />
+                </div>
+                <svg viewBox="0 0 100 44" preserveAspectRatio="none" className="w-40 sm:w-48 h-11 text-thumb-red" aria-hidden>
+                  <path key={`hero-l1-${heroDemoIndex}`} d="M50,0 Q50,22 22,44" fill="none" stroke="currentColor" strokeWidth="2" pathLength={1} className="thumb-line-draw" />
+                  <path key={`hero-l2-${heroDemoIndex}`} d="M50,0 Q50,22 78,44" fill="none" stroke="currentColor" strokeWidth="2" pathLength={1} className="thumb-line-draw" />
+                </svg>
+                <div className="flex gap-3">
+                  {HERO_DEMO_SETS[heroDemoIndex].outputs.map((src, i) => (
+                    <div
+                      key={`hero-out-${heroDemoIndex}-${i}`}
+                      className="w-28 sm:w-32 aspect-video rounded-xl overflow-hidden border border-thumb-line shadow-md animate-fade-in-up"
+                      style={{ animationDelay: `${180 + i * 140}ms` }}
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </section>
         )}
 
