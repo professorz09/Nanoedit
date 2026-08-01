@@ -28,19 +28,19 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
     <section className="pt-10 pb-16">
       {/* Billing cycle toggle */}
       <div className="flex items-center justify-center">
-        <div className="flex items-center gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
+        <div className="flex items-center gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl flex-wrap justify-center">
           <button
             onClick={() => setCycle('monthly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Monthly
           </button>
           <button
             onClick={() => setCycle('yearly')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
             Yearly
-            <span className="text-[10px] font-black uppercase tracking-wide text-thumb-green bg-thumb-greenSoft border border-thumb-green/30 rounded-full px-1.5 py-0.5">2 months free</span>
+            <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-thumb-green bg-thumb-greenSoft border border-thumb-green/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">2 months free</span>
           </button>
         </div>
       </div>
