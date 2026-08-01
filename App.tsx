@@ -525,12 +525,69 @@ function App() {
     setViewedImage(imageUrl);
   };
 
-  // Same as handleBrushSelect, but callable from the studio's lightweight
-  // lightbox (view === 'studio'), where brush mode isn't mounted yet — sends
-  // the image into the editor first, then activates brush mode on it there.
-  const handleOpenEditorWithBrush = (url: string) => {
-    handleOpenEditor(url);
-    handleBrushSelect(url);
+  // Quick "erase unwanted part" tool for the studio's lightweight lightbox —
+  // deliberately NOT the full nano-editor brush (no Pin tool, note field, or
+  // side panel): paint over the unwanted part, then Remove. Reuses the same
+  // canvas/draw handlers as the editor's brush (brushMode/brushTool/
+  // canvasRef), just with its own minimal UI and a fixed "remove this"
+  // instruction instead of asking what to do with the marked region.
+  const startRemoveMode = () => {
+    if (!viewedImage) return;
+    setBrushTool('brush');
+    setAnnotations([]);
+    setSelectedArea(viewedImage);
+    setBrushMode(true);
+  };
+
+  const cancelRemoveMode = () => {
+    clearBrushSelection();
+    setBrushMode(false);
+    setSelectedArea(null);
+  };
+
+  const applyRemoveSelection = () => {
+    if (!maskHasContent() || !selectedArea) return;
+    const target = selectedArea;
+    setIsImageMode(true);
+    const img = new Image();
+    // See the matching comment in applyEditorSelection — without this, painting
+    // a remote (Supabase Storage) image taints the canvas and toDataURL()
+    // throws silently, so "Remove" would look like it does nothing.
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      let merged = target;
+      let plain: string | null = null;
+      try {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const tctx = tempCanvas.getContext('2d');
+        if (tctx) {
+          tctx.drawImage(img, 0, 0);
+          plain = snapshotCanvas(tempCanvas);
+          if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
+          merged = snapshotCanvas(tempCanvas);
+        }
+      } catch (err) {
+        console.error('applyRemoveSelection merge failed', err);
+        setGlobalError('Could not remove that. Please try again.');
+        return;
+      }
+      const editPrompt = 'You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline marking exactly what to remove. Use the SECOND image only to locate what to remove — never render the outline in the output. Remove the marked object(s) completely from the FIRST image, filling in the background naturally and seamlessly so the removal is undetectable. Leave everything else in the image exactly unchanged.';
+      setQueue(prev => [...prev, {
+        id: crypto.randomUUID(),
+        prompt: editPrompt,
+        settings: { ...settings },
+        sourceImages: plain ? [plain, merged] : [merged],
+        status: 'pending',
+        timestamp: Date.now(),
+      }]);
+      setBrushMode(false);
+      setSelectedArea(null);
+      setViewedImage(null);
+    };
+    img.onerror = () => setGlobalError('Could not load the image. Please try again.');
+    img.src = target;
   };
 
   // Drop an annotation pin at the clicked spot (normalized 0..1 to the image box).
@@ -935,16 +992,58 @@ function App() {
                   onRetry={retryQueueItem}
                   onCancel={cancelQueueItem}
               />
-              {/* Lightweight lightbox for the studio (advanced zoom/brush lives in the editor) */}
+              {/* Lightweight lightbox for the studio (the full nano-editor's brush
+                  lives in EditorView — this has its own minimal "mark + remove"
+                  tool instead, see startRemoveMode/applyRemoveSelection above). */}
               {viewedImage && (
-                  <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setViewedImage(null)}>
-                      <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setViewedImage(null)}><IconX /></button>
-                      <RetryImage key={viewedImage} url={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
-                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => handleOpenEditorWithBrush(viewedImage!)} title="Brush out unwanted parts" className="h-12 w-12 shrink-0 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center text-lg backdrop-blur-sm transition-colors">🖌️</button>
-                          <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
-                          <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
+                  <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => { if (!brushMode) setViewedImage(null); }}>
+                      <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => brushMode ? cancelRemoveMode() : setViewedImage(null)}><IconX /></button>
+                      <div className="relative inline-block max-w-[92vw] max-h-[82vh]" onClick={e => e.stopPropagation()}>
+                          <RetryImage
+                              key={viewedImage}
+                              url={viewedImage}
+                              alt="Thumbnail"
+                              className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain block"
+                              onLoad={e => {
+                                  if (brushMode && canvasRef.current) {
+                                      const img = e.target as HTMLImageElement;
+                                      canvasRef.current.width = img.naturalWidth;
+                                      canvasRef.current.height = img.naturalHeight;
+                                  }
+                              }}
+                          />
+                          {brushMode && (
+                              <canvas
+                                  ref={canvasRef}
+                                  className="absolute top-0 left-0 w-full h-full rounded-2xl cursor-crosshair touch-none select-none"
+                                  onMouseDown={startDrawing}
+                                  onMouseMove={draw}
+                                  onMouseUp={stopDrawing}
+                                  onMouseLeave={stopDrawing}
+                                  onTouchStart={startDrawing}
+                                  onTouchMove={draw}
+                                  onTouchEnd={stopDrawing}
+                              />
+                          )}
                       </div>
+                      {!brushMode ? (
+                          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
+                              <button onClick={startRemoveMode} title="Brush out unwanted parts" className="h-12 w-12 shrink-0 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center text-lg backdrop-blur-sm transition-colors">🖌️</button>
+                              <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
+                              <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
+                          </div>
+                      ) : (
+                          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex flex-col gap-2.5" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center gap-2.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl px-3.5 py-2.5">
+                                  <span className="text-[11px] text-zinc-300 font-bold shrink-0">Brush size</span>
+                                  <input type="range" min="8" max="80" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
+                              </div>
+                              <div className="flex items-center gap-2.5">
+                                  <button onClick={clearBrushSelection} className="h-12 px-5 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl transition-colors backdrop-blur-sm">Clear</button>
+                                  <button onClick={applyRemoveSelection} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all shadow-lg">Remove</button>
+                              </div>
+                          </div>
+                      )}
                   </div>
               )}
           </>
