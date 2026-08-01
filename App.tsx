@@ -525,12 +525,12 @@ function App() {
     setViewedImage(imageUrl);
   };
 
-  // Quick "erase unwanted part" tool for the studio's lightweight lightbox —
-  // deliberately NOT the full nano-editor brush (no Pin tool, note field, or
-  // side panel): paint over the unwanted part, then Remove. Reuses the same
-  // canvas/draw handlers as the editor's brush (brushMode/brushTool/
-  // canvasRef), just with its own minimal UI and a fixed "remove this"
-  // instruction instead of asking what to do with the marked region.
+  // Quick brush tool for the studio's lightweight lightbox — deliberately NOT
+  // the full nano-editor brush (no Pin tool, minimize panel, etc.): paint over
+  // a part of the image, optionally say what to do with it, then Apply.
+  // Reuses the same canvas/draw machinery as the editor's brush
+  // (brushMode/brushTool/canvasRef/brushNote), just with its own minimal UI.
+  // Leaving the instruction blank defaults to removing the marked part.
   const startRemoveMode = () => {
     if (!viewedImage) return;
     setBrushTool('brush');
@@ -548,11 +548,12 @@ function App() {
   const applyRemoveSelection = () => {
     if (!maskHasContent() || !selectedArea) return;
     const target = selectedArea;
+    const instruction = brushNote.trim();
     setIsImageMode(true);
     const img = new Image();
     // See the matching comment in applyEditorSelection — without this, painting
     // a remote (Supabase Storage) image taints the canvas and toDataURL()
-    // throws silently, so "Remove" would look like it does nothing.
+    // throws silently, so "Apply" would look like it does nothing.
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       let merged = target;
@@ -570,10 +571,12 @@ function App() {
         }
       } catch (err) {
         console.error('applyRemoveSelection merge failed', err);
-        setGlobalError('Could not remove that. Please try again.');
+        setGlobalError('Could not apply that. Please try again.');
         return;
       }
-      const editPrompt = 'You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline marking exactly what to remove. Use the SECOND image only to locate what to remove — never render the outline in the output. Remove the marked object(s) completely from the FIRST image, filling in the background naturally and seamlessly so the removal is undetectable. Leave everything else in the image exactly unchanged.';
+      const editPrompt = instruction
+        ? `You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline marking exactly where to apply the change. Use the SECOND image only to locate where to edit — never render the outline in the output. Edit ONLY the marked region of the FIRST image: ${instruction}. Leave everything else in the image exactly unchanged.`
+        : 'You are given TWO images of the same photo: the FIRST is the original, unmarked; the SECOND has a white brushed outline marking exactly what to remove. Use the SECOND image only to locate what to remove — never render the outline in the output. Remove the marked object(s) completely from the FIRST image, filling in the background naturally and seamlessly so the removal is undetectable. Leave everything else in the image exactly unchanged.';
       setQueue(prev => [...prev, {
         id: crypto.randomUUID(),
         prompt: editPrompt,
@@ -1038,9 +1041,16 @@ function App() {
                                   <span className="text-[11px] text-zinc-300 font-bold shrink-0">Brush size</span>
                                   <input type="range" min="8" max="80" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
                               </div>
+                              <input
+                                  type="text"
+                                  value={brushNote}
+                                  onChange={e => setBrushNote(e.target.value)}
+                                  placeholder="What to do here… (leave blank to just remove it)"
+                                  className="h-12 px-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl text-white text-sm placeholder-zinc-500 outline-none focus:border-white/40"
+                              />
                               <div className="flex items-center gap-2.5">
                                   <button onClick={clearBrushSelection} className="h-12 px-5 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl transition-colors backdrop-blur-sm">Clear</button>
-                                  <button onClick={applyRemoveSelection} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all shadow-lg">Remove</button>
+                                  <button onClick={applyRemoveSelection} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all shadow-lg">Apply</button>
                               </div>
                           </div>
                       )}
