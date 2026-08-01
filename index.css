@@ -321,6 +321,17 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .thumb-light .hover\:bg-thumb-line\/50:hover { background-color: rgba(227,227,234,0.6); }
 .thumb-light .hover\:border-thumb-line:hover { border-color: #e3e3ea; }
 
+/* Soft red/green chip fills (error notes, empty-state icon badges, success
+   toasts) — these carry near-white/near-black text on the dark maroon/mint
+   they were designed for, so both the chip fill AND that text need to flip
+   together or the text goes invisible on the new light fill. */
+.thumb-light .bg-thumb-redSoft { background-color: #ffe3e8; }
+.thumb-light .bg-thumb-greenSoft { background-color: #ddf7ec; }
+.thumb-light .text-red-100,
+.thumb-light .text-red-200,
+.thumb-light .text-red-200\/90,
+.thumb-light .text-red-300 { color: #a3123a; }
+
 /* Dark surface fills → light (inputs, tracks). Overlays ≥40% stay dark. */
 .thumb-light .bg-black\/20,
 .thumb-light .bg-black\/25,

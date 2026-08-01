@@ -343,7 +343,7 @@ export default function EditorView(props: EditorViewProps) {
                                                 </div>
                                             </div>
                                             <div className="text-center space-y-1.5">
-                                                <h4 className="text-base font-bold text-white">Generation Failed</h4>
+                                                <h4 className="text-base font-bold text-thumb-ink">Generation Failed</h4>
                                                 {item.error && (
                                                     <p className="text-[11px] text-red-200/90 line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
                                                 )}
