@@ -8,6 +8,7 @@ import { extractYouTubeId, urlToBase64, fetchYouTubeTitle, fetchYouTubeThumb } f
 import AuthModal from './AuthModal';
 import { I } from './ThumbIcons';
 import ResultThumb from './ResultThumb';
+import ChangeFaceModal from './ChangeFaceModal';
 import SketchCanvas from './SketchCanvas';
 import PersonaPicker from './PersonaPicker';
 import SegmentedControl from './SegmentedControl';
@@ -365,14 +366,6 @@ const ThumbnailStudio: React.FC<Props> = ({
   };
   const handlePreviewUpload = (e: React.ChangeEvent<HTMLInputElement>) => readPreviewFile(e, setPreviewImage);
   const handlePreviewUploadB = (e: React.ChangeEvent<HTMLInputElement>) => readPreviewFile(e, setPreviewImageB);
-  // Send a thumbnail into the full-page feed tester (single preview system — no modal)
-  const openPreview = (url: string) => {
-    setPreviewImage(url);
-    setPreviewTitle(prev => prev || titleText || 'This changed everything (I was shocked)');
-    setSection('preview');
-    setSidebarOpen(false);
-    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
-  };
 
   const goHome = () => {
     setSection('home');
@@ -490,6 +483,17 @@ const ThumbnailStudio: React.FC<Props> = ({
     } catch (e: any) {
       setNoteText(e?.message || 'Could not save that face.');
     }
+  };
+
+  // "Change face" — fix a wrong/unwanted face on an already-generated
+  // thumbnail (e.g. one pulled in from a reference-style image) without
+  // redoing the whole generation. Modal builds an edit prompt + sources;
+  // this just queues it like any other generation.
+  const [changeFaceTarget, setChangeFaceTarget] = useState<string | null>(null);
+  const applyChangeFace = (prompt: string, sources: string[]) => {
+    onGenerate(prompt, sources, { count: 1, modelType: genModel === 'pro' ? 'pro' : 'flash' });
+    setChangeFaceTarget(null);
+    scrollToResults();
   };
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1355,7 +1359,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       onView={onView}
                       onDownload={onDownload}
                       onOpenEditor={onOpenEditor}
-                      onPreview={openPreview}
+                      onChangeFace={setChangeFaceTarget}
                       onDelete={onDelete}
                     />
                   ))}
@@ -1959,7 +1963,17 @@ const ThumbnailStudio: React.FC<Props> = ({
       {/* ── Auth (Google-only) modal ── */}
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} reason={authReason} />
 
-      {/* ── YouTube feed preview modal ── */}
+      {/* ── Change face on an existing generated thumbnail ── */}
+      {changeFaceTarget && (
+        <ChangeFaceModal
+          targetUrl={changeFaceTarget}
+          onClose={() => setChangeFaceTarget(null)}
+          onSubmit={applyChangeFace}
+          loggedIn={!configured || !!user}
+          onRequireLogin={() => requireLogin('Log in to change faces.')}
+          personaRefreshKey={personaRefreshKey}
+        />
+      )}
     </div>
   );
 };

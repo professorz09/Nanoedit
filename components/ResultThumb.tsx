@@ -13,9 +13,9 @@ const ResultThumb: React.FC<{
   onView: (url: string) => void;
   onDownload: (url: string) => void;
   onOpenEditor: (url: string) => void;
-  onPreview: (url: string) => void;
+  onChangeFace: (url: string) => void;
   onDelete: (id: string) => void;
-}> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete }) => {
+}> = ({ img, onView, onDownload, onOpenEditor, onChangeFace, onDelete }) => {
   const { loaded, errored, src, onLoad, onError, imgRef } = useImageLoad(img.url);
   const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
 
@@ -52,7 +52,7 @@ const ResultThumb: React.FC<{
       <div className="flex gap-1.5 p-2 bg-thumb-card">
         <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 py-2 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-line/60 transition-colors"><I.Download className="w-4 h-4" /> Save</button>
         <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas" className="flex-1 py-2 rounded-lg thumb-btn text-white text-xs font-bold flex items-center justify-center gap-1.5"><I.Edit className="w-4 h-4" /> Edit</button>
-        <button onClick={() => onPreview(img.url)} title="YouTube feed preview" aria-label="YouTube feed preview" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center transition-colors"><I.Tv className="w-4 h-4" /></button>
+        <button onClick={() => onChangeFace(img.url)} title="Change face" aria-label="Change face" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center transition-colors"><I.FaceSwap className="w-4 h-4" /></button>
         <button onClick={() => onDelete(img.id)} title="Delete" aria-label="Delete" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 flex items-center justify-center transition-colors"><I.Trash className="w-4 h-4" /></button>
       </div>
     </div>
