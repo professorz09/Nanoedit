@@ -41,6 +41,14 @@ const SHOWCASE_IMAGES = Object.entries(
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([, url]) => url);
 
+// The home showcase marquee (below) shows SHOWCASE_IMAGES in two rows
+// scrolling opposite ways. Splitting into disjoint odd/even sets — rather
+// than both rows drawing from the full array — guarantees the same photo
+// never appears in both rows at once (with a shared pool, a given image
+// legitimately can and did line up in both rows at the same moment).
+const SHOWCASE_ROW_1 = SHOWCASE_IMAGES.length > 1 ? SHOWCASE_IMAGES.filter((_, i) => i % 2 === 0) : SHOWCASE_IMAGES;
+const SHOWCASE_ROW_2 = SHOWCASE_IMAGES.length > 1 ? SHOWCASE_IMAGES.filter((_, i) => i % 2 === 1) : SHOWCASE_IMAGES;
+
 // Real reference thumbnails dropped straight into attached_assets/ (not in a
 // subfolder). These become an image-driven "style" pool: pick one and the AI
 // recreates a thumbnail in its exact look — no text style description needed.
@@ -1653,17 +1661,17 @@ const ThumbnailStudio: React.FC<Props> = ({
             <p className="text-center text-[13px] font-bold uppercase tracking-[0.15em] text-thumb-sub mb-6">Thumbnails people actually clicked</p>
             <div className="relative -mx-5 overflow-hidden space-y-4">
               <div className="flex gap-4 w-max thumb-marquee">
-                {[...SHOWCASE_IMAGES, ...SHOWCASE_IMAGES].map((src, i) => (
+                {[...SHOWCASE_ROW_1, ...SHOWCASE_ROW_1].map((src, i) => (
                   <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
                     <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
                   </div>
                 ))}
               </div>
-              {/* Second row scrolls the opposite way (reversed order so it doesn't
-                  just mirror row one frame-for-frame) — more thumbnails visible
-                  at once, and the crossing directions read as more dynamic. */}
+              {/* Second row scrolls the opposite way AND draws from the other half
+                  of SHOWCASE_IMAGES (see SHOWCASE_ROW_2 above) — distinct photos,
+                  not just a reordering of row one's, so nothing repeats between rows. */}
               <div className="flex gap-4 w-max thumb-marquee-reverse">
-                {[...SHOWCASE_IMAGES.slice().reverse(), ...SHOWCASE_IMAGES.slice().reverse()].map((src, i) => (
+                {[...SHOWCASE_ROW_2.slice().reverse(), ...SHOWCASE_ROW_2.slice().reverse()].map((src, i) => (
                   <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
                     <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
                   </div>
