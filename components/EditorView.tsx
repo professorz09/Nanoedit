@@ -196,7 +196,9 @@ export default function EditorView(props: EditorViewProps) {
   // null = default docked position; once dragged it holds absolute viewport
   // coords. Reset to docked each time the brush editor (re)opens.
   const [panelPos, setPanelPos] = React.useState<{ x: number; y: number } | null>(null);
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  // Shared between the full panel <div> and the minimized toggle <button> —
+  // only one of the two is ever mounted, so one ref covers both.
+  const panelRef = React.useRef<HTMLDivElement | HTMLButtonElement | null>(null);
   const dragOff = React.useRef<{ dx: number; dy: number } | null>(null);
 
   // Phones don't have room beside a centered, near-full-width image for a
@@ -212,11 +214,36 @@ export default function EditorView(props: EditorViewProps) {
 
   React.useEffect(() => { if (!brushMode) setPanelPos(null); }, [brushMode]);
 
+  // panelRef and panelPos are shared between the full panel AND the minimized
+  // toggle button (only one is ever mounted at a time) — dragging either one
+  // moves both, so a position picked while minimized carries over once you
+  // expand it again, and vice versa. Whenever we switch which one is mounted,
+  // re-clamp against ITS real size: a spot that was fine for the ~48px round
+  // toggle could clip a much wider expanded panel off-screen.
+  React.useEffect(() => {
+    if (!panelPos) return;
+    const el = panelRef.current;
+    if (!el) return;
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+    const nx = clamp(panelPos.x, 4, window.innerWidth - el.offsetWidth - 4);
+    const ny = clamp(panelPos.y, 4, window.innerHeight - el.offsetHeight - 4);
+    if (nx !== panelPos.x || ny !== panelPos.y) setPanelPos({ x: nx, y: ny });
+    // Only re-clamp on the mount switch itself, not on every drag update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brushPanelMin]);
+
   const dragPointFromEvent = (e: any) => {
     // Works for both mouse/pen and touch pointer events — pointer events
     // already report a single clientX/clientY regardless of input type.
     return { x: e.clientX, y: e.clientY };
   };
+
+  // Tracks whether a pointer-down actually turned into a drag (moved past a
+  // small threshold) vs. stayed a tap — the minimized toggle is both
+  // draggable AND tappable-to-expand, so its own end handler needs to tell
+  // those apart instead of always doing one or the other.
+  const dragStartPoint = React.useRef<{ x: number; y: number } | null>(null);
+  const didDragRef = React.useRef(false);
 
   const onPanelDragStart = (e: any) => {
     e.stopPropagation();
@@ -225,22 +252,34 @@ export default function EditorView(props: EditorViewProps) {
     const r = el.getBoundingClientRect();
     const p = dragPointFromEvent(e);
     dragOff.current = { dx: p.x - r.left, dy: p.y - r.top };
+    dragStartPoint.current = p;
+    didDragRef.current = false;
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* no-op */ }
   };
   const onPanelDragMove = (e: any) => {
     if (!dragOff.current) return;
     e.preventDefault?.();
+    const p = dragPointFromEvent(e);
+    if (dragStartPoint.current && Math.hypot(p.x - dragStartPoint.current.x, p.y - dragStartPoint.current.y) > 6) {
+      didDragRef.current = true;
+    }
     const el = panelRef.current;
     const w = el?.offsetWidth ?? 248;
     const h = el?.offsetHeight ?? 200;
     const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-    const p = dragPointFromEvent(e);
     setPanelPos({
       x: clamp(p.x - dragOff.current.dx, 4, window.innerWidth - w - 4),
       y: clamp(p.y - dragOff.current.dy, 4, window.innerHeight - h - 4),
     });
   };
   const onPanelDragEnd = () => { dragOff.current = null; };
+  // Used by the minimized toggle: a plain tap (no real drag) expands the
+  // panel instead of just repositioning it in place.
+  const onToggleDragEnd = () => {
+    const dragged = didDragRef.current;
+    onPanelDragEnd();
+    if (!dragged) setBrushPanelMin(false);
+  };
 
   // Default (undragged) panel placement + size — bottom sheet on phones,
   // right-docked floating panel on larger screens. Once the user drags it
@@ -251,6 +290,11 @@ export default function EditorView(props: EditorViewProps) {
       ? { left: 8, right: 8, bottom: 8, top: 'auto' }
       : { right: 12, top: '50%', transform: 'translateY(-50%)' };
   const panelWidthClass = panelPos || !isNarrow ? 'w-[min(80vw,248px)]' : 'w-auto';
+  // Minimized toggle: same shared panelPos when dragged, otherwise its own
+  // small default (right-middle) rather than the full panel's docked spot.
+  const togglePositionStyle: React.CSSProperties = panelPos
+    ? { left: panelPos.x, top: panelPos.y, right: 'auto', bottom: 'auto' }
+    : { right: 12, top: '50%', transform: 'translateY(-50%)' };
 
   // ── Canvas-style brush cursor ───────────────────────────────────────────────
   // A ring that follows the pointer and matches the real brush footprint, so you
@@ -840,9 +884,15 @@ export default function EditorView(props: EditorViewProps) {
                   minimizable so you can see the full frame while working. */}
               {brushMode && brushPanelMin && (
                   <button
-                      onClick={(e) => { e.stopPropagation(); setBrushPanelMin(false); }}
-                      title="Show edit tools"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 z-[120] w-12 h-12 rounded-full bg-black/85 backdrop-blur-xl border border-white/15 text-white text-lg shadow-2xl flex items-center justify-center hover:bg-black/95 transition-colors"
+                      ref={panelRef as React.RefObject<HTMLButtonElement>}
+                      onClick={e => e.stopPropagation()}
+                      onPointerDown={onPanelDragStart}
+                      onPointerMove={onPanelDragMove}
+                      onPointerUp={onToggleDragEnd}
+                      onPointerCancel={onPanelDragEnd}
+                      title="Show edit tools — drag to move, tap to open"
+                      className="fixed z-[120] w-12 h-12 rounded-full bg-black/85 backdrop-blur-xl border border-white/15 text-white text-lg shadow-2xl flex items-center justify-center hover:bg-black/95 transition-colors cursor-move touch-none select-none"
+                      style={togglePositionStyle}
                   >🖌️</button>
               )}
               {brushMode && !brushPanelMin && (
@@ -929,8 +979,11 @@ export default function EditorView(props: EditorViewProps) {
                   </div>
               )}
 
-              {/* Enhanced Zoom & Pan Controls Overlay */}
-              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-3 p-2 pl-4 pr-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-full shadow-2xl transition-all hover:bg-zinc-900" onClick={e => e.stopPropagation()}>
+              {/* Enhanced Zoom & Pan Controls Overlay — a plain centered top-6 collides
+                  with the wider "Cancel" pill (brush mode) on narrow screens, since
+                  centering ignores what's fixed in the top-right corner. Dropping it
+                  to its own row below in brush mode keeps them from overlapping. */}
+              <div className={`absolute ${brushMode ? 'top-16' : 'top-6'} left-1/2 -translate-x-1/2 z-[120] flex items-center gap-3 p-2 pl-4 pr-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-full shadow-2xl transition-all hover:bg-zinc-900`} onClick={e => e.stopPropagation()}>
                    <button onClick={handleZoomOut} className="text-zinc-400 hover:text-white transition-colors disabled:opacity-50" disabled={zoom <= 0.5} title="Zoom Out"><IconZoomOut /></button>
                    
                    <input 

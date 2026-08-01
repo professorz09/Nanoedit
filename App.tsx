@@ -569,35 +569,49 @@ function App() {
     const merge = () => {
       if (!selectedArea) { setBrushMode(false); setViewedImage(null); return; }
       const img = new Image();
+      // selectedArea is almost always a remote (Supabase Storage) URL. Without
+      // this, the browser treats the pixels it paints as "tainted" for canvas
+      // use even though the <img> displays fine — tempCanvas.toDataURL() below
+      // then throws a SecurityError inside this onload handler, which silently
+      // aborts before the setQueue/setBrushMode/setViewedImage calls ever run.
+      // That's exactly what "Apply does nothing" looked like: no error shown,
+      // nothing queued, editor stuck open.
+      img.crossOrigin = 'anonymous';
       img.onload = () => {
         let merged = selectedArea;
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = img.width;
-        tempCanvas.height = img.height;
-        const tctx = tempCanvas.getContext('2d');
-        if (tctx) {
-          tctx.drawImage(img, 0, 0);
-          if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
-          // Burn numbered markers so the model can see WHERE each note applies.
-          notes.forEach((a, i) => {
-            const x = a.nx * img.width;
-            const y = a.ny * img.height;
-            const r = Math.max(14, img.width * 0.02);
-            tctx.beginPath();
-            tctx.arc(x, y, r, 0, Math.PI * 2);
-            tctx.fillStyle = 'rgba(255,0,60,0.92)';
-            tctx.fill();
-            tctx.lineWidth = Math.max(2, r * 0.18);
-            tctx.strokeStyle = '#ffffff';
-            tctx.stroke();
-            tctx.fillStyle = '#ffffff';
-            tctx.font = `bold ${Math.round(r * 1.15)}px sans-serif`;
-            tctx.textAlign = 'center';
-            tctx.textBaseline = 'middle';
-            tctx.fillText(String(i + 1), x, y);
-          });
-          merged = tempCanvas.toDataURL('image/png');
-          setSourceImages([merged]);
+        try {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tctx = tempCanvas.getContext('2d');
+          if (tctx) {
+            tctx.drawImage(img, 0, 0);
+            if (canvasRef.current) tctx.drawImage(canvasRef.current, 0, 0);
+            // Burn numbered markers so the model can see WHERE each note applies.
+            notes.forEach((a, i) => {
+              const x = a.nx * img.width;
+              const y = a.ny * img.height;
+              const r = Math.max(14, img.width * 0.02);
+              tctx.beginPath();
+              tctx.arc(x, y, r, 0, Math.PI * 2);
+              tctx.fillStyle = 'rgba(255,0,60,0.92)';
+              tctx.fill();
+              tctx.lineWidth = Math.max(2, r * 0.18);
+              tctx.strokeStyle = '#ffffff';
+              tctx.stroke();
+              tctx.fillStyle = '#ffffff';
+              tctx.font = `bold ${Math.round(r * 1.15)}px sans-serif`;
+              tctx.textAlign = 'center';
+              tctx.textBaseline = 'middle';
+              tctx.fillText(String(i + 1), x, y);
+            });
+            merged = tempCanvas.toDataURL('image/png');
+            setSourceImages([merged]);
+          }
+        } catch (err) {
+          console.error('applyEditorSelection merge failed', err);
+          setGlobalError('Could not apply your edit. Please try again.');
+          return;
         }
         // Apply == generate: enqueue right away using LOCAL values (state updates
         // above won't have flushed yet, so we don't rely on them here).
@@ -611,6 +625,9 @@ function App() {
         }]);
         setBrushMode(false);
         setViewedImage(null);
+      };
+      img.onerror = () => {
+        setGlobalError('Could not load the image to apply your edit. Please try again.');
       };
       img.src = selectedArea;
     };
