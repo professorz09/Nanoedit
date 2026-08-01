@@ -556,7 +556,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           try {
             concept = (await generateText(
               `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
-              YOUTUBE_ANALYSIS_COST
+              'concept'
             )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
             await refreshProfile(); // credits were charged server-side — sync the header count
           } catch (e: any) {

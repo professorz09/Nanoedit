@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isKnownLoaded, markKnownLoaded } from '../services/imageLoadCache';
 
 const MAX_RETRIES = 4;
@@ -12,6 +12,17 @@ export function useImageLoad(url: string) {
   const [loaded, setLoaded] = useState(() => isKnownLoaded(url));
   const [errored, setErrored] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A component instance can be reused for a different url without
+  // remounting (e.g. no `key` on the caller) — reset retry state so a
+  // previous image's error/attempt count doesn't leak onto the new one.
+  useEffect(() => {
+    setLoaded(isKnownLoaded(url));
+    setErrored(false);
+    setAttempt(0);
+    return () => { if (retryTimer.current) clearTimeout(retryTimer.current); };
+  }, [url]);
 
   // data: URLs fail deterministically — retrying the identical string can't
   // help, so only retry real (Storage/CDN) URLs.
@@ -21,7 +32,7 @@ export function useImageLoad(url: string) {
   const onError = () => {
     if (isRemote && attempt < MAX_RETRIES) {
       const delay = 500 * (attempt + 1);
-      setTimeout(() => setAttempt(a => a + 1), delay);
+      retryTimer.current = setTimeout(() => setAttempt(a => a + 1), delay);
     } else {
       setErrored(true);
     }

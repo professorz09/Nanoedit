@@ -100,7 +100,7 @@ VIDEO CONTENT:
 ${context}`;
 
     try {
-      const out = await generateText(prompt, TITLE_COST);
+      const out = await generateText(prompt, 'title');
       const list = out.split('\n').map(cleanTitle).filter(Boolean).slice(0, count);
       if (!list.length) {
         setNote('Could not generate titles. Try again.');

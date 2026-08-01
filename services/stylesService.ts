@@ -14,6 +14,7 @@ import { supabase, isSupabaseConfigured } from './supabase';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BUCKET = 'styles';
+const SIGNED_URL_TTL = 60 * 60 * 24; // 1 day, matches personasService
 let cache: string[] | null = null;
 // Both the studio and the editor mount a useStyleImages() consumer, and either
 // can be the first to ask — without this, both would fire their own query the
@@ -35,12 +36,21 @@ export const fetchStyleImages = async (): Promise<string[]> => {
         .order('sort', { ascending: true })
         .order('created_at', { ascending: true });
       if (error || !data) return [];
-      const urls = data
-        .map((r: { path?: string }) => r.path)
-        .filter((p): p is string => !!p)
-        .map((p) => (/^https?:\/\//.test(p) ? p : supabase!.storage.from(BUCKET).getPublicUrl(p).data.publicUrl));
-      cache = urls;
-      return urls;
+      const paths = data.map((r: { path?: string }) => r.path).filter((p): p is string => !!p);
+      // Per-user custom styles (styles/user/<uid>/...) are RLS-scoped to their
+      // owner at the Storage level, so a plain public URL 403s even for the
+      // owner — sign those specifically. Global styles (admin/, seed/) stay
+      // public URLs: no round trip, and there's nothing owner-scoped to leak.
+      const urls = await Promise.all(paths.map(async (p) => {
+        if (/^https?:\/\//.test(p)) return p;
+        if (p.startsWith('user/')) {
+          const { data: signed } = await supabase!.storage.from(BUCKET).createSignedUrl(p, SIGNED_URL_TTL);
+          return signed?.signedUrl || '';
+        }
+        return supabase!.storage.from(BUCKET).getPublicUrl(p).data.publicUrl;
+      }));
+      cache = urls.filter(Boolean);
+      return cache;
     } catch {
       return [];
     } finally {

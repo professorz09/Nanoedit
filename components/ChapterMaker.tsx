@@ -84,7 +84,7 @@ TRANSCRIPT:
 ${context}`;
 
     try {
-      const out = await generateText(prompt, CHAPTERS_COST);
+      const out = await generateText(prompt, 'chapters');
       const cleaned = cleanChapters(out);
       if (!cleaned) {
         setNote('Could not build chapters. Try again or paste a fuller transcript.');

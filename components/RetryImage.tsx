@@ -8,14 +8,14 @@ import { useImageLoad } from '../hooks/useImageLoad';
 // sequence cleanly instead of carrying over stale attempt/error state.
 const RetryImage: React.FC<
   Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> & { url: string; onFail?: () => void }
-> = ({ url, onFail, onLoad, ...rest }) => {
-  const { errored, src, onLoad: markLoaded, onError } = useImageLoad(url);
+> = ({ url, onFail, onLoad, onError, ...rest }) => {
+  const { errored, src, onLoad: markLoaded, onError: retryOnError } = useImageLoad(url);
   useEffect(() => { if (errored) onFail?.(); }, [errored]);
   return (
     <img
       src={src}
       onLoad={(e) => { markLoaded(); onLoad?.(e); }}
-      onError={onError}
+      onError={(e) => { retryOnError(); onError?.(e); }}
       {...rest}
     />
   );

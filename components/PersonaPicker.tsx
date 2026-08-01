@@ -26,9 +26,14 @@ const PersonaPicker: React.FC<{
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!enabled) return;
-    fetchPersonas().then(setPersonas);
-  }, [enabled, refreshKey]);
+    if (!enabled || !loggedIn) { setPersonas(null); return; }
+    let cancelled = false;
+    // Ignore a response that lands after logout (or another logout/login
+    // cycle) — otherwise a slow request from a previous session can repaint
+    // someone else's saved faces on a shared device.
+    fetchPersonas().then(items => { if (!cancelled) setPersonas(items); });
+    return () => { cancelled = true; };
+  }, [enabled, loggedIn, refreshKey]);
 
   const readFile = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -47,7 +52,14 @@ const PersonaPicker: React.FC<{
     try {
       const dataUrl = await readFile(file);
       const saved = await savePersona(dataUrl);
-      setPersonas(prev => [saved, ...(prev ?? [])]);
+      if (saved.url) {
+        setPersonas(prev => [saved, ...(prev ?? [])]);
+      } else {
+        // Signed-URL creation failed — the row exists but isn't usable yet.
+        // Re-fetch instead of showing a broken tile; fetchPersonas already
+        // filters out any row it can't sign a URL for.
+        fetchPersonas().then(setPersonas);
+      }
       onPick(dataUrl);
     } catch (err: any) {
       setError(err?.message || 'Could not save that face.');
@@ -85,7 +97,7 @@ const PersonaPicker: React.FC<{
     else setError('Could not remove that face. Try again.');
   };
 
-  if (!enabled) return null;
+  if (!enabled || !loggedIn) return null;
   if (!showAddTile && !personas?.length) return null;
 
   return (

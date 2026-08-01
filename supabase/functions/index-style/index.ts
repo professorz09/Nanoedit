@@ -111,6 +111,15 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  // Every path this function ever returns a URL for is under user/<uid>/ —
+  // Storage RLS scopes those reads to their owner, so a plain public URL
+  // would 403 even for the owner. Sign it (service role bypasses RLS to
+  // create the signature; the signature itself is what grants the read).
+  const signedUrl = async (path: string): Promise<string> => {
+    const { data } = await admin.storage.from(BUCKET).createSignedUrl(path, 60 * 60 * 24);
+    return data?.signedUrl || '';
+  };
+
   // Must be signed in.
   const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').trim();
   if (!jwt) return json(401, { error: 'Please sign in.' });
@@ -136,7 +145,7 @@ Deno.serve(async (req) => {
   // call on tagging/embedding it all over again.
   const { data: already } = await admin.from('style_images').select('id, path, name, meta').eq('path', path).single();
   if (already) {
-    return json(200, { style: { ...already, url: `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}` } });
+    return json(200, { style: { ...already, url: await signedUrl(path) } });
   }
 
   // Per-user cap.
@@ -223,8 +232,7 @@ Deno.serve(async (req) => {
         .eq('path', path)
         .single();
       if (!fetchErr && existing) {
-        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
-        return json(200, { style: { ...existing, url: publicUrl } });
+        return json(200, { style: { ...existing, url: await signedUrl(path) } });
       }
       return json(409, { error: 'This image is already in your style library.' });
     }
@@ -232,6 +240,5 @@ Deno.serve(async (req) => {
     return json(500, { error: 'Could not save the style.' });
   }
 
-  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
-  return json(200, { style: { ...row, url: publicUrl } });
+  return json(200, { style: { ...row, url: await signedUrl(path) } });
 });

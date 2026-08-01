@@ -1,11 +1,17 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Supabase Edge Function: "text"
-// Secure text generation for the Title Generator & Chapter Maker tools.
+// Secure text generation for the Title Generator, Chapter Maker and the
+// YouTube-link thumbnail concept step.
 //
 // Why an Edge Function: the LLM key must NEVER ship to the browser, and an open
 // text endpoint would be a free proxy to our LLM key. So this requires a valid
-// logged-in user (JWT) and caps the prompt size. It does NOT spend credits —
-// these are free helper tools, just gated behind sign-in to stop abuse.
+// logged-in user (JWT) and caps the prompt size.
+//
+// The client sends WHICH operation it's doing (`op`), never how much it costs —
+// the cost for each op is a fixed, server-side value (COSTS below). A raw
+// client-supplied cost would let anyone call this endpoint directly with
+// cost:0 and get the exact same generations for free, bypassing the credit
+// gate entirely.
 //
 // Providers, in order:  Vertex (Gemini)  →  OpenRouter (fallback)
 //
@@ -25,25 +31,15 @@ const json = (status: number, obj: unknown) =>
 
 const MAX_PROMPT_CHARS = 32000; // chapters can include a long transcript
 
-// Free-tier (cost:0) calls aren't credit-gated, so bound them with a rolling
-// window instead — otherwise a signed-in user can hammer "Generate" and burn
-// an LLM completion (up to a 32k-char prompt) on every click, for free.
-const FREE_LIMIT = 20;
-const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-
-async function checkFreeRateLimit(admin: any, uid: string): Promise<boolean> {
-  const since = new Date(Date.now() - FREE_WINDOW_MS).toISOString();
-  const { count, error } = await admin
-    .from('tool_usage')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', uid)
-    .eq('tool', 'text_free')
-    .gte('created_at', since);
-  if (error) return true; // fail open — don't block the tool over a logging hiccup
-  if ((count ?? 0) >= FREE_LIMIT) return false;
-  await admin.from('tool_usage').insert({ user_id: uid, tool: 'text_free' }).catch(() => {});
-  return true;
-}
+// The ONLY source of truth for what each operation costs — matches
+// TITLE_COST (TitleGenerator.tsx), CHAPTERS_COST (ChapterMaker.tsx) and
+// YOUTUBE_ANALYSIS_COST (ThumbnailStudio.tsx). The client picks the op;
+// the server picks the price.
+const COSTS: Record<string, number> = {
+  title: 1,
+  chapters: 1,
+  concept: 3,
+};
 
 // Vertex client from EITHER a service-account JSON or a Vertex Express key.
 function makeVertex(): any {
@@ -82,28 +78,21 @@ Deno.serve(async (req) => {
   if (!prompt.trim()) return json(400, { error: 'Missing prompt' });
   if (prompt.length > MAX_PROMPT_CHARS) return json(400, { error: 'Input is too long.' });
 
-  // Optional metered cost. Paid tools (e.g. the Title Generator) send `cost`;
-  // free helpers (Chapter Maker, thumbnail concept) omit it. Spend up-front and
-  // refund if generation ultimately fails, so a failed run is never charged.
-  const cost = Number.isFinite(body?.cost) ? Math.max(0, Math.min(10, Math.floor(body.cost))) : 0;
+  const op = typeof body?.op === 'string' ? body.op : '';
+  const cost = COSTS[op];
+  if (cost === undefined) return json(400, { error: 'Unknown operation.' });
+
   const uid = userData.user.id;
   const refundAll = async () => { for (let i = 0; i < cost; i++) await admin.rpc('refund_credit', { p_user: uid }).catch(() => {}); };
 
-  if (cost === 0) {
-    const ok = await checkFreeRateLimit(admin, uid);
-    if (!ok) return json(429, { error: 'You’ve hit the free-tool limit for now — try again in a bit.' });
-  }
-
-  if (cost > 0) {
-    let done = 0;
-    for (let i = 0; i < cost; i++) {
-      const { data, error } = await admin.rpc('spend_credit', { p_user: uid });
-      if (error || !data) {
-        for (let j = 0; j < done; j++) await admin.rpc('refund_credit', { p_user: uid }).catch(() => {});
-        return json(402, { error: `Not enough credits — this tool costs ${cost} credits per run.` });
-      }
-      done++;
+  let done = 0;
+  for (let i = 0; i < cost; i++) {
+    const { data, error } = await admin.rpc('spend_credit', { p_user: uid });
+    if (error || !data) {
+      for (let j = 0; j < done; j++) await admin.rpc('refund_credit', { p_user: uid }).catch(() => {});
+      return json(402, { error: `Not enough credits — this tool costs ${cost} credits per run.` });
     }
+    done++;
   }
 
   const errs: string[] = [];

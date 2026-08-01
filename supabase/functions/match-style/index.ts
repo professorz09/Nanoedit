@@ -82,14 +82,19 @@ Deno.serve(async (req) => {
   if (!spent) return json(402, { error: 'No credits left. Please upgrade your plan to use style matching.' });
 
   // 1) Embed the query topic (same model + dims as the offline index).
+  // Bounded with a timeout — a credit is already reserved, so a hung upstream
+  // call shouldn't be able to hold it indefinitely before the refund below.
   let embedding: number[] | null = null;
   try {
-    const r: any = await ai.models.embedContent({
-      model: EMBED_MODEL,
-      contents: text,
-      // Styles were indexed as RETRIEVAL_DOCUMENT; the query is RETRIEVAL_QUERY.
-      config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_QUERY' },
-    });
+    const r: any = await Promise.race([
+      ai.models.embedContent({
+        model: EMBED_MODEL,
+        contents: text,
+        // Styles were indexed as RETRIEVAL_DOCUMENT; the query is RETRIEVAL_QUERY.
+        config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_QUERY' },
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('embed_timeout')), 15000)),
+    ]);
     embedding = r?.embeddings?.[0]?.values ?? null;
   } catch (e: any) {
     console.error('embed_failed', e?.message || String(e));
@@ -112,13 +117,26 @@ Deno.serve(async (req) => {
     return json(502, { error: 'Style search failed.' });
   }
 
+  // Per-user custom styles (path starts with "user/<uid>/") are RLS-scoped
+  // to their owner at the Storage level — a plain public URL 403s even for
+  // the owner, so sign those specifically. match_styles already filtered to
+  // only global rows or this caller's own, so every "user/" row here is
+  // guaranteed to belong to uid. Global styles (admin/, seed/) keep plain
+  // public URLs — no round trip, nothing owner-scoped to leak.
   const publicPrefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
-  const styles = (data || []).map((row: any) => ({
-    url: /^https?:\/\//.test(row.path) ? row.path : `${publicPrefix}${row.path}`,
-    name: row.name ?? null,
-    meta: row.meta ?? {},
-    similarity: row.similarity ?? null,
+  const SIGNED_URL_TTL = 60 * 60 * 24; // 1 day
+  const styles = await Promise.all((data || []).map(async (row: any) => {
+    let url: string;
+    if (/^https?:\/\//.test(row.path)) {
+      url = row.path;
+    } else if (row.path.startsWith('user/')) {
+      const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(row.path, SIGNED_URL_TTL);
+      url = signed?.signedUrl || '';
+    } else {
+      url = `${publicPrefix}${row.path}`;
+    }
+    return { url, name: row.name ?? null, meta: row.meta ?? {}, similarity: row.similarity ?? null };
   }));
 
-  return json(200, { styles });
+  return json(200, { styles: styles.filter(s => s.url) });
 });
