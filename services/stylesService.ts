@@ -129,3 +129,91 @@ export const useStyleImages = (bundled: string[], enabled: boolean = true): stri
   }, [enabled, remote]);
   return remote != null ? remote : bundled;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A user's own custom styles — uploaded from the Profile page (see Account.tsx),
+// backed by the SAME `style_images` table + `styles` bucket as the global pool
+// (migration 0006), just owned (`user_id`) instead of global. RLS on both the
+// table ("read styles") and the bucket ("read styles bucket", migration 0017)
+// already scope `user/<uid>/...` rows/objects to their owner, so once uploaded
+// a style is private to its owner AND automatically appears in that owner's
+// "Styles" picker via fetchStyleImages() above — no separate wiring needed
+// there. The "index-style" Edge Function does the actual insert (it vision-tags
+// + embeds the image so it also joins the owner's YouTube auto-match pool).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UserStyle {
+  id: string;
+  name: string | null;
+  path: string;
+  url: string;
+}
+
+const dataUrlToBlob = (dataUrl: string): { blob: Blob; mime: string } => {
+  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+  const mime = m?.[1] || 'image/jpeg';
+  const bin = atob(m?.[2] || '');
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { blob: new Blob([bytes], { type: mime }), mime };
+};
+
+export const fetchMyStyles = async (): Promise<UserStyle[]> => {
+  if (!supabase) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) return [];
+  const { data, error } = await supabase
+    .from('style_images')
+    .select('id, path, name')
+    .eq('user_id', uid)
+    .order('created_at', { ascending: false });
+  if (error || !data) return [];
+  const withUrls = await Promise.all(data.map(async (row: any) => {
+    const { data: signed } = await supabase!.storage.from(BUCKET).createSignedUrl(row.path, SIGNED_URL_TTL);
+    return { id: row.id, name: row.name, path: row.path, url: signed?.signedUrl || '' };
+  }));
+  return withUrls.filter(s => s.url);
+};
+
+export const uploadMyStyle = async (dataUrl: string, name?: string): Promise<UserStyle> => {
+  if (!supabase) throw new Error('Not configured.');
+  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (!supaUrl) throw new Error('Not configured.');
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) throw new Error('Please sign in to save a style.');
+
+  const { blob, mime } = dataUrlToBlob(dataUrl);
+  const ext = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+  const path = `user/${uid}/${crypto.randomUUID()}.${ext}`;
+  const up = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: mime, upsert: false });
+  if (up.error) throw new Error('Could not upload that image.');
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) { await supabase.storage.from(BUCKET).remove([path]).catch(() => {}); throw new Error('Please sign in.'); }
+
+  const resp = await fetch(`${supaUrl}/functions/v1/index-style`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
+    body: JSON.stringify({ path, name }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data?.style) {
+    await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+    throw new Error(data?.error || 'Could not save that style.');
+  }
+  cache = null; // so this new style shows up next time the Styles picker fetches
+  return { id: data.style.id, name: data.style.name, path: data.style.path, url: data.style.url };
+};
+
+export const deleteMyStyle = async (style: UserStyle): Promise<boolean> => {
+  if (!supabase) return false;
+  const { error } = await supabase.from('style_images').delete().eq('id', style.id);
+  if (error) return false;
+  await supabase.storage.from(BUCKET).remove([style.path]).catch(() => {});
+  cache = null;
+  return true;
+};

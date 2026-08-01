@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { getPlan } from '../services/plans';
+import { fetchPersonas, savePersona, deletePersona, Persona } from '../services/personasService';
+import { fetchMyStyles, uploadMyStyle, deleteMyStyle, UserStyle } from '../services/stylesService';
 
 interface LedgerRow {
   id: string;
@@ -9,6 +11,78 @@ interface LedgerRow {
   reason: string;
   created_at: string;
 }
+
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+
+// Shared "upload tile + thumbnail grid" for the Personas/Styles library
+// sections below — the only place in the app a user can add a saved face or a
+// custom style; every picker elsewhere (ThumbnailStudio, EditorView) is
+// select-only and just lists what's saved here.
+const AssetLibrary: React.FC<{
+  title: string;
+  hint: string;
+  items: { id: string; url: string; name: string | null }[] | null;
+  adding: boolean;
+  error: string | null;
+  onAdd: (file: File) => void;
+  onRemove: (id: string) => void;
+}> = ({ title, hint, items, adding, error, onAdd, onRemove }) => {
+  const fileRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="mt-6">
+      <h2 className="text-sm font-black uppercase tracking-wider text-thumb-sub mb-1">{title}</h2>
+      <p className="text-xs text-thumb-sub mb-3">{hint}</p>
+      {error && <p className="text-xs text-thumb-red mb-2">{error}</p>}
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={adding}
+          aria-label={`Upload to ${title}`}
+          className="aspect-square rounded-2xl border-2 border-dashed border-thumb-line hover:border-thumb-red/40 bg-thumb-soft text-thumb-sub hover:text-thumb-red flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
+        >
+          {adding
+            ? <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            : <><span className="text-2xl leading-none">+</span><span className="text-[11px] font-bold">Add</span></>}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f && f.type.startsWith('image/')) onAdd(f);
+          }}
+        />
+        {items === null ? (
+          <p className="col-span-full text-sm text-thumb-sub self-center">Loading…</p>
+        ) : (
+          items.map(it => (
+            <div key={it.id} className="relative aspect-square rounded-2xl overflow-hidden border border-thumb-line group">
+              <img src={it.url} alt={it.name || ''} className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => onRemove(it.id)}
+                aria-label="Remove"
+                className="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              >
+                ✕
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
 
 interface Props {
   onUpgrade: () => void;
@@ -24,10 +98,28 @@ const fmtDate = (iso: string | null) => {
   }
 };
 
+// Ledger rows for purchases are `purchase:<plan|addon>:<paymentId>` (see
+// supabase/functions/verify-payment) — turn that into a readable label
+// instead of showing the raw reason string (which embeds a payment id).
+const describePurchase = (reason: string) => {
+  const kind = reason.split(':')[1];
+  if (kind === 'addon') return 'Credit pack';
+  const plan = getPlan(kind as Parameters<typeof getPlan>[0]);
+  return plan ? `${plan.name} plan` : 'Plan purchase';
+};
+
 const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
   const { user, profile, totalCredits, signOut } = useAuth();
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
+
+  const [personas, setPersonas] = useState<Persona[] | null>(null);
+  const [personaAdding, setPersonaAdding] = useState(false);
+  const [personaError, setPersonaError] = useState<string | null>(null);
+
+  const [myStyles, setMyStyles] = useState<UserStyle[] | null>(null);
+  const [styleAdding, setStyleAdding] = useState(false);
+  const [styleError, setStyleError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -37,6 +129,9 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
       .from('credit_ledger')
       .select('id, delta, reason, created_at')
       .eq('user_id', user.id)
+      // Purchases only (Razorpay plan/add-on buys) — generation spend, refunds
+      // and signup/expiry adjustments are usage/bookkeeping, not a purchase.
+      .like('reason', 'purchase:%')
       .order('created_at', { ascending: false })
       .limit(20)
       .then(({ data }) => {
@@ -45,6 +140,60 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
       .then(() => alive && setLoadingLedger(false));
     return () => { alive = false; };
   }, [user]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!user) return;
+    fetchPersonas().then(items => { if (alive) setPersonas(items); });
+    fetchMyStyles().then(items => { if (alive) setMyStyles(items); });
+    return () => { alive = false; };
+  }, [user]);
+
+  const addPersona = async (file: File) => {
+    setPersonaError(null);
+    setPersonaAdding(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const saved = await savePersona(dataUrl);
+      setPersonas(prev => [saved, ...(prev ?? [])]);
+    } catch (e: any) {
+      setPersonaError(e?.message || 'Could not save that face.');
+    } finally {
+      setPersonaAdding(false);
+    }
+  };
+
+  const removePersona = async (id: string) => {
+    const p = personas?.find(x => x.id === id);
+    if (!p) return;
+    setPersonaError(null);
+    const ok = await deletePersona(p);
+    if (ok) setPersonas(prev => prev?.filter(x => x.id !== id) ?? null);
+    else setPersonaError('Could not remove that face. Try again.');
+  };
+
+  const addStyle = async (file: File) => {
+    setStyleError(null);
+    setStyleAdding(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const saved = await uploadMyStyle(dataUrl);
+      setMyStyles(prev => [saved, ...(prev ?? [])]);
+    } catch (e: any) {
+      setStyleError(e?.message || 'Could not save that style.');
+    } finally {
+      setStyleAdding(false);
+    }
+  };
+
+  const removeStyle = async (id: string) => {
+    const s = myStyles?.find(x => x.id === id);
+    if (!s) return;
+    setStyleError(null);
+    const ok = await deleteMyStyle(s);
+    if (ok) setMyStyles(prev => prev?.filter(x => x.id !== id) ?? null);
+    else setStyleError('Could not remove that style. Try again.');
+  };
 
   if (!user) {
     return (
@@ -114,29 +263,49 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
         </button>
       </div>
 
-      {/* Purchase & usage history */}
+      {/* Purchase history — purchases only, no generation/usage rows */}
       <div className="mt-6">
-        <h2 className="text-sm font-black uppercase tracking-wider text-thumb-sub mb-3">Purchases & usage</h2>
+        <h2 className="text-sm font-black uppercase tracking-wider text-thumb-sub mb-3">Purchases</h2>
         <div className="thumb-glass rounded-2xl divide-y divide-thumb-line overflow-hidden">
           {loadingLedger ? (
             <p className="text-sm text-thumb-sub p-5">Loading…</p>
           ) : ledger.length === 0 ? (
-            <p className="text-sm text-thumb-sub p-5">No activity yet. Purchases and credit usage will appear here.</p>
+            <p className="text-sm text-thumb-sub p-5">No purchases yet. Plan and credit-pack purchases will appear here.</p>
           ) : (
             ledger.map(row => (
               <div key={row.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-thumb-ink capitalize truncate">{row.reason.replace(/_/g, ' ')}</p>
+                  <p className="text-sm font-bold text-thumb-ink truncate">{describePurchase(row.reason)}</p>
                   <p className="text-xs text-thumb-sub">{fmtDate(row.created_at)}</p>
                 </div>
-                <span className={`text-sm font-black shrink-0 ${row.delta >= 0 ? 'text-thumb-green' : 'text-thumb-red'}`}>
-                  {row.delta >= 0 ? `+${row.delta}` : row.delta}
-                </span>
+                <span className="text-sm font-black shrink-0 text-thumb-green">+{row.delta}</span>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* Saved faces + custom styles — the only place either can be uploaded.
+          Every picker elsewhere (ThumbnailStudio, EditorView) is select-only
+          and just lists what's saved here. */}
+      <AssetLibrary
+        title="Saved faces"
+        hint="Upload a face once and reuse it across generations without re-uploading."
+        items={personas}
+        adding={personaAdding}
+        error={personaError}
+        onAdd={addPersona}
+        onRemove={removePersona}
+      />
+      <AssetLibrary
+        title="Your styles"
+        hint="Upload your own reference thumbnails to reuse as a style, or to auto-match against for YouTube-link generations."
+        items={myStyles}
+        adding={styleAdding}
+        error={styleError}
+        onAdd={addStyle}
+        onRemove={removeStyle}
+      />
     </section>
   );
 };

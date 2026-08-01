@@ -1164,11 +1164,10 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Saved faces (shared for templates + reference + prompt + sketch). In
-                  reference mode the dropzone above is already the upload entry point,
-                  so this only shows previously-saved faces, not another "Add" tile. */}
+              {/* Saved faces (shared for templates + reference + prompt + sketch) —
+                  select-only here; faces are uploaded from the Profile page. */}
               {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && (
-                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={mode !== 'reference'} />
+                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={false} />
               )}
 
               {/* Uploaded thumbnails preview (shared for templates + reference + prompt + sketch) */}
