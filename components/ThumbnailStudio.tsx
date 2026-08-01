@@ -1253,9 +1253,11 @@ const ThumbnailStudio: React.FC<Props> = ({
             {(generatedImages.length > 0 || queue.length > 0) ? (
               <>
                 <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-2xl font-black flex items-center gap-2">
-                    {isProcessing ? <><span className="w-4 h-4 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" /> Generating…</> : 'Your thumbnails'}
-                  </h2>
+                  {/* Each queue card already shows its own progress (spinner,
+                      elapsed time, step list) — a separate "Generating…"
+                      heading up here was redundant, floating text disconnected
+                      from any card. Keep this a plain, constant section title. */}
+                  <h2 className="text-2xl font-black">Your thumbnails</h2>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
