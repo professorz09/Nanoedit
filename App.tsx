@@ -9,6 +9,7 @@ import { useImageQueue } from './hooks/useImageQueue';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
+import RetryImage from './components/RetryImage';
 // jszip (~95 KB) is loaded on demand in handleDownloadAll — kept out of the initial bundle.
 
 // The full-screen editor (~760 lines of markup) is split into its own chunk and
@@ -51,7 +52,11 @@ function App() {
 
   // Generation queue — parallel processing, per-item timers, cancel/retry.
   const { queue, setQueue, isProcessing, itemTimers, cancelQueueItem, retryQueueItem } = useImageQueue({
-    onGenerated: (newImages) => setGeneratedImages(prev => [...newImages, ...prev]),
+    // Capped to match the server's own rolling cleanup (MAX_THUMBNAILS_PER_USER
+    // in the "generate" Edge Function, default 50) — without this, the local
+    // IndexedDB history grows forever (never pruned client-side), well past
+    // what the server actually still has in Storage.
+    onGenerated: (newImages) => setGeneratedImages(prev => [...newImages, ...prev].slice(0, 50)),
     onText: (text) => setTextResponse(text),
     onError: (message) => setGlobalError(message),
   });
@@ -78,14 +83,10 @@ function App() {
   // describing the change you want there. Positions are normalized (0..1) to the image.
   const [annotations, setAnnotations] = useState<{ id: string; nx: number; ny: number; note: string }[]>([]);
 
-  // Tracks which image srcs have finished loading, so the shimmer skeleton is
-  // removed once the real image paints (otherwise it keeps animating behind
-  // transparent PNGs like remove-bg cut-outs).
-  const [loadedSrcs, setLoadedSrcs] = useState<Record<string, boolean>>({});
-  const markLoaded = (src: string) => setLoadedSrcs(prev => (prev[src] ? prev : { ...prev, [src]: true }));
-
   // Style pool for the "From styles" picker — DB-backed, bundled fallback.
-  const styleImages = useStyleImages(REFERENCE_IMAGES);
+  // Only hits Supabase once the picker is actually opened (showStylePicker),
+  // not on every editor load — most sessions never open it.
+  const styleImages = useStyleImages(REFERENCE_IMAGES, showStylePicker);
 
   // Fullscreen-viewer zoom & pan (wheel/drag/pinch). Resets when the viewed image changes.
   const {
@@ -768,7 +769,7 @@ function App() {
               {viewedImage && (
                   <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setViewedImage(null)}>
                       <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setViewedImage(null)}><IconX /></button>
-                      <img src={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+                      <RetryImage key={viewedImage} url={viewedImage} alt="Thumbnail" className="max-w-[92vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
                       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
                           <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
                           <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-full hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
@@ -811,8 +812,6 @@ function App() {
         isProcessing={isProcessing}
         retryQueueItem={retryQueueItem}
         cancelQueueItem={cancelQueueItem}
-        loadedSrcs={loadedSrcs}
-        markLoaded={markLoaded}
         copyPromptFromImage={copyPromptFromImage}
         copiedPromptId={copiedPromptId}
         handleBrushSelect={handleBrushSelect}

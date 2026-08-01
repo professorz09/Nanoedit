@@ -15,18 +15,22 @@ export const formatTime = (sec: number): string => {
   return `${pad(h)}:${pad(m)}:${pad(ss)}`;
 };
 
+/** Which operation this prompt is for — the server (not the client) decides
+ *  what each one costs, so this can't be used to spoof a lower/zero cost. */
+export type TextOp = 'title' | 'chapters' | 'concept';
+
 /**
  * Generate plain text with a Gemini text model.
  * DEV  → local proxy (/api/text); the key stays in the Vite/Node server.
  * PROD → secure Supabase Edge Function (/functions/v1/text); requires sign-in,
  *        and the LLM key never ships to the browser.
  */
-export const generateText = async (prompt: string, cost = 0): Promise<string> => {
+export const generateText = async (prompt: string, op: TextOp): Promise<string> => {
   if (import.meta.env?.DEV) {
     const resp = await fetch('/api/text', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, cost }),
+      body: JSON.stringify({ prompt, op }),
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data?.error || `Text service error ${resp.status}`);
@@ -49,7 +53,7 @@ export const generateText = async (prompt: string, cost = 0): Promise<string> =>
       Authorization: `Bearer ${token}`,
       apikey: supaAnon ?? '',
     },
-    body: JSON.stringify({ prompt, cost }),
+    body: JSON.stringify({ prompt, op }),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(data?.error || `Text service error ${resp.status}`);

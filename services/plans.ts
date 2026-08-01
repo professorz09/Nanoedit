@@ -1,11 +1,14 @@
-// ── Pricing config (single source of truth) ──────────────────────────
-// Edit prices/credits here; UI + Stripe checkout both read from this.
+// ── Pricing config (DISPLAY only) ──────────────────────────
+// Edit prices/credits here for the UI. The amount actually charged is
+// computed server-side by the matching catalog entry in
+// supabase/functions/_shared/pricing.ts (Razorpay order-creation +
+// verification) — keep the two in sync when changing a price or credit
+// amount, since the client here is never trusted for the charged amount.
 export type PlanId = 'free' | 'pro' | 'studio';
 export type BillingCycle = 'monthly' | 'yearly';
 
 export interface PriceOption {
   priceUsd: number;  // monthly cycle: per month.  yearly cycle: total per YEAR.
-  priceEnv: string;  // .env key holding the matching Stripe Price ID (server-side)
 }
 
 export interface Plan {
@@ -28,8 +31,8 @@ export const PLANS: Plan[] = [
     id: 'pro',
     name: 'Pro',
     credits: 200,
-    monthly: { priceUsd: 39, priceEnv: 'STRIPE_PRICE_PRO_MONTHLY' },
-    yearly:  { priceUsd: 390, priceEnv: 'STRIPE_PRICE_PRO_YEARLY' },
+    monthly: { priceUsd: 39 },
+    yearly:  { priceUsd: 390 },
     highlight: true,
     features: ['200 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
   },
@@ -37,8 +40,8 @@ export const PLANS: Plan[] = [
     id: 'studio',
     name: 'Studio',
     credits: 750,
-    monthly: { priceUsd: 79, priceEnv: 'STRIPE_PRICE_STUDIO_MONTHLY' },
-    yearly:  { priceUsd: 790, priceEnv: 'STRIPE_PRICE_STUDIO_YEARLY' },
+    monthly: { priceUsd: 79 },
+    yearly:  { priceUsd: 790 },
     features: ['750 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
   },
 ];
@@ -48,12 +51,11 @@ export interface AddonPack {
   id: string;
   credits: number;
   priceUsd: number;
-  priceEnv: string;
 }
 
 export const ADDONS: AddonPack[] = [
-  { id: 'addon_small', credits: 100, priceUsd: 8,  priceEnv: 'STRIPE_PRICE_ADDON_SMALL' },
-  { id: 'addon_large', credits: 500, priceUsd: 30, priceEnv: 'STRIPE_PRICE_ADDON_LARGE' },
+  { id: 'addon_small', credits: 100, priceUsd: 8 },
+  { id: 'addon_large', credits: 500, priceUsd: 30 },
 ];
 
 export const getPlan = (id: PlanId): Plan | undefined => PLANS.find(p => p.id === id);

@@ -38,3 +38,4 @@ secrets/
 
 # Claude Code local settings may contain tokens — keep local only
 .claude/settings.local.json
+zipFile.zip

@@ -10,6 +10,7 @@ export interface Profile {
   credits: number;
   addon_credits: number;
   renews_at: string | null;
+  is_admin: boolean;
 }
 
 interface AuthValue {
@@ -38,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, email, plan, credits, addon_credits, renews_at')
+        .select('id, email, plan, credits, addon_credits, renews_at, is_admin')
         .eq('id', u.id)
         .single();
       if (data) setProfile(data as Profile);

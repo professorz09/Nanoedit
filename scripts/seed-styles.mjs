@@ -1,6 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed the "styles" pool into Supabase (one-time / repeatable).
 //
+// NOTE: this only uploads the file + inserts a bare row (path/name/sort) — it
+// does NOT vision-tag or embed anything, so rows it creates will show up in
+// the manual "Styles" picker but NEVER in the YouTube auto-match flow
+// (match_styles() only searches rows that have an embedding). For NEW styles,
+// use scripts/tag-styles.mjs instead — it does the same upload but also tags
+// + embeds, so the style works in both places. This script is kept for the
+// original bundled attached_assets/ seed only.
+//
 // Uploads every top-level image in attached_assets/ to the public "styles"
 // Storage bucket and inserts a matching row into public.style_images. Idempotent:
 // re-running upserts files and skips rows whose path already exists.

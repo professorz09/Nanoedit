@@ -1,6 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { generateText, fetchTranscript, segmentsToText, formatTime } from '../services/textService';
-import { extractYouTubeId } from './ThumbnailStudio';
+import { extractYouTubeId } from '../services/youtubeService';
+import { useAuth } from '../contexts/AuthContext';
+import { getFromLocalStorage, saveToLocalStorage, STORAGE_KEYS } from '../services/storageService';
+import { I } from './ThumbIcons';
+
+const CHAPTERS_COST = 1; // credits charged per chapters run
 
 const Ic = {
   List: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>),
@@ -31,13 +36,22 @@ const ChapterMaker: React.FC = () => {
   const [detail, setDetail] = useState('balanced');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [chapters, setChapters] = useState('');
+  // Persisted across reloads/tab switches, same as generated thumbnails.
+  const [chapters, setChaptersState] = useState(() => getFromLocalStorage(STORAGE_KEYS.CHAPTER_RESULTS, ''));
+  const setChapters = (val: string) => { setChaptersState(val); saveToLocalStorage(STORAGE_KEYS.CHAPTER_RESULTS, val); };
+  const removeChapter = (i: number) => setChapters(lines.filter((_, x) => x !== i).join('\n'));
   const [copied, setCopied] = useState(false);
+  const { user, totalCredits, configured, refreshProfile } = useAuth();
 
   const run = useCallback(async () => {
     setNote(null);
     const id = extractYouTubeId(url.trim());
     if (!id) { setNote('Paste a valid YouTube link.'); return; }
+    // Chapter generation reads the full transcript — gate on sign-in + credits before doing any work.
+    if (configured) {
+      if (!user) { setNote('Please sign in to generate chapters.'); return; }
+      if (totalCredits < CHAPTERS_COST) { setNote(`You need ${CHAPTERS_COST} credits to generate chapters. Please top up your plan.`); return; }
+    }
     setBusy(true);
 
     let context = '';
@@ -70,16 +84,20 @@ TRANSCRIPT:
 ${context}`;
 
     try {
-      const out = await generateText(prompt);
+      const out = await generateText(prompt, 'chapters');
       const cleaned = cleanChapters(out);
-      if (!cleaned) { setNote('Could not build chapters. Try again or paste a fuller transcript.'); }
-      setChapters(cleaned || '');
+      if (!cleaned) {
+        setNote('Could not build chapters. Try again or paste a fuller transcript.');
+      } else {
+        setChapters(cleaned);
+      }
     } catch (e: any) {
       setNote(e?.message?.slice(0, 140) || 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
+      refreshProfile(); // credits may have been charged server-side even on a failed request — sync the header count
     }
-  }, [url, transcript, detail]);
+  }, [url, transcript, detail, user, totalCredits, configured, refreshProfile]);
 
   const copyAll = () => {
     navigator.clipboard?.writeText(chapters);
@@ -139,6 +157,7 @@ ${context}`;
         <button onClick={run} disabled={busy} className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70">
           {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analyzing video…</> : <><Ic.Wand className="w-5 h-5" /> Generate Chapters</>}
         </button>
+        <p className="text-center text-[12px] text-thumb-sub -mt-1">Uses {CHAPTERS_COST} credits per generation</p>
       </div>
 
       {/* ── Results ── */}
@@ -157,9 +176,12 @@ ${context}`;
                 const time = m ? m[1] : '';
                 const title = m ? m[2] : l;
                 return (
-                  <div key={i} className="flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-thumb-soft/60 transition-colors">
+                  <div key={i} className="group flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-thumb-soft/60 transition-colors">
                     <span className="shrink-0 font-mono text-[13px] font-bold text-thumb-red tabular-nums pt-0.5 flex items-center gap-1.5"><Ic.Clock className="w-3.5 h-3.5 opacity-70" />{time}</span>
-                    <span className="text-[15px] text-thumb-ink font-medium leading-snug">{title}</span>
+                    <span className="text-[15px] text-thumb-ink font-medium leading-snug flex-1">{title}</span>
+                    <button onClick={() => removeChapter(i)} aria-label={`Remove chapter ${i + 1}`} title="Remove" className="shrink-0 p-1 rounded-lg text-thumb-sub hover:text-thumb-red opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <I.Trash className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 );
               })}

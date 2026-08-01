@@ -1,15 +1,24 @@
-import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, Suspense } from 'react';
 import { GeneratedImage, QueueItem, ThumbInputMode, THUMBNAIL_TEMPLATES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
-import { Plan, BillingCycle, priceFor } from '../services/plans';
+import { Plan, BillingCycle } from '../services/plans';
+import { buyItem } from '../services/paymentsService';
+import { extractYouTubeId, urlToBase64, fetchYouTubeTitle, fetchYouTubeThumb } from '../services/youtubeService';
 import AuthModal from './AuthModal';
+import { I } from './ThumbIcons';
+import ResultThumb from './ResultThumb';
+import SketchCanvas from './SketchCanvas';
+import PersonaPicker from './PersonaPicker';
+import SegmentedControl from './SegmentedControl';
+import { savePersona } from '../services/personasService';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
 // the user opens that tab, so the initial studio view stays lean.
 const Pricing = React.lazy(() => import('./Pricing'));
 const Account = React.lazy(() => import('./Account'));
 const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
 const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
+const AdminStyles = React.lazy(() => import('./AdminStyles'));
 
 // Lightweight loader shown while a lazy tab chunk arrives (usually a few ms).
 const PanelFallback = () => (
@@ -62,37 +71,13 @@ const SHOWCASE_TEMPLATE_PREVIEWS: Record<string, string> = {
   'animated-expose': SHOWCASE_IMAGES[5],
 };
 
-// ── Inline icons (red-theme, self-contained) ──────────────────────
-const I = {
-  Wand: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5" /></svg>),
-  Youtube: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M23 12s0-3.3-.4-4.9a2.5 2.5 0 0 0-1.8-1.8C19.2 5 12 5 12 5s-7.2 0-8.8.4A2.5 2.5 0 0 0 1.4 7.2C1 8.7 1 12 1 12s0 3.3.4 4.9a2.5 2.5 0 0 0 1.8 1.8C4.8 19 12 19 12 19s7.2 0 8.8-.4a2.5 2.5 0 0 0 1.8-1.8C23 15.3 23 12 23 12zM9.8 15.3V8.7l6 3.3-6 3.3z" /></svg>),
-  Grid: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>),
-  Text: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 7V5h16v2M9 19h6M12 5v14" /></svg>),
-  Image: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>),
-  Upload: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>),
-  Download: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>),
-  Edit: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>),
-  Trash: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>),
-  X: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>),
-  Eye: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>),
-  Star: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1L12 2z" /></svg>),
-  Menu: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" {...p}><path d="M3 6h18M3 12h18M3 18h18" /></svg>),
-  Bolt: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>),
-  Moon: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>),
-  Sun: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>),
-  ArrowUp: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 19V5M5 12l7-7 7 7" /></svg>),
-  ArrowDown: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 5v14M19 12l-7 7-7-7" /></svg>),
-  Tv: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="2" y="7" width="20" height="13" rx="2" /><path d="m17 2-5 5-5-5" /></svg>),
-  Check: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z" /></svg>),
-  Play: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M8 5v14l11-7z" /></svg>),
-  Bolt2: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>),
-  List: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>),
-  Brush: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9.06 11.9 3 18v3h3l6.1-6.06M14 6l4 4M20.7 7.3a2.5 2.5 0 0 0-3.5-3.5L8 13l3 3 9.7-8.7z" /></svg>),
-  Eraser: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M7 21h13M15.5 4.5l4 4a2 2 0 0 1 0 2.83l-7.09 7.08a2 2 0 0 1-2.83 0l-4-4a2 2 0 0 1 0-2.82l7.09-7.09a2 2 0 0 1 2.83 0z" /></svg>),
-  Undo: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg>),
-};
-
 // ── Prompt composition ────────────────────────────────────────────
+// Credits charged for the one-time-per-video YouTube analysis (transcript
+// fetch + LLM concept step) in "youtube" mode. Cached per video id (see
+// ytCache below), so re-generating from the SAME link never re-charges this —
+// only the normal per-image credit applies after the first analysis.
+const YOUTUBE_ANALYSIS_COST = 3;
+
 const BASE_THUMB = 'Design a top-tier, agency-grade, scroll-stopping YouTube thumbnail in 16:9 landscape — match the production quality, polish and click-worthiness of the best viral thumbnails from the biggest creators. Unless a specific art style is explicitly requested, lean photorealistic and lifelike — real-camera depth of field, natural skin texture, and a sharp, detailed, expressive face with realistic lighting. Compose it in whatever way best suits the topic — a bold real scene, a dramatic environment, or a clean backdrop — with a strong, clear focal point and real depth; just avoid random, meaningless clutter. Depict the subject and topic accurately. Use dramatic lighting, punchy vibrant colors and strong contrast so it pops even at small sizes. Render at high fidelity — crisp, detailed and clean, with no blur, noise, artifacts, warping or distorted anatomy. Do not add extra text, letters, captions, subtitles, watermarks or gibberish beyond any text that is explicitly requested.';
 
 // Vertical variant for YouTube Shorts / Reels / TikTok covers.
@@ -135,74 +120,6 @@ const textDirective = (t: string) => {
   return `Overlay ONE bold, chunky, EXTRA-LARGE uppercase title text — ${hook}. The text color MUST be pure white with a thick solid black outline and a strong drop shadow for maximum contrast. Place it clear of the subject's face and keep it to at most one third of the frame. Render ONLY this single piece of text — absolutely no other words, duplicate captions, subtitles, stray letters or gibberish anywhere else on the image.`;
 };
 
-// Extract the 11-char YouTube video id from most URL shapes
-export const extractYouTubeId = (url: string): string | null => {
-  const m = url.match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
-  return m ? m[1] : null;
-};
-
-// Convert a bundled asset URL (template preview) into a base64 data-URL so it can
-// be sent to the model as a real style reference.
-const urlToBase64 = async (url: string): Promise<string | null> => {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const r = new FileReader();
-      r.onloadend = () => resolve(r.result as string);
-      r.onerror = () => resolve(null);
-      r.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-};
-
-// Fetch a YouTube video's title (best-effort, CORS-friendly). noembed first, then
-// YouTube's own oembed as a fallback. Returns null when neither is reachable.
-const fetchYouTubeTitle = async (id: string): Promise<string | null> => {
-  const endpoints = [
-    `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`,
-    `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`,
-  ];
-  for (const url of endpoints) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const data = await res.json().catch(() => null);
-      const title = typeof data?.title === 'string' ? data.title.trim() : '';
-      if (title) return title;
-    } catch {
-      /* try next */
-    }
-  }
-  return null;
-};
-
-// Fetch an existing YouTube thumbnail as a base64 reference (best quality available)
-const fetchYouTubeThumb = async (id: string): Promise<string | null> => {
-  const qualities = ['maxresdefault', 'sddefault', 'hqdefault'];
-  for (const q of qualities) {
-    try {
-      const res = await fetch(`https://i.ytimg.com/vi/${id}/${q}.jpg`);
-      if (!res.ok) continue;
-      const blob = await res.blob();
-      // hqdefault always exists (120x90 grey placeholder is ~1KB); skip tiny/empty ones
-      if (blob.size < 3000 && q !== 'hqdefault') continue;
-      return await new Promise((resolve) => {
-        const r = new FileReader();
-        r.onloadend = () => resolve(r.result as string);
-        r.onerror = () => resolve(null);
-        r.readAsDataURL(blob);
-      });
-    } catch {
-      /* try next quality */
-    }
-  }
-  return null;
-};
-
 interface Props {
   onGenerate: (prompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; aspect?: string }) => void;
   generatedImages: GeneratedImage[];
@@ -219,11 +136,11 @@ interface Props {
 }
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
-  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
   { id: 'templates', label: 'Styles', icon: I.Grid },
+  { id: 'sketch', label: 'Sketch', icon: I.Brush },
   { id: 'prompt', label: 'Prompt', icon: I.Text },
   { id: 'reference', label: 'Image', icon: I.Image },
-  { id: 'sketch', label: 'Sketch', icon: I.Brush },
+  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
 ];
 
 const TESTIMONIALS = [
@@ -254,255 +171,56 @@ const FEED_NEIGHBORS = [
   { title: 'World\'s Largest Bowl Of Cereal', channel: 'MrFeast', meta: '9.4M views · 2 days ago', dur: '10:02', hue: 'from-red-400 to-rose-600', av: 'bg-red-500', logo: '🥣' },
 ];
 
-// A single result card with its own skeleton-while-loading state.
-// The image only fetches when near the viewport (loading="lazy"), so a long
-// history stays cheap — the browser (and Supabase Storage/CDN) isn't hit for
-// off-screen thumbnails.
-const ResultThumb: React.FC<{
-  img: GeneratedImage;
-  onView: (url: string) => void;
-  onDownload: (url: string) => void;
-  onOpenEditor: (url: string) => void;
-  onPreview: (url: string) => void;
-  onDelete: (id: string) => void;
-}> = ({ img, onView, onDownload, onOpenEditor, onPreview, onDelete }) => {
-  const [loaded, setLoaded] = useState(false);
-  const [errored, setErrored] = useState(false);
-  const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
-  return (
-    <div className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
-      <div className={`relative overflow-hidden bg-thumb-soft mx-auto w-full ${portrait ? 'aspect-[9/16] max-w-[240px]' : 'aspect-video'}`}>
-        {!loaded && !errored && <div className="absolute inset-0 thumb-skeleton" aria-hidden />}
-        {errored ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-thumb-soft text-thumb-sub text-xs">
-            <I.Image className="w-6 h-6 opacity-50" />
-            <span>Preview unavailable</span>
-          </div>
-        ) : (
-          <img
-            src={img.url}
-            alt={img.prompt}
-            loading="lazy"
-            decoding="async"
-            onLoad={() => setLoaded(true)}
-            onError={() => setErrored(true)}
-            onClick={() => onView(img.url)}
-            className={`w-full h-full object-cover cursor-pointer transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          />
-        )}
-      </div>
-      {/* Clean action bar (always visible, works on touch) — single delete */}
-      <div className="flex gap-1.5 p-2 bg-thumb-card">
-        <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 py-2 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-line/60 transition-colors"><I.Download className="w-4 h-4" /> Save</button>
-        <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas" className="flex-1 py-2 rounded-lg thumb-btn text-white text-xs font-bold flex items-center justify-center gap-1.5"><I.Edit className="w-4 h-4" /> Edit</button>
-        <button onClick={() => onPreview(img.url)} title="YouTube feed preview" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center transition-colors"><I.Tv className="w-4 h-4" /></button>
-        <button onClick={() => onDelete(img.id)} title="Delete" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 flex items-center justify-center transition-colors"><I.Trash className="w-4 h-4" /></button>
-      </div>
-    </div>
-  );
-};
-
-// ── Sketch pad ────────────────────────────────────────────────────
-// Draw a rough layout (mouse, touch or stylus via pointer events) and the AI
-// turns it into a finished thumbnail. A fixed 1280×720 internal buffer keeps the
-// exported sketch crisp and consistent while CSS scales the surface to fit any
-// screen — fully responsive on mobile and desktop.
-const SKETCH_W = 1280;
-const SKETCH_H = 720;
-const SKETCH_COLORS = ['#111827', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'];
-const SKETCH_SIZES = [4, 8, 16];
-
-const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = ({ onChange }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const blankRef = useRef<string>('');
-  const undoStack = useRef<ImageData[]>([]);
-  const drawing = useRef(false);
-  const last = useRef<{ x: number; y: number } | null>(null);
-  const [color, setColor] = useState('#111827');
-  const [size, setSize] = useState(8);
-  const [eraser, setEraser] = useState(false);
-  const [canUndo, setCanUndo] = useState(false);
-
-  const ctxOf = () => canvasRef.current?.getContext('2d') || null;
-  const fillWhite = (ctx: CanvasRenderingContext2D) => { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, SKETCH_W, SKETCH_H); };
-
-  // Start with a clean white page and remember its signature so we can tell
-  // "still blank" from "has a drawing" without heavyweight pixel scanning.
-  useEffect(() => {
-    const c = canvasRef.current; const ctx = c?.getContext('2d');
-    if (!c || !ctx) return;
-    fillWhite(ctx);
-    blankRef.current = c.toDataURL('image/png');
-  }, []);
-
-  // Report the drawing to the parent — null while it's still an empty page.
-  const emit = () => {
-    const c = canvasRef.current;
-    if (!c) return;
-    const data = c.toDataURL('image/png');
-    onChange(data === blankRef.current ? null : data);
-  };
-
-  // Map a pointer position to internal canvas coordinates (handles CSS scaling).
-  const pos = (e: React.PointerEvent) => {
-    const r = canvasRef.current!.getBoundingClientRect();
-    return { x: ((e.clientX - r.left) / r.width) * SKETCH_W, y: ((e.clientY - r.top) / r.height) * SKETCH_H };
-  };
-
-  const pushUndo = () => {
-    const ctx = ctxOf(); if (!ctx) return;
-    undoStack.current.push(ctx.getImageData(0, 0, SKETCH_W, SKETCH_H));
-    if (undoStack.current.length > 15) undoStack.current.shift();
-    setCanUndo(true);
-  };
-
-  const strokeStyle = (ctx: CanvasRenderingContext2D) => {
-    ctx.strokeStyle = eraser ? '#ffffff' : color;
-    ctx.fillStyle = eraser ? '#ffffff' : color;
-    ctx.lineWidth = eraser ? size * 2.4 : size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  };
-
-  const start = (e: React.PointerEvent) => {
-    e.preventDefault();
-    const ctx = ctxOf(); if (!ctx) return;
-    pushUndo();
-    drawing.current = true;
-    const p = pos(e);
-    last.current = p;
-    canvasRef.current?.setPointerCapture(e.pointerId);
-    strokeStyle(ctx);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2); // dot on a single tap
-    ctx.fill();
-  };
-
-  const move = (e: React.PointerEvent) => {
-    if (!drawing.current) return;
-    e.preventDefault();
-    const ctx = ctxOf(); if (!ctx || !last.current) return;
-    const p = pos(e);
-    strokeStyle(ctx);
-    ctx.beginPath();
-    ctx.moveTo(last.current.x, last.current.y);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    last.current = p;
-  };
-
-  const end = () => {
-    if (!drawing.current) return;
-    drawing.current = false;
-    last.current = null;
-    emit();
-  };
-
-  const undo = () => {
-    const ctx = ctxOf();
-    const prev = undoStack.current.pop();
-    if (!ctx || !prev) return;
-    ctx.putImageData(prev, 0, 0);
-    setCanUndo(undoStack.current.length > 0);
-    emit();
-  };
-
-  const clear = () => {
-    const ctx = ctxOf(); if (!ctx) return;
-    pushUndo();
-    fillWhite(ctx);
-    emit();
-  };
-
-  return (
-    <div className="space-y-3 animate-fade-in-up">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-xl p-1.5">
-          {SKETCH_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => { setColor(c); setEraser(false); }}
-              aria-label={`Color ${c}`}
-              className={`w-6 h-6 rounded-full border transition-transform ${!eraser && color === c ? 'ring-2 ring-thumb-red ring-offset-2 ring-offset-thumb-soft scale-110' : 'border-black/10 hover:scale-110'}`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
-        </div>
-        <div className="flex items-center gap-1 bg-thumb-soft border border-thumb-line rounded-xl p-1">
-          {SKETCH_SIZES.map(s => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSize(s)}
-              aria-label={`Brush ${s}`}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${size === s ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-            >
-              <span className="rounded-full bg-current" style={{ width: s / 1.7 + 3, height: s / 1.7 + 3 }} />
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => setEraser(v => !v)}
-          className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors ${eraser ? 'bg-thumb-red text-white border-thumb-red' : 'bg-thumb-soft border-thumb-line text-thumb-ink hover:border-thumb-red/40'}`}
-        >
-          <I.Eraser className="w-4 h-4" /> Erase
-        </button>
-        <button
-          type="button"
-          onClick={undo}
-          disabled={!canUndo}
-          className="h-9 px-3 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-ink text-xs font-bold flex items-center gap-1.5 hover:border-thumb-red/40 transition-colors disabled:opacity-40"
-        >
-          <I.Undo className="w-4 h-4" /> Undo
-        </button>
-        <button
-          type="button"
-          onClick={clear}
-          className="h-9 px-3 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-sub text-xs font-bold flex items-center gap-1.5 hover:text-thumb-red hover:border-thumb-red/40 transition-colors ml-auto"
-        >
-          <I.Trash className="w-4 h-4" /> Clear
-        </button>
-      </div>
-
-      {/* Drawing surface — 16:9, scales to fit; touch-action:none stops the page
-          from scrolling while you draw on mobile. */}
-      <div className="rounded-2xl overflow-hidden border-2 border-thumb-line bg-white shadow-inner select-none">
-        <canvas
-          ref={canvasRef}
-          width={SKETCH_W}
-          height={SKETCH_H}
-          onPointerDown={start}
-          onPointerMove={move}
-          onPointerUp={end}
-          onPointerLeave={end}
-          onPointerCancel={end}
-          className="w-full aspect-video block cursor-crosshair select-none"
-          style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
-        />
-      </div>
-      <p className="text-[12px] text-thumb-sub leading-relaxed">
-        Rough it out — place the face, objects, arrows and where the title goes. The AI redraws your sketch into a polished HD thumbnail. Add a description below for best results.
-      </p>
-    </div>
-  );
-};
-
 const ThumbnailStudio: React.FC<Props> = ({
   onGenerate, generatedImages, queue, isProcessing, itemTimers,
   onView, onDownload, onDownloadAll, onDelete, onOpenEditor, onRetry, onCancel,
 }) => {
-  const [mode, setMode] = useState<ThumbInputMode>('youtube');
+  const [mode, setMode] = useState<ThumbInputMode>('templates');
+  // Sliding highlight behind the mode tabs — mirrors SegmentedControl's fix
+  // for the same underlying issue: a plain className swap onto the
+  // thumb-liquid gradient can't be CSS-transitioned, so it used to snap
+  // instantly on every tab switch instead of animating (felt glitchy,
+  // especially on mobile with the tab also growing/shrinking at the same time).
+  const tabsGroupRef = useRef<HTMLDivElement>(null);
+  const tabBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [tabRect, setTabRect] = useState<{ left: number; width: number } | null>(null);
+  const measureTab = useCallback(() => {
+    const group = tabsGroupRef.current;
+    const btn = tabBtnRefs.current[mode];
+    if (!group || !btn) return;
+    const g = group.getBoundingClientRect();
+    const b = btn.getBoundingClientRect();
+    setTabRect({ left: b.left - g.left, width: b.width });
+  }, [mode]);
+  useLayoutEffect(() => { measureTab(); }, [measureTab]);
+  useEffect(() => {
+    window.addEventListener('resize', measureTab);
+    return () => window.removeEventListener('resize', measureTab);
+  }, [measureTab]);
+  // A single layout-effect measurement can land before the row's real layout
+  // settles (e.g. the Inter webfont swapping in after first paint changes
+  // the active label's width without changing the row's own outer size) —
+  // that's what made the highlight disappear/misplace intermittently.
+  // Observing both the row and the active button re-measures whenever
+  // either's real layout changes, not just on our own state updates.
+  useEffect(() => {
+    const group = tabsGroupRef.current;
+    const btn = tabBtnRefs.current[mode];
+    if (!group || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureTab());
+    ro.observe(group);
+    if (btn) ro.observe(btn);
+    return () => ro.disconnect();
+  }, [mode, measureTab]);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>(THUMBNAIL_TEMPLATES[0].id);
   // The Styles tab has a single picker: pick a REAL thumbnail and the AI recreates
   // its exact look for your topic. Default to the first one so a style is always set.
-  // The pool comes from the DB (falls back to the bundled REFERENCE_IMAGES).
-  const styleImages = useStyleImages(REFERENCE_IMAGES);
+  // The pool comes from the DB (falls back to the bundled REFERENCE_IMAGES) — only
+  // fetched once this tab is actually opened, not on every visit to the studio.
+  const styleImages = useStyleImages(REFERENCE_IMAGES, mode === 'templates');
   const [selectedRef, setSelectedRef] = useState<string | null>(REFERENCE_IMAGES[0] ?? null);
   // Keep a valid default selected as the DB pool loads / changes.
   useEffect(() => {
@@ -519,11 +237,19 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [genModel, setGenModel] = useState<'fast' | 'pro'>('pro');
   const [format, setFormat] = useState<'thumb' | 'short'>('thumb'); // 16:9 thumbnail vs 9:16 Shorts
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  type Note = { text: string; kind: 'error' | 'success' | 'info' };
+  const [note, setNote] = useState<Note | null>(null);
+  const setNoteText = (text: string, kind: Note['kind'] = 'error') => setNote({ text, kind });
   // Per-video-id cache of the analysed YouTube inputs (thumbnail, title, AI concept).
   // Once a link is analysed, regenerating from the SAME link reuses this — the
   // transcript is never re-fetched and no second analysis call is made.
   const ytCache = useRef<Record<string, { thumb: string | null; title: string | null; concept: string }>>({});
+  // Raw fetch (thumbnail/title/transcript) cached separately from the AI concept
+  // above — insufficient credits or a failed generateText call stop the concept
+  // step, but the fetch itself already happened and burned a transcript-fetch
+  // rate-limit slot; without this, retrying (e.g. after buying credits) would
+  // re-fetch the transcript from scratch and could exhaust that limit.
+  const ytFetchCache = useRef<Record<string, [string | null, string | null, Awaited<ReturnType<typeof fetchTranscript>>]>>({});
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [legal, setLegal] = useState<null | 'about' | 'privacy' | 'terms'>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -555,10 +281,10 @@ const ThumbnailStudio: React.FC<Props> = ({
     return () => { if (ric && cancel) cancel(id); else clearTimeout(id); };
   }, []);
   // Landing ('home') vs generator ('generate') vs feed preview ('preview') vs pricing
-  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account'>('home');
+  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account' | 'admin'>('home');
 
   // Auth + billing
-  const { user, profile, totalCredits, creditsLoading, signOut, configured } = useAuth();
+  const { user, profile, totalCredits, creditsLoading, signOut, configured, refreshProfile } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [authReason, setAuthReason] = useState<string | undefined>(undefined);
 
@@ -577,39 +303,40 @@ const ThumbnailStudio: React.FC<Props> = ({
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
 
-  // Stripe checkout — asks the backend for a Checkout URL and redirects.
+  // Real gate is server-side (admin-styles Edge Function re-checks is_admin on
+  // every call) — this just avoids showing the nav entry/page to non-admins.
+  const goAdmin = () => {
+    if (!profile?.is_admin) return;
+    setSection('admin');
+    setSidebarOpen(false);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
+  };
+
+  // Razorpay checkout — creates a server-side order, opens the Razorpay modal,
+  // then verifies + grants the purchase server-side (see paymentsService.ts).
   const startCheckout = async (plan: Plan, cycle: BillingCycle) => {
     if (!user || !supabase) { requireLogin('Log in to upgrade.'); return; }
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ plan: plan.id, cycle, priceEnv: priceFor(plan, cycle).priceEnv }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) window.location.href = data.url;
-      else setNote('Checkout is not available yet. Please try again shortly.');
-    } catch {
-      setNote('Could not start checkout. Please try again.');
+      await buyItem(`plan:${plan.id}:${cycle}`);
+    } catch (e: any) {
+      if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
+      return;
     }
+    // The charge already succeeded — a refresh hiccup here is cosmetic, not a checkout failure.
+    setNoteText(`You're on ${plan.name} now. Enjoy!`, 'success');
+    refreshProfile().catch(() => {});
   };
 
   const buyAddon = async (addonId: string) => {
     if (!user || !supabase) { requireLogin('Log in to buy credits.'); return; }
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ addon: addonId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data?.url) window.location.href = data.url;
-      else setNote('Checkout is not available yet. Please try again shortly.');
-    } catch {
-      setNote('Could not start checkout. Please try again.');
+      await buyItem(`addon:${addonId}`);
+    } catch (e: any) {
+      if (e?.message !== 'cancelled') setNoteText(e?.message || 'Could not start checkout. Please try again.');
+      return;
     }
+    setNoteText('Credits added to your account.', 'success');
+    refreshProfile().catch(() => {});
   };
 
   // YouTube feed preview
@@ -736,6 +463,33 @@ const ThumbnailStudio: React.FC<Props> = ({
     });
   };
 
+  // Ask for login before opening the file picker (or accepting a drop) when
+  // signed out, instead of letting someone upload photos they can't use yet.
+  const triggerUpload = () => {
+    if (configured && !user) { requireLogin('Log in to upload photos.'); return; }
+    fileRef.current?.click();
+  };
+  const dropFiles = (files: File[]) => {
+    if (configured && !user) { requireLogin('Log in to upload photos.'); return; }
+    readFiles(files);
+  };
+
+  // Saved faces ("personas") — reuse a face across generations without
+  // re-uploading it every time. personaRefreshKey bumps to tell every open
+  // PersonaPicker instance to re-fetch after a new save.
+  const [personaRefreshKey, setPersonaRefreshKey] = useState(0);
+  const pickPersona = (dataUrl: string) => setUploads(prev => [...prev, dataUrl].slice(0, 4));
+  const saveAsPersona = async (dataUrl: string) => {
+    if (!user) { requireLogin('Log in to save faces.'); return; }
+    try {
+      await savePersona(dataUrl);
+      setPersonaRefreshKey(k => k + 1);
+      setNoteText('Face saved for reuse.', 'success');
+    } catch (e: any) {
+      setNoteText(e?.message || 'Could not save that face.');
+    }
+  };
+
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) readFiles(Array.from(e.target.files));
     e.target.value = '';
@@ -746,7 +500,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     if (mode === 'youtube') return extractYouTubeId(youtubeUrl) !== null;
     if (mode === 'templates') return !!selectedRef && (titleText.trim().length > 0 || uploads.length > 0);
     if (mode === 'prompt') return promptText.trim().length > 0;
-    if (mode === 'reference') return uploads.length > 0 || promptText.trim().length > 0;
+    if (mode === 'reference') return uploads.length > 0 || titleText.trim().length > 0;
     if (mode === 'sketch') return sketchData !== null;
     return false;
   })();
@@ -775,24 +529,42 @@ const ThumbnailStudio: React.FC<Props> = ({
       let analysis = ytCache.current[id];
       if (!analysis) {
         setBusy(true);
-        setNote('Analysing the video — thumbnail, title and transcript…');
-        const [thumb, title, segments] = await Promise.all([
+        setNoteText('Analysing the video — thumbnail, title and transcript…', 'info');
+        const fetched = ytFetchCache.current[id] ?? await Promise.all([
           fetchYouTubeThumb(id),
           fetchYouTubeTitle(id),
           fetchTranscript(id),
         ]);
+        ytFetchCache.current[id] = fetched;
+        const [thumb, title, segments] = fetched;
         // Turn the title + transcript into a concrete visual thumbnail concept.
         // Best-effort — if the text model is unavailable we still generate from the
-        // title and the original thumbnail.
+        // title and the original thumbnail. Charged once per new video (cached
+        // above); insufficient credits stop here instead of silently degrading.
         let concept = '';
-        try {
-          const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
-          if (title || transcriptText) {
-            concept = (await generateText(
-              `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`
-            )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
+        const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
+        if (title || transcriptText) {
+          // Skip while the profile is still loading — totalCredits reads 0
+          // until it resolves, which would otherwise redirect a user with
+          // plenty of credits to pricing just because they clicked early.
+          if (configured && !creditsLoading && totalCredits < YOUTUBE_ANALYSIS_COST) {
+            setBusy(false);
+            setNoteText(`Analyzing a new video needs ${YOUTUBE_ANALYSIS_COST} credits. Please top up your plan.`);
+            goPricing();
+            return;
           }
-        } catch { /* concept stays empty — fall back to title + thumbnail */ }
+          try {
+            concept = (await generateText(
+              `You are a world-class YouTube thumbnail art director. Based on the video below, describe in 2-3 vivid sentences the single most click-worthy thumbnail concept: the main subject and their emotion/expression, the key visual elements/scene, and the mood, lighting and colour palette. Be concrete and purely visual. Do NOT include any words, captions or text to render on the image.\n\nTITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
+              'concept'
+            )).trim().slice(0, 600); // keep the concept short so the final image prompt stays under the length cap
+            await refreshProfile(); // credits were charged server-side — sync the header count
+          } catch (e: any) {
+            const msg = e?.message || '';
+            if (/credit/i.test(msg)) { setBusy(false); setNoteText(msg); goPricing(); return; }
+            /* otherwise concept stays empty — fall back to title + thumbnail */
+          }
+        }
         analysis = { thumb, title, concept };
         ytCache.current[id] = analysis;
         setBusy(false);
@@ -821,7 +593,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         prompt = `Using the uploaded original YouTube thumbnail (FIRST image) as reference for the subject and topic, create a FRESH, far more click-worthy thumbnail for this video that captures its core hook. ${titleLine}${conceptLine}${ytPremium}${personDir}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
       } else {
         if (!title && !concept && !promptText.trim()) {
-          setNote('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
+          setNoteText('Could not read that video (private/unavailable). Open Advanced and describe what you want for best results.');
           return;
         }
         prompt = `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(promptText)} ${BASE_THUMB}`;
@@ -865,9 +637,10 @@ const ThumbnailStudio: React.FC<Props> = ({
       const extra = promptText.trim() ? `Extra direction: ${promptText.trim()}. ` : '';
       prompt = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${extra}${topicDirective(promptText || titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
     } else {
-      // reference
-      const extra = promptText.trim() ? `Additional direction: ${promptText.trim()}. ` : '';
-      prompt = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${uploads.length ? 'If a person appears, preserve their likeness. ' : ''}${extra}${topicDirective(promptText || titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
+      // reference — single field, same instruction-only pipeline as Styles/templates:
+      // it's creative direction for the model, never auto-rendered as on-image text.
+      const extra = titleText.trim() ? `Apply this direction: ${titleText.trim()}. ` : '';
+      prompt = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${uploads.length ? 'If a person appears, preserve their likeness. ' : ''}${extra}${topicDirective(titleText)}Do NOT add, invent or write any new text, letters, words, captions or labels anywhere on the image. ${BASE_THUMB}`;
     }
 
     // Shorts mode: swap the landscape base directive for the vertical one (every
@@ -876,7 +649,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -899,11 +672,11 @@ const ThumbnailStudio: React.FC<Props> = ({
       <header className="sticky top-0 z-40 bg-thumb-bg/90 backdrop-blur-xl border-b border-thumb-line">
         <div className="max-w-6xl mx-auto px-5 h-[68px] flex items-center justify-between">
           <div className="flex items-center gap-7">
-            <button onClick={goHome} className="flex items-center gap-2.5">
-              <div className="thumb-btn w-10 h-10 rounded-[13px] flex items-center justify-center text-white">
+            <button onClick={goHome} className="flex items-center gap-2.5 shrink-0">
+              <div className="thumb-btn w-10 h-10 rounded-[13px] flex items-center justify-center text-white shrink-0">
                 <I.Wand className="w-5 h-5" />
               </div>
-              <span className="text-xl font-extrabold tracking-tight">PodcastFlux</span>
+              <span className="hidden sm:inline text-xl font-extrabold tracking-tight whitespace-nowrap">PodcastFlux</span>
             </button>
             {/* Desktop nav */}
             <nav className="hidden lg:flex items-center gap-1">
@@ -914,6 +687,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 { label: 'Chapters', on: goChapters, active: section === 'chapters' },
                 { label: 'Feed test', on: goPreview, active: section === 'preview' },
                 { label: 'Pricing', on: goPricing, active: section === 'pricing' },
+                ...(profile?.is_admin ? [{ label: 'Admin', on: goAdmin, active: section === 'admin' }] : []),
               ].map(item => (
                 <button
                   key={item.label}
@@ -925,33 +699,33 @@ const ThumbnailStudio: React.FC<Props> = ({
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {configured && user ? (
               <>
-                <button onClick={goPricing} title="Credits — tap to top up" className="flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-2.5 pr-3 py-1.5 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
+                <button onClick={goPricing} title="Credits — tap to top up" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-2.5 pr-3 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
                   <I.Bolt className="w-4 h-4 text-thumb-red" />
                   {creditsLoading
                     ? <span className="thumb-skeleton inline-block w-5 h-4 rounded align-middle" aria-label="Loading credits" />
                     : totalCredits}
                   <span className="hidden sm:inline text-thumb-sub font-semibold">credits</span>
                 </button>
-                <button onClick={goAccount} className="w-9 h-9 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
+                <button onClick={goAccount} className="w-11 h-11 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
                   {(user.email?.[0] || 'U').toUpperCase()}
                 </button>
               </>
             ) : (
               <>
                 {configured && (
-                  <button onClick={() => requireLogin()} className="text-sm font-bold text-thumb-ink hover:text-thumb-red transition-colors px-2">
+                  <button onClick={() => requireLogin()} className="h-11 inline-flex items-center whitespace-nowrap rounded-full border border-thumb-line px-3 sm:px-4 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 hover:text-thumb-red transition-colors">
                     Log in
                   </button>
                 )}
-                <button onClick={goGenerate} className="thumb-btn text-white font-bold text-sm px-5 py-2.5 rounded-full">
+                <button onClick={goGenerate} className="h-11 inline-flex items-center whitespace-nowrap thumb-btn text-white font-bold text-sm px-3.5 sm:px-5 rounded-full">
                   Start now
                 </button>
               </>
             )}
-            <button onClick={() => setSidebarOpen(true)} className="p-2 text-thumb-ink/70 hover:text-thumb-ink" aria-label="Menu"><I.Menu className="w-6 h-6" /></button>
+            <button onClick={() => setSidebarOpen(true)} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-full text-thumb-ink/70 hover:text-thumb-ink hover:bg-thumb-soft transition-colors" aria-label="Menu"><I.Menu className="w-6 h-6" /></button>
           </div>
         </div>
       </header>
@@ -997,6 +771,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               { key: 'editor', label: 'Editor', tag: 'Canvas', icon: I.Edit, active: false, onClick: () => { setSidebarOpen(false); onOpenEditor(); } },
               { key: 'pricing', label: 'Pricing', tag: 'Plans', icon: I.Star, active: section === 'pricing', onClick: goPricing },
               { key: 'account', label: 'Account', tag: 'Profile', icon: I.Check, active: section === 'account', onClick: goAccount },
+              ...(profile?.is_admin ? [{ key: 'admin', label: 'Admin', tag: 'Styles', icon: I.Grid, active: section === 'admin', onClick: goAdmin }] : []),
             ] as { key: string; label: string; tag: string; icon: (p: any) => React.ReactElement; active: boolean; onClick: () => void }[]).map(item => (
               <button
                 key={item.key}
@@ -1117,15 +892,25 @@ const ThumbnailStudio: React.FC<Props> = ({
 
             {/* Tabs */}
             {/* Expanding-pill selector: the active tab grows to show its label; the
-                rest stay compact (icon only) so five tabs fit one clean line. */}
-            <div className="flex items-stretch gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
+                rest stay compact (icon only) so five tabs fit one clean line. A
+                sliding highlight (not a class swap onto the gradient) keeps the
+                switch animated instead of snapping. */}
+            <div ref={tabsGroupRef} className="relative flex items-stretch gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
+              {tabRect && (
+                <span
+                  className="thumb-liquid absolute inset-y-1.5 rounded-xl transition-[transform,width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none"
+                  style={{ transform: `translateX(${tabRect.left}px)`, width: tabRect.width }}
+                />
+              )}
               {TABS.map(t => {
                 const active = mode === t.id;
                 return (
                   <button
                     key={t.id}
+                    ref={el => { tabBtnRefs.current[t.id] = el; }}
                     title={t.label}
                     aria-label={t.label}
+                    aria-pressed={active}
                     onClick={() => {
                       // Each tab is its own independent input — don't let one section's
                       // typed prompt/title leak into another (e.g. into YouTube generate).
@@ -1133,8 +918,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                       setMode(t.id);
                       setNote(null);
                     }}
-                    className={`flex flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
-                      active ? 'thumb-liquid flex-1 px-3' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-line/50 px-3.5'
+                    className={`relative z-10 flex flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
+                      active ? 'text-white flex-1 px-3' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-line/50 px-3.5'
                     }`}
                   >
                     <t.icon className="w-4 h-4 shrink-0" />
@@ -1159,7 +944,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                         className="w-full bg-transparent py-4 outline-none text-[15px] placeholder-thumb-sub/50"
                       />
                     </div>
-                    <p className="text-[12px] text-thumb-sub leading-relaxed">Just paste the link — we analyse the video and craft the perfect thumbnail for you.</p>
                   </div>
 
                   {/* Advanced (optional) */}
@@ -1187,19 +971,21 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Add a person's photo</label>
+                          <PersonaPicker enabled={mode === 'youtube' && ytAdvanced} refreshKey={personaRefreshKey} onPick={pickPersona} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={false} />
                           {uploads.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {uploads.map((u, i) => (
                                 <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
                                   <img src={u} alt="" className="w-full h-full object-cover" />
-                                  <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                                  <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} aria-label={`Remove photo ${i + 1}`} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                                  {user && <button onClick={() => saveAsPersona(u)} title="Save face" aria-label="Save this face for reuse" className="absolute bottom-0.5 right-0.5 w-5 h-5 bg-black/60 hover:bg-thumb-red text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.Star className="w-3 h-3" /></button>}
                                 </div>
                               ))}
                             </div>
                           ) : (
                             <button
                               type="button"
-                              onClick={() => fileRef.current?.click()}
+                              onClick={triggerUpload}
                               className="w-full border-2 border-dashed border-white/12 rounded-2xl p-4 flex items-center justify-center gap-2.5 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
                             >
                               <I.Upload className="w-4 h-4" />
@@ -1221,7 +1007,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <label className="text-sm font-bold text-thumb-ink flex items-center gap-2">
                     <I.Image className="w-4 h-4 text-thumb-red" /> Pick a style to recreate
                   </label>
-                  <p className="text-[12px] text-thumb-sub -mt-1 leading-relaxed">Tap a thumbnail, then upload your photo or describe the change below. We keep it exactly as-is and only change what you ask (like swapping the face) — no text is added.</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
                     {styleImages.map(src => {
                       const active = selectedRef === src;
@@ -1252,7 +1037,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                     placeholder="Tell us about your video and the thumbnail you want — e.g. A gaming video about a crazy comeback; I want a shocked gamer with a glowing headset, explosion behind, neon RGB lighting, and the text 'INSANE COMEBACK'."
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
                   />
-                  <p className="text-[12px] text-thumb-sub leading-relaxed">Just describe your video and the look you want — we turn it into a full thumbnail prompt for you.</p>
                 </div>
               )}
 
@@ -1260,9 +1044,9 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <div className="space-y-2.5 animate-fade-in-up">
                   <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Upload reference or your photo</label>
                   <div
-                    onClick={() => fileRef.current?.click()}
+                    onClick={triggerUpload}
                     onDragOver={e => e.preventDefault()}
-                    onDrop={e => { e.preventDefault(); readFiles(Array.from(e.dataTransfer.files)); }}
+                    onDrop={e => { e.preventDefault(); dropFiles(Array.from(e.dataTransfer.files)); }}
                     className="border-2 border-dashed border-white/12 rounded-2xl p-7 flex flex-col items-center justify-center gap-2.5 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
                   >
                     <div className="w-11 h-11 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center"><I.Upload className="w-5 h-5" /></div>
@@ -1270,13 +1054,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <span className="text-xs text-thumb-sub/80">Up to 4 images · PNG or JPG</span>
                   </div>
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
-                  <textarea
-                    value={promptText}
-                    onChange={e => setPromptText(e.target.value)}
-                    rows={2}
-                    placeholder="Optional: extra direction (colors, mood, subject...)"
-                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
-                  />
                 </div>
               )}
 
@@ -1294,94 +1071,79 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
+              {/* Saved faces (shared for templates + reference + prompt + sketch). In
+                  reference mode the dropzone above is already the upload entry point,
+                  so this only shows previously-saved faces, not another "Add" tile. */}
+              {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && (
+                <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={mode !== 'reference'} />
+              )}
+
               {/* Uploaded thumbnails preview (shared for templates + reference + prompt + sketch) */}
               {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && uploads.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {uploads.map((u, i) => (
                     <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
                       <img src={u} alt="" className="w-full h-full object-cover" />
-                      <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                      <button onClick={() => setUploads(prev => prev.filter((_, x) => x !== i))} aria-label={`Remove photo ${i + 1}`} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.X className="w-3 h-3" /></button>
+                      {user && <button onClick={() => saveAsPersona(u)} title="Save face" aria-label="Save this face for reuse" className="absolute bottom-0.5 right-0.5 w-5 h-5 bg-black/60 hover:bg-thumb-red text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><I.Star className="w-3 h-3" /></button>}
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Optional add-photo for templates + prompt + sketch */}
-              {(mode === 'templates' || mode === 'prompt' || mode === 'sketch') && uploads.length === 0 && (
-                <button onClick={() => fileRef.current?.click()} className="text-xs font-semibold text-thumb-red hover:underline flex items-center gap-1.5">
-                  <I.Upload className="w-3.5 h-3.5" /> Add your face/photo (optional)
-                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
-                </button>
-              )}
-
-              {/* templates = edit instruction (optional); reference + sketch = overlay title (optional) */}
+              {/* templates + reference = single edit/direction instruction (optional);
+                  sketch = overlay title (optional) */}
               {(mode === 'templates' || mode === 'reference' || mode === 'sketch') && (
                 <div className="space-y-2.5">
-                  <label className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'templates' ? 'What to change' : 'Title text on thumbnail'}</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-thumb-sub bg-white/5 border border-white/10">optional</span>
-                  </label>
+                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'sketch' ? 'Title text on thumbnail' : 'What to change'}</label>
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
-                    placeholder={mode === 'templates' ? "e.g. Replace the face with my photo · change the title to 'MODI JI'" : 'e.g. THIS CHANGED EVERYTHING'}
+                    placeholder={mode === 'sketch' ? 'e.g. THIS CHANGED EVERYTHING' : "e.g. Replace the face with my photo · change the title to 'MODI JI'"}
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
                   />
-                  {mode === 'templates' && (
-                    <p className="text-[12px] text-thumb-sub leading-relaxed">This is an edit instruction — it won't be written on the image. Leave it empty to just swap in your uploaded photo.</p>
-                  )}
                 </div>
               )}
 
               {/* Format: 16:9 thumbnail vs 9:16 Shorts */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
-                <div className="grid grid-cols-2 gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setFormat('thumb')}
-                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-bold transition-colors ${format === 'thumb' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-                  >
-                    <span className="w-5 h-3 rounded-[3px] border-2 border-current" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormat('short')}
-                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-bold transition-colors ${format === 'short' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-                  >
-                    <span className="w-3 h-4 rounded-[3px] border-2 border-current" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span>
-                  </button>
-                </div>
+                <SegmentedControl
+                  value={format}
+                  onChange={setFormat}
+                  options={[
+                    { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                    { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                  ]}
+                />
               </div>
 
               {/* Output options */}
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
-                  <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
-                    {[1, 2, 3, 4].map(n => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setGenCount(n)}
-                        className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genCount === n ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl
+                    value={String(genCount)}
+                    onChange={(v) => setGenCount(Number(v))}
+                    options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
-                  <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
-                    <button type="button" onClick={() => setGenModel('fast')} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genModel === 'fast' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>Fast</button>
-                    <button type="button" onClick={() => setGenModel('pro')} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-colors ${genModel === 'pro' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>Pro</button>
-                  </div>
+                  <SegmentedControl
+                    value={genModel}
+                    onChange={setGenModel}
+                    options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
+                  />
                 </div>
               </div>
 
               {note && (
-                <div className="text-xs bg-thumb-redSoft text-red-300 border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>
+                <div className={`text-xs rounded-xl px-4 py-3 leading-relaxed border ${
+                  note.kind === 'success' ? 'bg-thumb-greenSoft text-thumb-green border-thumb-green/30'
+                  : note.kind === 'info' ? 'bg-thumb-soft text-thumb-sub border-thumb-line'
+                  : 'bg-thumb-redSoft text-red-300 border-thumb-red/20'
+                }`}>{note.text}</div>
               )}
 
               {/* Generate */}
@@ -1514,7 +1276,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 {previewImage ? (
                   <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 group">
                     <img src={previewImage} alt="Your thumbnail" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <button onClick={() => previewFileRef.current?.click()} className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold">Change</button>
                       <button onClick={() => setPreviewImage(null)} className="px-3 py-1.5 rounded-lg bg-thumb-red text-white text-xs font-bold">Remove</button>
                     </div>
@@ -1553,7 +1315,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   {previewImageB ? (
                     <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 group">
                       <img src={previewImageB} alt="Thumbnail B" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <button onClick={() => previewFileRefB.current?.click()} className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-bold">Change</button>
                         <button onClick={() => setPreviewImageB(null)} className="px-3 py-1.5 rounded-lg bg-thumb-red text-white text-xs font-bold">Remove</button>
                       </div>
@@ -1798,6 +1560,13 @@ const ThumbnailStudio: React.FC<Props> = ({
           </Suspense>
         )}
 
+        {/* ── Admin: global styles (server re-checks is_admin on every call) ── */}
+        {section === 'admin' && profile?.is_admin && (
+          <Suspense fallback={<PanelFallback />}>
+            <AdminStyles />
+          </Suspense>
+        )}
+
         {/* ── Showcase gallery (real thumbnails) — home only ── */}
         {section === 'home' && (SHOWCASE_IMAGES.length > 0 ? (
           <section className="pt-16">
@@ -1964,16 +1733,23 @@ const ThumbnailStudio: React.FC<Props> = ({
               const open = openFaq === i;
               return (
                 <div key={i} className={`thumb-glass rounded-2xl overflow-hidden transition-all duration-300 ${open ? 'thumb-float-red' : ''}`}>
-                  <button onClick={() => setOpenFaq(open ? null : i)} className="w-full flex items-center gap-4 text-left px-4 sm:px-5 py-4">
-                    <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 ${open ? 'thumb-btn text-white' : 'bg-white/5 border border-white/10 text-thumb-ink'}`}>
-                      <span className={`transition-transform duration-300 ${open ? 'rotate-45' : ''} text-xl leading-none font-light`}>+</span>
-                    </span>
-                    <span className={`font-bold text-[15px] sm:text-base transition-colors duration-200 ${open ? 'text-thumb-red' : 'text-thumb-ink'}`}>{f.q}</span>
-                  </button>
-                  <div className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                    <div className="overflow-hidden">
-                      <p className="px-4 sm:px-5 pb-5 sm:pl-[4.25rem] text-sm text-thumb-sub leading-relaxed">{f.a}</p>
-                    </div>
+                  <h3 className="m-0">
+                    <button
+                      onClick={() => setOpenFaq(open ? null : i)}
+                      aria-expanded={open}
+                      aria-controls={`faq-answer-${i}`}
+                      className="w-full flex items-center gap-4 text-left px-4 sm:px-5 py-4"
+                    >
+                      <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 ${open ? 'thumb-btn text-white' : 'bg-white/5 border border-white/10 text-thumb-ink'}`}>
+                        <span className={`transition-transform duration-300 ${open ? 'rotate-45' : ''} text-xl leading-none font-light`}>+</span>
+                      </span>
+                      <span className={`font-bold text-[15px] sm:text-base transition-colors duration-200 ${open ? 'text-thumb-red' : 'text-thumb-ink'}`}>{f.q}</span>
+                    </button>
+                  </h3>
+                  {/* max-height (not grid-template-rows) — animates reliably on iOS Safari,
+                      which doesn't smoothly interpolate fr-unit grid track sizes. */}
+                  <div id={`faq-answer-${i}`} className={`overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? 'max-h-[400px]' : 'max-h-0'}`}>
+                    <p className="px-4 sm:px-5 pb-5 sm:pl-[4.25rem] text-sm text-thumb-sub leading-relaxed">{f.a}</p>
                   </div>
                 </div>
               );

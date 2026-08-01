@@ -5,6 +5,8 @@ import {
   IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip,
   IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera,
 } from './Icons';
+import LoadedThumb from './LoadedThumb';
+import RetryImage from './RetryImage';
 
 // Props are the App-level state/handlers the editor reads. The project ships
 // without @types/react, so precise setter/event types add no real safety here —
@@ -40,8 +42,6 @@ interface EditorViewProps {
   isProcessing: any;
   retryQueueItem: any;
   cancelQueueItem: any;
-  loadedSrcs: any;
-  markLoaded: any;
   copyPromptFromImage: any;
   copiedPromptId: any;
   handleBrushSelect: any;
@@ -133,8 +133,6 @@ export default function EditorView(props: EditorViewProps) {
     isProcessing,
     retryQueueItem,
     cancelQueueItem,
-    loadedSrcs,
-    markLoaded,
     copyPromptFromImage,
     copiedPromptId,
     handleBrushSelect,
@@ -262,9 +260,10 @@ export default function EditorView(props: EditorViewProps) {
                                 <div className="absolute top-1 left-1 bg-nano-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                                     {idx + 1}
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => removeSourceImage(idx)}
-                                    className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md transition-colors opacity-0 group-hover:opacity-100"
+                                    aria-label={`Remove source image ${idx + 1}`}
+                                    className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100"
                                 >
                                     <IconX />
                                 </button>
@@ -344,7 +343,7 @@ export default function EditorView(props: EditorViewProps) {
                                                 </div>
                                             </div>
                                             <div className="text-center space-y-1.5">
-                                                <h4 className="text-base font-bold text-white">Generation Failed</h4>
+                                                <h4 className="text-base font-bold text-thumb-ink">Generation Failed</h4>
                                                 {item.error && (
                                                     <p className="text-[11px] text-red-200/90 line-clamp-2 max-w-[220px] leading-relaxed">{item.error}</p>
                                                 )}
@@ -394,8 +393,7 @@ export default function EditorView(props: EditorViewProps) {
                                 style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
                             >
                                 {/* Shimmer placeholder — sits behind the image so there's no white flash while it loads. Removed once loaded so it never shimmers through transparent PNGs. */}
-                                {!loadedSrcs[img.url] && <div className="thumb-skeleton absolute inset-0" aria-hidden />}
-                                <img src={img.url} alt={img.prompt} loading="lazy" className="relative w-full h-full object-cover cursor-pointer img-fade" onClick={() => setViewedImage(img.url)} onLoad={() => markLoaded(img.url)} onError={() => markLoaded(img.url)} />
+                                <LoadedThumb src={img.url} alt={img.prompt} className="relative w-full h-full object-cover cursor-pointer img-fade" onClick={() => setViewedImage(img.url)} />
                                 <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-3 sm:p-4 transition-all duration-300 ${uiVisible ? 'opacity-100 md:opacity-0 md:group-hover:opacity-100' : 'opacity-0 pointer-events-none'}`}>
                                     <p 
                                         onClick={(e) => {
@@ -700,8 +698,7 @@ export default function EditorView(props: EditorViewProps) {
                               onClick={() => { addToLayers(src); setShowStylePicker(false); }}
                               className="relative aspect-video rounded-xl overflow-hidden border border-thumb-line hover:border-nano-accent transition-colors group"
                           >
-                              {!loadedSrcs[src] && <div className="thumb-skeleton absolute inset-0" aria-hidden />}
-                              <img src={src} alt={`Style ${i + 1}`} loading="lazy" className="relative w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" onLoad={() => markLoaded(src)} onError={() => markLoaded(src)} />
+                              <LoadedThumb src={src} alt={`Style ${i + 1}`} className="relative w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
                           </button>
                       ))}
                   </div>
@@ -866,10 +863,11 @@ export default function EditorView(props: EditorViewProps) {
                     </div>
                  ) : (
                   <div className="relative inline-block">
-                      <img 
+                      <RetryImage
                           key={viewedImage}
-                          src={viewedImage} 
-                          alt="Full View" 
+                          url={viewedImage}
+                          onFail={() => setImageLoadError(true)}
+                          alt="Full View"
                           className="origin-center select-none block"
                           style={{
                               transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
@@ -879,7 +877,6 @@ export default function EditorView(props: EditorViewProps) {
                               willChange: 'transform'
                           }}
                           draggable={false}
-                          onError={() => setImageLoadError(true)}
                           onLoad={(e) => {
                               if (brushMode && canvasRef.current) {
                                   const img = e.target as HTMLImageElement;
