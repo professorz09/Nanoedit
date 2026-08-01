@@ -8,8 +8,11 @@
 // the closest styles by cosine similarity. Returns their public URLs + tags so
 // the client can recreate the best-fitting styles.
 //
-// Auth: requires a logged-in user (JWT), same anti-abuse gate as "text". Spends
-// no credits — matching is a free helper step of the paid generation.
+// Auth: requires a logged-in user (JWT). Unlike "text"/"transcript" (free,
+// rate-limited helpers), this spends MATCH_COST credits via the same
+// spend_credit()/refund_credit() RPCs "generate" uses — so it's only usable
+// within whatever credit balance the caller actually has, the same as any
+// other metered action, not a free-standing unlimited helper.
 //
 // Deploy:  supabase functions deploy match-style --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
@@ -30,6 +33,7 @@ const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
 const EMBED_DIMS = 768; // must match the style_images.embedding vector(768) column
 const BUCKET = 'styles';
 const MAX_TEXT = 8000;
+const MATCH_COST = 1; // credits spent per match call, refunded if it fails
 
 function makeVertex(): any {
   const saRaw = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
@@ -56,7 +60,6 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  // Anti-abuse gate: must be signed in (same as the other helper endpoints).
   const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').trim();
   if (!jwt) return json(401, { error: 'Please sign in.' });
   const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
@@ -72,6 +75,12 @@ Deno.serve(async (req) => {
   const ai = makeVertex();
   if (!ai) return json(500, { error: 'Match service is not configured.' });
 
+  // Reserve credits up front — bounded strictly by whatever balance the
+  // caller actually has, same atomic RPC "generate" uses. 402 at zero.
+  const { data: spent, error: spendErr } = await admin.rpc('spend_credit', { p_user: uid });
+  if (spendErr) return json(500, { error: 'Credit check failed. Please try again.' });
+  if (!spent) return json(402, { error: 'No credits left. Please upgrade your plan to use style matching.' });
+
   // 1) Embed the query topic (same model + dims as the offline index).
   let embedding: number[] | null = null;
   try {
@@ -85,7 +94,10 @@ Deno.serve(async (req) => {
   } catch (e: any) {
     console.error('embed_failed', e?.message || String(e));
   }
-  if (!embedding?.length) return json(502, { error: 'Could not analyse the topic. Please try again.' });
+  if (!embedding?.length) {
+    await admin.rpc('refund_credit', { p_user: uid }).catch(() => {});
+    return json(502, { error: 'Could not analyse the topic. Please try again.' });
+  }
 
   // 2) Cosine-similarity search over the indexed styles — global defaults PLUS
   // the caller's own custom styles (p_user_id filters to user_id IS NULL OR own).
@@ -94,7 +106,11 @@ Deno.serve(async (req) => {
     match_count: count,
     p_user_id: uid,
   });
-  if (error) { console.error('match_styles_failed', error.message); return json(502, { error: 'Style search failed.' }); }
+  if (error) {
+    console.error('match_styles_failed', error.message);
+    await admin.rpc('refund_credit', { p_user: uid }).catch(() => {});
+    return json(502, { error: 'Style search failed.' });
+  }
 
   const publicPrefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
   const styles = (data || []).map((row: any) => ({

@@ -3,7 +3,7 @@ import { generateText, fetchTranscript, segmentsToText } from '../services/textS
 import { extractYouTubeId } from '../services/youtubeService';
 import { useAuth } from '../contexts/AuthContext';
 
-const TITLE_COST = 2; // credits charged per title-generation run
+const TITLE_COST = 1; // credits charged per title-generation run
 
 const Ic = {
   Type: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 7V5h16v2M9 19h6M12 5v14" /></svg>),
