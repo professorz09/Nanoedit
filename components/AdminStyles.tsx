@@ -114,12 +114,22 @@ const AdminStyles: React.FC = () => {
   // Independent of `active` above — this only affects the manual "Styles"
   // picker. The style stays fully eligible for YouTube auto-matching either
   // way, since match_styles() never checks show_in_picker.
+  // pendingPickerIds disables a style's own button while its toggle is in
+  // flight — without it, a rapid double-click fires two overlapping updates
+  // that the server can apply out of order, leaving the shown state (which is
+  // purely optimistic, never re-synced after success) wrong.
+  const [pendingPickerIds, setPendingPickerIds] = useState<Set<string>>(new Set());
   const togglePicker = async (s: AdminStyle) => {
-    setStyles(prev => prev.map(x => x.id === s.id ? { ...x, show_in_picker: !x.show_in_picker } : x)); // optimistic
+    const next = !s.show_in_picker;
+    setPendingPickerIds(prev => new Set(prev).add(s.id));
+    setStyles(prev => prev.map(x => x.id === s.id ? { ...x, show_in_picker: next } : x)); // optimistic
     try {
-      await callAdmin({ action: 'toggle_picker', id: s.id, show_in_picker: !s.show_in_picker });
+      await callAdmin({ action: 'toggle_picker', id: s.id, show_in_picker: next });
+      setStyles(prev => prev.map(x => x.id === s.id ? { ...x, show_in_picker: next } : x)); // reconcile with the confirmed value
     } catch {
       refresh(); // revert on failure
+    } finally {
+      setPendingPickerIds(prev => { const n = new Set(prev); n.delete(s.id); return n; });
     }
   };
 
@@ -218,7 +228,7 @@ const AdminStyles: React.FC = () => {
                   </div>
                   <button
                     onClick={() => togglePicker(s)}
-                    disabled={!s.active}
+                    disabled={!s.active || pendingPickerIds.has(s.id)}
                     className="w-full py-1.5 rounded-lg bg-thumb-soft border border-thumb-line text-[11px] font-bold hover:border-thumb-red/40 transition-colors disabled:opacity-50"
                   >
                     {s.show_in_picker ? 'Hide from picker' : 'Show in picker'}

@@ -20,16 +20,23 @@ let cache: string[] | null = null;
 // can be the first to ask — without this, both would fire their own query the
 // instant they're both enabled. Cache the in-flight request itself so every
 // caller shares ONE round trip to Supabase, not one each.
-let inflight: Promise<string[]> | null = null;
+let inflight: Promise<string[] | null> | null = null;
 
-// Fetch the active, picker-visible style image URLs from the DB (empty array
-// on any problem). `show_in_picker` is independent of `active` — an admin can
-// hide a style from THIS manual list while it stays fully eligible for the
-// YouTube auto-match flow (matchStyles() below never checks show_in_picker).
-export const fetchStyleImages = async (): Promise<string[]> => {
+// Fetch the active, picker-visible style image URLs from the DB. `show_in_picker`
+// is independent of `active` — an admin can hide a style from THIS manual list
+// while it stays fully eligible for the YouTube auto-match flow (matchStyles()
+// below never checks show_in_picker).
+//
+// Returns `null` when the DB genuinely couldn't be reached (not configured,
+// network/query error) — as opposed to `[]`, which means the query succeeded
+// and there are simply zero active+visible styles right now (e.g. an admin
+// hid every global style from the picker). useStyleImages() below only falls
+// back to the bundled pool for `null` — otherwise a legitimately empty picker
+// would incorrectly repopulate itself from the bundled images.
+export const fetchStyleImages = async (): Promise<string[] | null> => {
   if (cache) return cache;
   if (inflight) return inflight;
-  if (!isSupabaseConfigured || !supabase) return [];
+  if (!isSupabaseConfigured || !supabase) return null;
   inflight = (async () => {
     try {
       const { data, error } = await supabase!
@@ -39,7 +46,7 @@ export const fetchStyleImages = async (): Promise<string[]> => {
         .eq('show_in_picker', true)
         .order('sort', { ascending: true })
         .order('created_at', { ascending: true });
-      if (error || !data) return [];
+      if (error || !data) return null;
       const paths = data.map((r: { path?: string }) => r.path).filter((p): p is string => !!p);
       // Per-user custom styles (styles/user/<uid>/...) are RLS-scoped to their
       // owner at the Storage level, so a plain public URL 403s even for the
@@ -56,7 +63,7 @@ export const fetchStyleImages = async (): Promise<string[]> => {
       cache = urls.filter(Boolean);
       return cache;
     } catch {
-      return [];
+      return null;
     } finally {
       inflight = null;
     }
@@ -111,12 +118,14 @@ export const matchStyles = async (text: string, count = 8): Promise<MatchedStyle
  * screen's own useStyleImages call) instant with no extra request.
  */
 export const useStyleImages = (bundled: string[], enabled: boolean = true): string[] => {
-  const [remote, setRemote] = useState<string[] | null>(null);
+  // undefined = not fetched yet; null = fetch failed/unavailable; string[] =
+  // a real result from the DB, which may legitimately be empty.
+  const [remote, setRemote] = useState<string[] | null | undefined>(undefined);
   useEffect(() => {
-    if (!enabled || remote) return;
+    if (!enabled || remote !== undefined) return;
     let alive = true;
     fetchStyleImages().then((urls) => { if (alive) setRemote(urls); });
     return () => { alive = false; };
-  }, [enabled]);
-  return remote && remote.length ? remote : bundled;
+  }, [enabled, remote]);
+  return remote != null ? remote : bundled;
 };
