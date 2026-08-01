@@ -14,12 +14,11 @@ interface Props {
 const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) => {
   const { user, profile } = useAuth();
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
-  // Only one checkout (Razorpay only ever has one modal open at a time) can be
-  // in flight — 'plan:<id>' | 'addon:<id>' | null. Also doubles as the click
-  // guard: without it, a click that doesn't visibly react in the ~1s it takes
-  // to create the order + load the Razorpay script reads as "nothing
-  // happened," so an impatient second click fires a second order/checkout
-  // and often surfaces as a confusing "Something went wrong."
+  // Only one checkout can be in flight — 'plan:<id>' | 'addon:<id>' | null.
+  // Also doubles as the click guard: without it, a click that doesn't
+  // visibly react in the ~1s it takes to create the checkout session reads
+  // as "nothing happened," so an impatient second click fires a second
+  // session and often surfaces as a confusing "Something went wrong."
   const [busy, setBusy] = useState<string | null>(null);
 
   // Add-on credit packs are only for paying subscribers (Pro / Studio).

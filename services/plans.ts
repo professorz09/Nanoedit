@@ -1,8 +1,8 @@
 // ── Pricing config (DISPLAY only) ──────────────────────────
 // Edit prices/credits here for the UI. The amount actually charged is
 // computed server-side by the matching catalog entry in
-// supabase/functions/_shared/pricing.ts (Razorpay order-creation +
-// verification) — keep the two in sync when changing a price or credit
+// supabase/functions/_shared/pricing.ts (Dodo Payments checkout creation +
+// webhook crediting) — keep the two in sync when changing a price or credit
 // amount, since the client here is never trusted for the charged amount.
 export type PlanId = 'free' | 'pro' | 'studio';
 export type BillingCycle = 'monthly' | 'yearly';

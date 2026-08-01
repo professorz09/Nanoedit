@@ -4,12 +4,15 @@
 // (e.g. "plan:pro:monthly"); the amount is computed here so a client can never
 // tamper with the price it's charged.
 //
-// Prices in services/plans.ts are USD (display). Razorpay test accounts are
-// INR-only, so we charge in INR: amount = round(USD × USD_TO_INR) rupees.
-// Change USD_TO_INR (or the per-item usd) here and both order-creation and
-// crediting stay in sync. Imported by create-order + verify-payment.
+// Billed via Dodo Payments (merchant of record) in USD — `usd` here is the
+// exact amount charged, no currency conversion needed. Imported by
+// create-checkout + dodo-webhook.
 // ═══════════════════════════════════════════════════════════════════════════
-export const USD_TO_INR = 84;
+
+// The single "Pay What You Want" one-time-payment product created in the Dodo
+// dashboard — every purchase uses this same product, with the actual price
+// set per-request via create-checkout (see docs: dynamic pricing checkout).
+export const DODO_PRODUCT_ID = 'pdt_0NkS5eCDZFTWah6f5OH0u';
 
 export interface CatalogItem {
   kind: 'plan' | 'addon';
@@ -22,7 +25,7 @@ export interface CatalogItem {
 
 // Yearly plans grant a full year's worth of credits (12 × the monthly
 // allotment) up front, since there's no recurring monthly refill mechanism —
-// billing is a one-time Razorpay order, not a Razorpay subscription. Without
+// billing is a one-time Dodo Payments checkout, not a subscription. Without
 // this, a yearly buyer got only ONE month's credits for the whole year
 // (services/plans.ts advertises "200 thumbnails / month" regardless of
 // cycle), which they'd burn through immediately.
@@ -34,8 +37,3 @@ export const CATALOG: Record<string, CatalogItem> = {
   'addon:addon_small':   { kind: 'addon', credits: 100, usd: 8,  label: '100 credit pack' },
   'addon:addon_large':   { kind: 'addon', credits: 500, usd: 30, label: '500 credit pack' },
 };
-
-// Smallest currency unit (paise). Razorpay requires amount ≥ 100 (₹1).
-export const inrPaise = (usd: number): number => Math.round(usd * USD_TO_INR) * 100;
-
-export const CURRENCY = 'INR';

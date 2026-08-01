@@ -1,25 +1,7 @@
 import { supabase } from './supabase';
 
-// Loads the Razorpay Checkout script once and reuses it on repeat calls.
-let razorpayScriptPromise: Promise<void> | null = null;
-const loadRazorpayScript = (): Promise<void> => {
-  if ((window as any).Razorpay) return Promise.resolve();
-  if (razorpayScriptPromise) return razorpayScriptPromise;
-  razorpayScriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve();
-    script.onerror = () => { razorpayScriptPromise = null; reject(new Error('Could not load the payment provider.')); };
-    document.body.appendChild(script);
-  });
-  return razorpayScriptPromise;
-};
-
-interface OrderResponse {
-  order_id: string;
-  amount: number;
-  currency: string;
-  key_id: string;
+interface CheckoutResponse {
+  checkout_url: string;
   label: string;
 }
 
@@ -63,10 +45,9 @@ const authedFetch = async (path: string, body: unknown) => {
   return data;
 };
 
-// create-order is a single idempotent-enough GET-like operation (it just asks
-// Razorpay to mint a fresh order — retrying on a transient failure costs
-// nothing but a redundant, unused order). One retry covers the same class of
-// transient blips verify-payment already retries for.
+// create-checkout is a single idempotent-enough GET-like operation (it just
+// asks Dodo Payments to mint a fresh checkout session — retrying on a
+// transient failure costs nothing but a redundant, unused session).
 const authedFetchWithRetry = async (path: string, body: unknown) => {
   try {
     return await authedFetch(path, body);
@@ -77,47 +58,15 @@ const authedFetchWithRetry = async (path: string, body: unknown) => {
 };
 
 /**
- * Buys a catalog item (a plan cycle or an add-on pack) via Razorpay Standard
- * Checkout: creates a server-side order, opens the Razorpay modal, then
- * verifies the payment server-side (which grants the credits/plan). Resolves
- * once the purchase is confirmed and credited; rejects if cancelled or failed.
+ * Buys a catalog item (a plan cycle or an add-on pack) via Dodo Payments:
+ * creates a server-side checkout session, then navigates the browser to
+ * Dodo's hosted checkout page. There is no client-side "success" callback —
+ * Dodo redirects back to the app's return_url once the customer finishes
+ * checkout, and the actual credit grant happens server-side via the
+ * "dodo-webhook" Edge Function once Dodo confirms the payment.
  */
 export const buyItem = async (itemId: string): Promise<void> => {
-  const order = await authedFetchWithRetry('create-order', { item: itemId }) as OrderResponse;
-  await loadRazorpayScript();
-
-  return new Promise((resolve, reject) => {
-    const rz = new (window as any).Razorpay({
-      key: order.key_id,
-      order_id: order.order_id,
-      amount: order.amount,
-      currency: order.currency,
-      name: 'PodcastFlux',
-      description: order.label,
-      handler: async (resp: any) => {
-        const payload = {
-          razorpay_order_id: resp.razorpay_order_id,
-          razorpay_payment_id: resp.razorpay_payment_id,
-          razorpay_signature: resp.razorpay_signature,
-        };
-        try {
-          // verify-payment is idempotent (claims the ledger row before
-          // crediting), so a single retry safely covers a transient failure
-          // right after a successful charge — the money already moved.
-          try {
-            await authedFetch('verify-payment', payload);
-          } catch {
-            await authedFetch('verify-payment', payload);
-          }
-          resolve();
-        } catch (e: any) {
-          reject(new Error(`${e?.message || 'Verification failed.'} Payment reference: ${resp.razorpay_payment_id}`));
-        }
-      },
-      modal: { ondismiss: () => reject(new Error('cancelled')) },
-      theme: { color: '#e63946' },
-    });
-    rz.on('payment.failed', () => reject(new Error('Payment failed. Please try again.')));
-    rz.open();
-  });
+  const session = await authedFetchWithRetry('create-checkout', { item: itemId }) as CheckoutResponse;
+  if (!session?.checkout_url) throw new Error('Could not start checkout. Please try again.');
+  window.location.href = session.checkout_url;
 };
