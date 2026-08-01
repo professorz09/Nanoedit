@@ -22,7 +22,10 @@ let cache: string[] | null = null;
 // caller shares ONE round trip to Supabase, not one each.
 let inflight: Promise<string[]> | null = null;
 
-// Fetch the active style image URLs from the DB (empty array on any problem).
+// Fetch the active, picker-visible style image URLs from the DB (empty array
+// on any problem). `show_in_picker` is independent of `active` — an admin can
+// hide a style from THIS manual list while it stays fully eligible for the
+// YouTube auto-match flow (matchStyles() below never checks show_in_picker).
 export const fetchStyleImages = async (): Promise<string[]> => {
   if (cache) return cache;
   if (inflight) return inflight;
@@ -33,6 +36,7 @@ export const fetchStyleImages = async (): Promise<string[]> => {
         .from('style_images')
         .select('path')
         .eq('active', true)
+        .eq('show_in_picker', true)
         .order('sort', { ascending: true })
         .order('created_at', { ascending: true });
       if (error || !data) return [];
