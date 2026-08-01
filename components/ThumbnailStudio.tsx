@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, Suspense } from 'react';
 import { GeneratedImage, QueueItem, ThumbInputMode, THUMBNAIL_TEMPLATES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
@@ -137,9 +137,9 @@ interface Props {
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
   { id: 'templates', label: 'Styles', icon: I.Grid },
+  { id: 'sketch', label: 'Sketch', icon: I.Brush },
   { id: 'prompt', label: 'Prompt', icon: I.Text },
   { id: 'reference', label: 'Image', icon: I.Image },
-  { id: 'sketch', label: 'Sketch', icon: I.Brush },
   { id: 'youtube', label: 'YouTube', icon: I.Youtube },
 ];
 
@@ -176,6 +176,27 @@ const ThumbnailStudio: React.FC<Props> = ({
   onView, onDownload, onDownloadAll, onDelete, onOpenEditor, onRetry, onCancel,
 }) => {
   const [mode, setMode] = useState<ThumbInputMode>('templates');
+  // Sliding highlight behind the mode tabs — mirrors SegmentedControl's fix
+  // for the same underlying issue: a plain className swap onto the
+  // thumb-liquid gradient can't be CSS-transitioned, so it used to snap
+  // instantly on every tab switch instead of animating (felt glitchy,
+  // especially on mobile with the tab also growing/shrinking at the same time).
+  const tabsGroupRef = useRef<HTMLDivElement>(null);
+  const tabBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [tabRect, setTabRect] = useState<{ left: number; width: number } | null>(null);
+  const measureTab = useCallback(() => {
+    const group = tabsGroupRef.current;
+    const btn = tabBtnRefs.current[mode];
+    if (!group || !btn) return;
+    const g = group.getBoundingClientRect();
+    const b = btn.getBoundingClientRect();
+    setTabRect({ left: b.left - g.left, width: b.width });
+  }, [mode]);
+  useLayoutEffect(() => { measureTab(); }, [measureTab]);
+  useEffect(() => {
+    window.addEventListener('resize', measureTab);
+    return () => window.removeEventListener('resize', measureTab);
+  }, [measureTab]);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -624,11 +645,11 @@ const ThumbnailStudio: React.FC<Props> = ({
       <header className="sticky top-0 z-40 bg-thumb-bg/90 backdrop-blur-xl border-b border-thumb-line">
         <div className="max-w-6xl mx-auto px-5 h-[68px] flex items-center justify-between">
           <div className="flex items-center gap-7">
-            <button onClick={goHome} className="flex items-center gap-2.5">
-              <div className="thumb-btn w-10 h-10 rounded-[13px] flex items-center justify-center text-white">
+            <button onClick={goHome} className="flex items-center gap-2.5 shrink-0">
+              <div className="thumb-btn w-10 h-10 rounded-[13px] flex items-center justify-center text-white shrink-0">
                 <I.Wand className="w-5 h-5" />
               </div>
-              <span className="text-xl font-extrabold tracking-tight">PodcastFlux</span>
+              <span className="hidden sm:inline text-xl font-extrabold tracking-tight whitespace-nowrap">PodcastFlux</span>
             </button>
             {/* Desktop nav */}
             <nav className="hidden lg:flex items-center gap-1">
@@ -668,11 +689,11 @@ const ThumbnailStudio: React.FC<Props> = ({
             ) : (
               <>
                 {configured && (
-                  <button onClick={() => requireLogin()} className="h-11 inline-flex items-center rounded-full border border-thumb-line px-4 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 hover:text-thumb-red transition-colors">
+                  <button onClick={() => requireLogin()} className="h-11 inline-flex items-center whitespace-nowrap rounded-full border border-thumb-line px-3 sm:px-4 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 hover:text-thumb-red transition-colors">
                     Log in
                   </button>
                 )}
-                <button onClick={goGenerate} className="h-11 inline-flex items-center thumb-btn text-white font-bold text-sm px-4 sm:px-5 rounded-full">
+                <button onClick={goGenerate} className="h-11 inline-flex items-center whitespace-nowrap thumb-btn text-white font-bold text-sm px-3.5 sm:px-5 rounded-full">
                   Start now
                 </button>
               </>
@@ -844,15 +865,25 @@ const ThumbnailStudio: React.FC<Props> = ({
 
             {/* Tabs */}
             {/* Expanding-pill selector: the active tab grows to show its label; the
-                rest stay compact (icon only) so five tabs fit one clean line. */}
-            <div className="flex items-stretch gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
+                rest stay compact (icon only) so five tabs fit one clean line. A
+                sliding highlight (not a class swap onto the gradient) keeps the
+                switch animated instead of snapping. */}
+            <div ref={tabsGroupRef} className="relative flex items-stretch gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
+              {tabRect && (
+                <span
+                  className="thumb-liquid absolute inset-y-1.5 rounded-xl transition-[transform,width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none"
+                  style={{ transform: `translateX(${tabRect.left}px)`, width: tabRect.width }}
+                />
+              )}
               {TABS.map(t => {
                 const active = mode === t.id;
                 return (
                   <button
                     key={t.id}
+                    ref={el => { tabBtnRefs.current[t.id] = el; }}
                     title={t.label}
                     aria-label={t.label}
+                    aria-pressed={active}
                     onClick={() => {
                       // Each tab is its own independent input — don't let one section's
                       // typed prompt/title leak into another (e.g. into YouTube generate).
@@ -860,8 +891,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                       setMode(t.id);
                       setNote(null);
                     }}
-                    className={`flex flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
-                      active ? 'thumb-liquid flex-1 px-3' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-line/50 px-3.5'
+                    className={`relative z-10 flex flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
+                      active ? 'text-white flex-1 px-3' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-line/50 px-3.5'
                     }`}
                   >
                     <t.icon className="w-4 h-4 shrink-0" />
@@ -950,7 +981,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <label className="text-sm font-bold text-thumb-ink flex items-center gap-2">
                     <I.Image className="w-4 h-4 text-thumb-red" /> Pick a style to recreate
                   </label>
-                  <p className="text-[12px] text-thumb-sub -mt-1 leading-relaxed">Tap a thumbnail, then upload your photo or describe the change below. We keep it exactly as-is and only change what you ask (like swapping the face) — no text is added.</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
                     {styleImages.map(src => {
                       const active = selectedRef === src;
@@ -981,7 +1011,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                     placeholder="Tell us about your video and the thumbnail you want — e.g. A gaming video about a crazy comeback; I want a shocked gamer with a glowing headset, explosion behind, neon RGB lighting, and the text 'INSANE COMEBACK'."
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
                   />
-                  <p className="text-[12px] text-thumb-sub leading-relaxed">Just describe your video and the look you want — we turn it into a full thumbnail prompt for you.</p>
                 </div>
               )}
 
@@ -1062,9 +1091,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                     placeholder={mode === 'templates' ? "e.g. Replace the face with my photo · change the title to 'MODI JI'" : 'e.g. THIS CHANGED EVERYTHING'}
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
                   />
-                  {mode === 'templates' && (
-                    <p className="text-[12px] text-thumb-sub leading-relaxed">This is an edit instruction — it won't be written on the image. Leave it empty to just swap in your uploaded photo.</p>
-                  )}
                 </div>
               )}
 
