@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { I } from './ThumbIcons';
 import PersonaPicker from './PersonaPicker';
 import { urlToBase64 } from '../services/youtubeService';
@@ -31,7 +31,17 @@ const ChangeFaceModal: React.FC<{
   const [slots, setSlots] = useState<FaceSlot[]>([newSlot()]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [personaSlotId, setPersonaSlotId] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // The modal renders over the page as a fixed overlay, but the page BEHIND
+  // it could still scroll while it's open — lock body scroll for as long as
+  // this modal is mounted, restore whatever it was on close/unmount.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const addSlot = () => setSlots(prev => (prev.length >= 4 ? prev : [...prev, newSlot()]));
   const removeSlot = (id: string) => setSlots(prev => (prev.length <= 1 ? prev : prev.filter(s => s.id !== id)));
@@ -93,7 +103,7 @@ const ChangeFaceModal: React.FC<{
           <p className="text-[11px] text-thumb-sub leading-relaxed self-center">Everything else — layout, text, background — stays exactly the same. Only the face(s) you specify below get replaced.</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pr-0.5">
+        <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pr-0.5">
           {slots.map((slot, i) => (
             <div key={slot.id} className="bg-thumb-soft border border-thumb-line rounded-xl p-3 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -103,38 +113,49 @@ const ChangeFaceModal: React.FC<{
                 )}
               </div>
 
-              {slot.image ? (
-                <div className="flex items-center gap-3">
-                  <img src={slot.image} alt={`Replacement face ${i + 1}`} className="w-14 h-14 rounded-lg object-cover border border-thumb-line" />
-                  <button onClick={() => setSlotImage(slot.id, null)} className="text-xs font-bold text-thumb-red hover:underline">Change photo</button>
-                </div>
-              ) : (
-                <div className="space-y-2">
+              {/* Photo on the left (fixed size), instruction on the right —
+                  same row instead of stacked, so each face is one compact unit. */}
+              <div className="flex items-start gap-3">
+                <div className="w-20 shrink-0 space-y-1.5">
+                  {slot.image ? (
+                    <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-thumb-line group">
+                      <img src={slot.image} alt={`Replacement face ${i + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setSlotImage(slot.id, null)}
+                        aria-label="Change photo"
+                        className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 focus:opacity-100 text-white text-[10px] font-bold flex items-center justify-center transition-opacity"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { if (!loggedIn) { onRequireLogin(); return; } fileRefs.current[slot.id]?.click(); }}
+                      className="w-20 h-20 rounded-lg border-2 border-dashed border-thumb-line hover:border-thumb-red text-thumb-sub hover:text-thumb-red flex flex-col items-center justify-center gap-1 transition-colors"
+                    >
+                      <I.Upload className="w-4 h-4" />
+                      <span className="text-[10px] font-bold">Upload</span>
+                    </button>
+                  )}
+                  <input ref={el => { fileRefs.current[slot.id] = el; }} type="file" accept="image/*" className="hidden" onChange={e => handleUpload(slot.id, e)} />
                   <button
                     type="button"
-                    onClick={() => { if (!loggedIn) { onRequireLogin(); return; } fileRefs.current[slot.id]?.click(); }}
-                    className="w-full h-11 rounded-lg border-2 border-dashed border-thumb-line hover:border-thumb-red text-thumb-sub hover:text-thumb-red text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                    onClick={() => { if (!loggedIn) { onRequireLogin(); return; } setPersonaSlotId(slot.id); }}
+                    className="w-20 text-[10px] font-bold text-thumb-red hover:underline"
                   >
-                    <I.Upload className="w-4 h-4" /> Upload a photo
+                    Saved face
                   </button>
-                  <input ref={el => { fileRefs.current[slot.id] = el; }} type="file" accept="image/*" className="hidden" onChange={e => handleUpload(slot.id, e)} />
-                  <PersonaPicker
-                    enabled
-                    refreshKey={personaRefreshKey}
-                    onPick={(dataUrl) => setSlotImage(slot.id, dataUrl)}
-                    loggedIn={loggedIn}
-                    onRequireLogin={onRequireLogin}
-                    showAddTile={false}
-                  />
                 </div>
-              )}
 
-              <input
-                value={slot.instruction}
-                onChange={e => setSlotInstruction(slot.id, e.target.value)}
-                placeholder={slots.length > 1 ? "Which face? e.g. “the man on the left” or “green shirt”" : 'Which face? (optional if only one person)'}
-                className="w-full bg-thumb-card border border-thumb-line rounded-lg px-3 py-2 text-xs outline-none placeholder-thumb-sub/60 focus:border-thumb-red/50"
-              />
+                <textarea
+                  value={slot.instruction}
+                  onChange={e => setSlotInstruction(slot.id, e.target.value)}
+                  rows={3}
+                  placeholder={slots.length > 1 ? "Which face? e.g. “the man on the left” or “green shirt”" : 'Which face? (optional if only one person)'}
+                  className="flex-1 h-20 bg-thumb-card border border-thumb-line rounded-lg px-3 py-2 text-xs outline-none placeholder-thumb-sub/60 focus:border-thumb-red/50 resize-none"
+                />
+              </div>
             </div>
           ))}
 
@@ -144,6 +165,16 @@ const ChangeFaceModal: React.FC<{
             </button>
           )}
         </div>
+
+        <PersonaPicker
+          enabled
+          refreshKey={personaRefreshKey}
+          onPick={(dataUrl) => { if (personaSlotId) setSlotImage(personaSlotId, dataUrl); }}
+          loggedIn={loggedIn}
+          onRequireLogin={onRequireLogin}
+          externalOpen={personaSlotId !== null}
+          onExternalClose={() => setPersonaSlotId(null)}
+        />
 
         {error && <p className="text-xs text-thumb-red mt-3">{error}</p>}
 
