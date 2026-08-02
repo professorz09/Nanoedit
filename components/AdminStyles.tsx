@@ -8,7 +8,7 @@ interface AdminStyle {
   active: boolean;
   show_in_picker: boolean;
   meta: any;
-  sort: number;
+  sort: number | null;
   url: string;
   created_at: string;
 }
@@ -134,16 +134,22 @@ const AdminStyles: React.FC = () => {
     }
   };
 
-  // Position within the manual "Styles" picker — lower shows first (see
-  // stylesService.fetchStyleImages' `.order('sort', { ascending: true })`).
-  // Local draft text per style so typing doesn't fight the input, committed
-  // on blur/Enter rather than on every keystroke.
+  // Position within the manual "Styles" picker — lower shows first; unranked
+  // (null) always falls in behind every ranked style (see
+  // stylesService.fetchStyleImages' `.order('sort', { ascending: true,
+  // nullsFirst: false })`). Local draft text per style so typing doesn't
+  // fight the input, committed on blur/Enter rather than on every keystroke.
+  // An empty field commits as "clear back to unranked", not 0 — 0 is now a
+  // real top-priority rank, not a placeholder for "never touched".
+  const sortCompare = (a: number | null, b: number | null) =>
+    a === null && b === null ? 0 : a === null ? 1 : b === null ? -1 : a - b;
   const [sortDrafts, setSortDrafts] = useState<Record<string, string>>({});
   const commitSort = async (s: AdminStyle) => {
     const raw = sortDrafts[s.id];
     if (raw === undefined) return;
-    const next = Number(raw);
-    if (!Number.isFinite(next) || next === s.sort) {
+    const trimmed = raw.trim();
+    const next = trimmed === '' ? null : Number(trimmed);
+    if ((next !== null && !Number.isFinite(next)) || next === s.sort) {
       setSortDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n; });
       return;
     }
@@ -151,7 +157,7 @@ const AdminStyles: React.FC = () => {
     // grid immediately reflects the new position instead of waiting for a
     // manual refresh.
     setStyles(prev => prev.map(x => x.id === s.id ? { ...x, sort: next } : x)
-      .sort((a, b) => a.sort - b.sort || (a.created_at < b.created_at ? 1 : -1)));
+      .sort((a, b) => sortCompare(a.sort, b.sort) || (a.created_at < b.created_at ? 1 : -1)));
     setSortDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n; });
     try {
       await callAdmin({ action: 'set_sort', id: s.id, sort: next });
@@ -245,12 +251,13 @@ const AdminStyles: React.FC = () => {
                     <p className="text-xs font-bold text-thumb-ink truncate flex-1" title={s.name || ''}>{s.name || '(untitled)'}</p>
                     <input
                       type="number"
-                      value={sortDrafts[s.id] ?? String(s.sort)}
+                      value={sortDrafts[s.id] ?? (s.sort === null ? '' : String(s.sort))}
                       onChange={e => setSortDrafts(prev => ({ ...prev, [s.id]: e.target.value }))}
                       onBlur={() => commitSort(s)}
                       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                      title="Order in the manual Styles picker — lower shows first"
-                      aria-label="Picker order (lower shows first)"
+                      placeholder="—"
+                      title="Order in the manual Styles picker — lower shows first. Blank = unranked, falls in behind every ranked style."
+                      aria-label="Picker order (lower shows first, blank = unranked)"
                       className="w-12 shrink-0 bg-thumb-soft border border-thumb-line rounded-md px-1.5 py-0.5 text-[11px] text-center outline-none focus:border-thumb-red/50"
                     />
                   </div>
