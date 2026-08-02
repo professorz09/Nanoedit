@@ -12,7 +12,9 @@
 // The single "Pay What You Want" one-time-payment product created in the Dodo
 // dashboard — every purchase uses this same product, with the actual price
 // set per-request via create-checkout (see docs: dynamic pricing checkout).
-export const DODO_PRODUCT_ID = 'pdt_0NkS5eCDZFTWah6f5OH0u';
+// LIVE-mode product id (test and live are separate catalogs — this only
+// works together with DODO_PAYMENTS_ENVIRONMENT=live_mode + a live API key).
+export const DODO_PRODUCT_ID = 'pdt_0NkSA7Ixv4HewZQhStCHM';
 
 export interface CatalogItem {
   kind: 'plan' | 'addon';
