@@ -21,7 +21,7 @@
 //          APP_URL = https://podcastflux.com (optional, used for the post-checkout return_url)
 // ═══════════════════════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { CATALOG, DODO_PRODUCT_ID } from '../_shared/pricing.ts';
+import { CATALOG, DODO_PRODUCT_ID, PLAN_RANK } from '../_shared/pricing.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -65,14 +65,25 @@ Deno.serve(async (req) => {
     if (!item) return json(400, { error: 'Unknown item.' });
 
     // Add-on credit packs are top-ups for existing subscribers only — a 'free'
-    // account can't buy credits without first holding Pro/Studio. Checked here
-    // (not just hidden in the UI) so a direct API call can't bypass it.
-    if (item.kind === 'addon') {
+    // account can't buy credits without first holding Pro/Studio. A plan buy
+    // resets `profiles.credits` to the new plan's allotment (see
+    // dodo-webhook), so a LOWER tier than the one already active would
+    // silently wipe out unused credits — block that too. Both checked here
+    // (not just hidden/disabled in the UI) so a direct API call can't bypass
+    // either.
+    if (item.kind === 'addon' || item.kind === 'plan') {
       const { data: prof, error: profErr } = await admin
         .from('profiles').select('plan').eq('id', uid).single();
       if (profErr) return json(500, { error: 'Could not verify your plan.' });
-      if (prof?.plan !== 'pro' && prof?.plan !== 'studio') {
+      if (item.kind === 'addon' && prof?.plan !== 'pro' && prof?.plan !== 'studio') {
         return json(403, { error: 'Add-on credits require an active Pro or Studio plan.' });
+      }
+      if (item.kind === 'plan') {
+        const currentRank = PLAN_RANK[(prof?.plan as 'free' | 'pro' | 'studio') ?? 'free'] ?? 0;
+        const targetRank = PLAN_RANK[item.plan!];
+        if (targetRank < currentRank) {
+          return json(403, { error: `You're already on a higher plan — buy add-on credits instead if you need more.` });
+        }
       }
     }
 

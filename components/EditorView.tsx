@@ -226,8 +226,20 @@ export default function EditorView(props: EditorViewProps) {
   // it manages its own sign-in state the same self-contained way
   // ThumbnailStudio does, rather than threading user/login state down through
   // App.tsx's props for a single feature.
-  const { user, configured } = useAuth();
+  const { user, configured, totalCredits, creditsLoading } = useAuth();
   const loggedIn = !configured || !!user;
+  // Generating here goes straight through addToQueue/handleGenerate with no
+  // credit check at all — the server (generate/index.ts) does reject a 0-credit
+  // request, but only after the item already shows "processing", so the error
+  // lands a beat late instead of blocking the click outright. Mirrors
+  // ThumbnailStudio's handleGenerate: out of credits sends them back to
+  // Studio (where Pricing lives) instead of letting the request go out.
+  const outOfCredits = configured && loggedIn && !creditsLoading && totalCredits <= 0;
+  const handleGenerateClick = () => {
+    if (!loggedIn) { setAuthOpen(true); return; }
+    if (outOfCredits) { setView('studio'); return; }
+    handleGenerate();
+  };
   const [authOpen, setAuthOpen] = React.useState(false);
   const [showPersonaPicker, setShowPersonaPicker] = React.useState(false);
   const [personas, setPersonas] = React.useState<Persona[] | null>(null);
@@ -611,10 +623,20 @@ export default function EditorView(props: EditorViewProps) {
                 <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
               </button>
               <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
-              <div className="leading-tight">
-                <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink">PodcastFlux Editor</div>
+              <div className="leading-tight min-w-0 flex-1">
+                <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink truncate">PodcastFlux Editor</div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Canvas Editor</div>
               </div>
+              {configured && loggedIn && (
+                <button
+                  onClick={() => setView('studio')}
+                  title="Credits — tap to top up"
+                  className="shrink-0 h-6 inline-flex items-center gap-1 bg-thumb-soft border border-thumb-line rounded-lg px-2 text-[11px] font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" className="w-3 h-3 text-thumb-red" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>
+                  {creditsLoading ? <span className="thumb-skeleton inline-block w-4 h-3 rounded align-middle" aria-label="Loading credits" /> : totalCredits}
+                </button>
+              )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -624,11 +646,11 @@ export default function EditorView(props: EditorViewProps) {
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image to generate..."}
                   className="w-full min-h-[120px] lg:min-h-[200px] bg-thumb-soft text-thumb-ink placeholder-thumb-sub/60 rounded-2xl px-4 py-3 outline-none border border-thumb-line focus:border-nano-accent/50 transition-all text-sm resize-none"
-                  onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleGenerate()}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleGenerateClick()}
               />
           </div>
           <button
-              onClick={handleGenerate}
+              onClick={handleGenerateClick}
               disabled={!prompt.trim()}
               className={`thumb-btn w-full py-3.5 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : ''}`}
           >
@@ -741,10 +763,10 @@ export default function EditorView(props: EditorViewProps) {
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image..."}
                       className="flex-1 min-w-0 bg-thumb-soft text-thumb-ink placeholder-thumb-sub/60 rounded-xl px-4 py-3 outline-none border border-thumb-line focus:border-nano-accent/50 transition-all text-sm"
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); handleGenerate(); } }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); handleGenerateClick(); } }}
                   />
                   <button
-                      onClick={handleGenerate}
+                      onClick={handleGenerateClick}
                       disabled={!prompt.trim()}
                       className={`thumb-btn h-12 px-5 shrink-0 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed text-sm whitespace-nowrap ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : ''}`}
                   >

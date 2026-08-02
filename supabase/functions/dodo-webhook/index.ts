@@ -13,8 +13,8 @@
 //   2. On a `payment.succeeded` event, read {uid, item} back from the
 //      metadata this payment's checkout session was created with.
 //   3. Idempotently grant: skip if this payment already appears in the
-//      ledger, else update profiles (plan → set plan+credits+renews_at;
-//      addon → bump addon_credits) and append a credit_ledger row.
+//      ledger, else update profiles (plan → set plan, ADD credits, reset
+//      renews_at; addon → bump addon_credits) and append a credit_ledger row.
 //
 // Auth: NOT a user-authenticated call — Dodo's servers call this directly, so
 // verify_jwt is disabled and the webhook signature IS the authentication.
@@ -152,9 +152,19 @@ Deno.serve(async (req) => {
     // "already granted" forever.
     try {
       if (item.kind === 'plan') {
+        // Upgrading mid-cycle (Pro -> Studio) used to RESET credits to the
+        // new plan's allotment, silently discarding whatever was left of the
+        // old plan's — someone with 100 unused Pro credits who upgraded to
+        // Studio got exactly 400, not 500. Add instead, same as addon
+        // top-ups. (create-checkout already blocks buying a same-or-lower
+        // tier than the one already active, so this path only ever runs for
+        // a genuine upgrade or a first purchase from 'free'.)
+        const { data: prof, error: readErr } = await admin
+          .from('profiles').select('credits').eq('id', uid).single();
+        if (readErr) throw readErr;
         const { error } = await admin.from('profiles').update({
           plan: item.plan,
-          credits: item.credits,          // plan credits reset to the plan's allotment
+          credits: (prof?.credits ?? 0) + item.credits,
           renews_at: renewsAt(item.cycle),
           updated_at: new Date().toISOString(),
         }).eq('id', uid);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PLANS, ADDONS, perMonth, priceFor, yearlySavingPct, BillingCycle, Plan } from '../services/plans';
+import { PLANS, ADDONS, perMonth, priceFor, yearlySavingPct, PLAN_RANK, PlanId, BillingCycle, Plan } from '../services/plans';
 import { useAuth } from '../contexts/AuthContext';
 
 const Check = (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z" /></svg>);
@@ -24,6 +24,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
   // Add-on credit packs are only for paying subscribers (Pro / Studio).
   // Free users must pick a plan first — top-ups aren't offered to them.
   const hasPaidPlan = profile?.plan === 'pro' || profile?.plan === 'studio';
+  const currentRank = PLAN_RANK[(profile?.plan as PlanId) ?? 'free'] ?? 0;
 
   const handlePick = async (plan: Plan) => {
     if (!user) { onRequireLogin(); return; }
@@ -74,6 +75,11 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
       <div className="grid sm:grid-cols-2 gap-5 lg:gap-6 max-w-3xl mx-auto mt-9 px-1">
         {PLANS.map(plan => {
           const isCurrent = profile?.plan === plan.id;
+          // A plan buy always resets credits to the purchased plan's
+          // allotment (see dodo-webhook) — buying a lower tier while a
+          // higher one is active would silently wipe out unused credits, so
+          // block it here instead of letting it through as a real purchase.
+          const isDowngrade = !isCurrent && PLAN_RANK[plan.id] < currentRank;
           const opt = priceFor(plan, cycle);
           return (
             <div
@@ -102,18 +108,21 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
 
               <button
                 onClick={() => handlePick(plan)}
-                disabled={isCurrent || busy !== null}
+                disabled={isCurrent || isDowngrade || busy !== null}
+                title={isDowngrade ? `You're already on ${profile?.plan} — this would reset your credits down, so it's blocked. Buy add-on credits instead if you need more.` : undefined}
                 className={`mt-6 w-full py-3.5 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2 transition-all disabled:opacity-60 ${
-                  isCurrent
+                  isCurrent || isDowngrade
                     ? 'bg-thumb-soft border border-thumb-line text-thumb-sub cursor-default'
                     : 'thumb-btn text-white'
                 }`}
               >
                 {isCurrent
                   ? 'Current plan'
-                  : busy === `plan:${plan.id}`
-                    ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing…</>
-                    : <><Wand className="w-4 h-4" /> Get {plan.name}</>}
+                  : isDowngrade
+                    ? 'Included in your plan'
+                    : busy === `plan:${plan.id}`
+                      ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing…</>
+                      : <><Wand className="w-4 h-4" /> Get {plan.name}</>}
               </button>
             </div>
           );

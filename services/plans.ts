@@ -60,6 +60,11 @@ export const ADDONS: AddonPack[] = [
 
 export const getPlan = (id: PlanId): Plan | undefined => PLANS.find(p => p.id === id);
 
+// Tier ordering — used to block buying a LOWER (or equal — "Current plan"
+// already covers equal) plan than the one a user actively holds, since a
+// purchase there would otherwise silently downgrade their credits.
+export const PLAN_RANK: Record<PlanId, number> = { free: 0, pro: 1, studio: 2 };
+
 // Helpers for the UI
 export const priceFor = (plan: Plan, cycle: BillingCycle) =>
   cycle === 'monthly' ? plan.monthly : plan.yearly;
