@@ -13,6 +13,7 @@ import { deleteGenerationOnServer } from './services/geminiService';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
 import RetryImage from './components/RetryImage';
+import ConfirmModal from './components/ConfirmModal';
 // jszip (~95 KB) is loaded on demand in handleDownloadAll — kept out of the initial bundle.
 
 // The full-screen editor (~760 lines of markup) is split into its own chunk and
@@ -505,8 +506,13 @@ function App() {
     setSourceImages([]);
   };
 
-  const deleteGeneratedImage = (id: string) => {
-      if (!window.confirm('Delete this thumbnail? This cannot be undone.')) return;
+  // Native window.confirm() looks jarring next to the app's own UI and can't
+  // be themed — confirmModal drives a styled stand-in instead (see
+  // ConfirmModal). Holds the action to run if the user confirms; null means
+  // no dialog is open.
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
+  const performDeleteImage = (id: string) => {
       const target = generatedImages.find(img => img.id === id);
       setGeneratedImages(prev => prev.filter(img => img.id !== id));
       if (viewedImage) setViewedImage(null);
@@ -522,16 +528,30 @@ function App() {
       }
   };
 
-  const clearAllGeneratedImages = () => {
-    if (window.confirm('Clear all generated images? This cannot be undone.')) {
-      const toDelete = generatedImages;
-      setGeneratedImages([]);
-      setTextResponse(null);
-      toDelete.forEach(img => {
-        deletedUrlsRef.current.add(img.url);
-        deleteGenerationOnServer(img.url);
+  const deleteGeneratedImage = (id: string) => {
+      setConfirmModal({
+        title: 'Delete thumbnail?',
+        message: 'This cannot be undone.',
+        onConfirm: () => { performDeleteImage(id); setConfirmModal(null); },
       });
-    }
+  };
+
+  const performClearAllImages = () => {
+    const toDelete = generatedImages;
+    setGeneratedImages([]);
+    setTextResponse(null);
+    toDelete.forEach(img => {
+      deletedUrlsRef.current.add(img.url);
+      deleteGenerationOnServer(img.url);
+    });
+  };
+
+  const clearAllGeneratedImages = () => {
+    setConfirmModal({
+      title: 'Clear all generated images?',
+      message: 'This cannot be undone.',
+      onConfirm: () => { performClearAllImages(); setConfirmModal(null); },
+    });
   };
 
   const copyPromptFromImage = (imagePrompt: string, imageId: string) => {
@@ -1080,11 +1100,19 @@ function App() {
                       )}
                   </div>
               )}
+              <ConfirmModal
+                  open={confirmModal !== null}
+                  title={confirmModal?.title ?? ''}
+                  message={confirmModal?.message ?? ''}
+                  onConfirm={() => confirmModal?.onConfirm()}
+                  onCancel={() => setConfirmModal(null)}
+              />
           </>
       );
   }
 
   return (
+    <>
     <React.Suspense fallback={<div className="thumb-scope min-h-screen bg-thumb-bg" />}>
       <EditorView
         theme={theme}
@@ -1175,6 +1203,14 @@ function App() {
         handleViewerRemoveBg={handleViewerRemoveBg}
       />
     </React.Suspense>
+    <ConfirmModal
+        open={confirmModal !== null}
+        title={confirmModal?.title ?? ''}
+        message={confirmModal?.message ?? ''}
+        onConfirm={() => confirmModal?.onConfirm()}
+        onCancel={() => setConfirmModal(null)}
+    />
+    </>
   );
 }
 
