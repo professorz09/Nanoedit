@@ -294,16 +294,15 @@ const ThumbnailStudio: React.FC<Props> = ({
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
 
-  // Lemon Squeezy redirects back here after checkout (return_url set in
+  // Dodo redirects back here after checkout (return_url set in
   // create-checkout) — there's no client-side "payment succeeded" callback
-  // like Razorpay had, since crediting happens purely via the
-  // "lemonsqueezy-webhook" Edge Function, which can land a second or two
-  // after the browser's own redirect. Poll the profile until the credited
-  // amount actually shows up, instead of leaving the user staring at a
-  // stale balance.
+  // like Razorpay had, since crediting happens purely via the "dodo-webhook"
+  // Edge Function, which can land a second or two after the browser's own
+  // redirect. Poll the profile until the credited amount actually shows up,
+  // instead of leaving the user staring at a stale balance.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('ls_checkout') !== 'return') return;
+    if (params.get('dodo_checkout') !== 'return') return;
     window.history.replaceState(null, '', window.location.pathname);
     goPricing();
     setNoteText('Finalizing your purchase…', 'info');
@@ -328,11 +327,11 @@ const ThumbnailStudio: React.FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Lemon Squeezy checkout — creates a server-side checkout and navigates
-  // the browser to Lemon Squeezy's hosted checkout page (see
+  // Dodo Payments checkout — creates a server-side checkout session and
+  // navigates the browser to Dodo's hosted checkout page (see
   // paymentsService.ts). There's no "success" branch here: on success the
-  // page navigates away entirely before this promise would resolve. Lemon
-  // Squeezy redirects back to `?ls_checkout=return`, handled by the effect below,
+  // page navigates away entirely before this promise would resolve. Dodo
+  // redirects back to `?dodo_checkout=return`, handled by the effect below,
   // which shows the success note once the webhook has actually granted the
   // credits — a failure here only ever means checkout couldn't even start.
   const startCheckout = async (plan: Plan, cycle: BillingCycle) => {

@@ -129,7 +129,7 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
       .from('credit_ledger')
       .select('id, delta, reason, created_at')
       .eq('user_id', user.id)
-      // Purchases only (Lemon Squeezy plan/add-on buys) — generation spend, refunds
+      // Purchases only (Dodo Payments plan/add-on buys) — generation spend, refunds
       // and signup/expiry adjustments are usage/bookkeeping, not a purchase.
       .like('reason', 'purchase:%')
       .order('created_at', { ascending: false })
