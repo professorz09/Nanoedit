@@ -196,7 +196,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   // its exact look for your topic. Default to the first one so a style is always set.
   // The pool comes from the DB (falls back to the bundled REFERENCE_IMAGES) — only
   // fetched once this tab is actually opened, not on every visit to the studio.
-  const styleImages = useStyleImages(REFERENCE_IMAGES, mode === 'templates' || mode === 'youtube');
+  const styleImages = useStyleImages(REFERENCE_IMAGES, mode === 'templates' || mode === 'youtube' || mode === 'sketch');
   const [selectedRef, setSelectedRef] = useState<string | null>(REFERENCE_IMAGES[0] ?? null);
   // Keep a valid default selected as the DB pool loads / changes.
   useEffect(() => {
@@ -206,6 +206,11 @@ const ThumbnailStudio: React.FC<Props> = ({
   }, [styleImages, selectedRef]);
   const [uploads, setUploads] = useState<string[]>([]);
   const [sketchData, setSketchData] = useState<string | null>(null);
+  // Sketch mode's optional extras (persona / style / photo upload) are
+  // collapsed behind one toggled panel at a time instead of always showing
+  // all three — keeps the composer compact since most sketches need none of them.
+  const [sketchPanel, setSketchPanel] = useState<'persona' | 'style' | 'upload' | null>(null);
+  const [selectedSketchStyle, setSelectedSketchStyle] = useState<string | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
   // YouTube mode normally auto-matches a style per video (vector search over
   // the style pool) — this lets a user override that and force one specific
@@ -789,8 +794,21 @@ const ThumbnailStudio: React.FC<Props> = ({
       // any uploaded photo follows as the real face/subject to render in.
       sources = [sketchData, ...sources];
       const hasFace = uploads.length > 0;
+      // An optional style reference goes LAST — kept clearly separate from the
+      // sketch/face sources so the "match style only, not layout" instruction
+      // below has one unambiguous image to point at.
+      let styleDir = '';
+      if (selectedSketchStyle) {
+        setBusy(true);
+        const styleB64 = await urlToBase64(selectedSketchStyle);
+        setBusy(false);
+        if (styleB64) {
+          sources = [...sources, styleB64];
+          styleDir = 'A final reference image is provided purely for visual STYLE — match its color grading, lighting mood and art treatment only. Do NOT copy its layout, composition or subjects; the hand-drawn sketch above always decides where everything goes. ';
+        }
+      }
       const extra = promptText.trim() ? `Extra direction: ${promptText.trim()}. ` : '';
-      prompt = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${extra}${topicDirective(promptText || titleText)}${textDirective(titleText)} ${BASE_THUMB}`;
+      prompt = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${styleDir}${extra}${topicDirective(promptText)}${textDirective(promptText)} ${BASE_THUMB}`;
     } else {
       // reference — single field, same instruction-only pipeline as Styles/templates:
       // it's creative direction for the model, never auto-rendered as on-image text.
@@ -804,7 +822,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -1243,19 +1261,95 @@ const ThumbnailStudio: React.FC<Props> = ({
                     value={promptText}
                     onChange={e => setPromptText(e.target.value)}
                     rows={2}
-                    placeholder="Describe what it's about — e.g. 'gaming video, shocked player, explosion behind, neon colors'"
+                    placeholder="Describe it and the title text — e.g. 'gaming video, shocked player, explosion behind, neon colors, text: INSANE COMEBACK'"
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
                   />
+
+                  {/* Three equal-size entry points for the optional extras — only one
+                      panel open at a time keeps this compact instead of always
+                      showing a face strip + style grid + dropzone together. */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSketchPanel(p => (p === 'persona' ? null : 'persona'))}
+                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${sketchPanel === 'persona' ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                    >
+                      <I.FaceSwap className="w-4 h-4" /> Persona
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSketchPanel(p => (p === 'style' ? null : 'style'))}
+                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${sketchPanel === 'style' ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                    >
+                      <I.Image className="w-4 h-4" /> Style
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { if (configured && !user) { requireLogin('Log in to upload photos.'); return; } setSketchPanel(p => (p === 'upload' ? null : 'upload')); }}
+                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${sketchPanel === 'upload' ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                    >
+                      <I.Upload className="w-4 h-4" /> Upload
+                    </button>
+                  </div>
+
+                  {sketchPanel === 'persona' && (
+                    <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} />
+                  )}
+
+                  {sketchPanel === 'style' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-thumb-sub">Match this style's look — the sketch still decides the layout.</p>
+                        {selectedSketchStyle && (
+                          <button type="button" onClick={() => setSelectedSketchStyle(null)} className="text-[11px] font-bold text-thumb-red hover:underline shrink-0">Clear</button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[220px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
+                        {styleImages.map(src => {
+                          const active = selectedSketchStyle === src;
+                          return (
+                            <button
+                              key={src}
+                              type="button"
+                              onClick={() => setSelectedSketchStyle(active ? null : src)}
+                              className={`relative rounded-xl overflow-hidden border-2 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
+                            >
+                              <div className="aspect-video overflow-hidden bg-black/40">
+                                <img src={src} alt="Style reference" loading="lazy" className="w-full h-full object-cover" />
+                              </div>
+                              {active && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-thumb-red text-white flex items-center justify-center text-[10px] font-bold">✓</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {sketchPanel === 'upload' && (
+                    <div>
+                      <div
+                        onClick={triggerUpload}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => { e.preventDefault(); dropFiles(Array.from(e.dataTransfer.files)); }}
+                        className="border-2 border-dashed border-white/12 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
+                      >
+                        <I.Upload className="w-5 h-5" />
+                        <span className="text-xs font-bold">Click or drag to upload</span>
+                        <span className="text-[11px] text-thumb-sub/80">Up to 4 images · PNG or JPG</span>
+                      </div>
+                      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Saved faces (shared for templates + reference + prompt + sketch) —
-                  select-only here; faces are uploaded from the Profile page. */}
-              {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && (
+              {/* Saved faces (shared for templates + reference + prompt) — sketch
+                  has its own toggled Persona panel above instead. */}
+              {(mode === 'reference' || mode === 'templates' || mode === 'prompt') && (
                 <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={false} />
               )}
 
-              {/* Uploaded thumbnails preview (shared for templates + reference + prompt + sketch) */}
+              {/* Uploaded thumbnails preview (shared across every mode that can carry a photo) */}
               {(mode === 'reference' || mode === 'templates' || mode === 'prompt' || mode === 'sketch') && uploads.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {uploads.map((u, i) => (
@@ -1268,15 +1362,16 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* templates + reference = single edit/direction instruction (optional);
-                  sketch = overlay title (optional) */}
-              {(mode === 'templates' || mode === 'reference' || mode === 'sketch') && (
+              {/* templates + reference = single edit/direction instruction (optional).
+                  sketch no longer uses this — its title text is now part of the
+                  single description field above. */}
+              {(mode === 'templates' || mode === 'reference') && (
                 <div className="space-y-2.5">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">{mode === 'sketch' ? 'Title text on thumbnail' : 'What to change'}</label>
+                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">What to change</label>
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
-                    placeholder={mode === 'sketch' ? 'e.g. THIS CHANGED EVERYTHING' : "e.g. Replace the face with my photo · change the title to 'MODI JI'"}
+                    placeholder="e.g. Replace the face with my photo · change the title to 'MODI JI'"
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
                   />
                 </div>
