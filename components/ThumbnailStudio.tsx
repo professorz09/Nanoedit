@@ -146,6 +146,11 @@ interface Props {
   onOpenEditor: (url?: string) => void;
   onRetry: (item: QueueItem) => void;
   onCancel: (id: string) => void;
+  // Lifted to App (rather than local state) so the Studio's own lightbox
+  // there can also trigger "Change face" on the same image, not just the
+  // per-card button in the results grid below.
+  changeFaceTarget: string | null;
+  setChangeFaceTarget: (url: string | null) => void;
 }
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
@@ -187,6 +192,7 @@ const FEED_NEIGHBORS = [
 const ThumbnailStudio: React.FC<Props> = ({
   onGenerate, generatedImages, queue, isProcessing, itemTimers,
   onView, onDownload, onDownloadAll, onDelete, onOpenEditor, onRetry, onCancel,
+  changeFaceTarget, setChangeFaceTarget,
 }) => {
   const [mode, setMode] = useState<ThumbInputMode>('templates');
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -519,8 +525,9 @@ const ThumbnailStudio: React.FC<Props> = ({
   // "Change face" — fix a wrong/unwanted face on an already-generated
   // thumbnail (e.g. one pulled in from a reference-style image) without
   // redoing the whole generation. Modal builds an edit prompt + sources;
-  // this just queues it like any other generation.
-  const [changeFaceTarget, setChangeFaceTarget] = useState<string | null>(null);
+  // this just queues it like any other generation. changeFaceTarget/
+  // setChangeFaceTarget are now props (owned by App) so the Studio's own
+  // lightbox there can trigger this too, not just the per-card button below.
   const applyChangeFace = (prompt: string, sources: string[]) => {
     // Same eligibility gate as the main Generate button — this bypasses that
     // button entirely, so it needs its own login/credit check before queuing.
@@ -2034,7 +2041,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           <div className="text-center mt-8">
             <h3 className="text-xl sm:text-2xl font-black">Turn underperformers into winners</h3>
             <p className="text-thumb-sub mt-2 max-w-lg mx-auto">Never let another video flatline. Create, test, iterate &amp; unlock more views.</p>
-            <button onClick={goGenerate} className="thumb-btn mt-5 px-6 py-3 rounded-xl text-white font-bold inline-flex items-center gap-2">
+            <button onClick={goGenerate} className="thumb-btn mt-5 px-6 py-3 rounded-full text-white font-bold inline-flex items-center gap-2">
               <I.Wand className="w-4 h-4" /> Create better thumbnails
             </button>
           </div>
