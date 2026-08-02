@@ -119,11 +119,18 @@ Deno.serve(async (req) => {
       console.error('dodo_zero_amount', paymentId, itemId, paidCents, paidCurrency);
       return json(400, { error: 'Payment amount looks invalid.' });
     }
-    if (paidCurrency !== 'USD' || paidCents !== expectedCents) {
+    // total_amount is the final charge (subtotal - discount + tax), while
+    // expectedCents is the pre-tax cart amount we quoted — comparing them
+    // directly flagged every normal taxed payment as a "mismatch" (tax is
+    // basically never zero). Back tax out first so this only fires for an
+    // actual currency/amount problem.
+    const paidTax = typeof event.data?.tax === 'number' ? event.data.tax : 0;
+    const paidPreTax = paidCents - paidTax;
+    if (paidCurrency !== 'USD' || paidPreTax !== expectedCents) {
       // Not a hard failure — log for visibility (e.g. billing_currency ever
       // stops being honored) but still grant the credits the metadata says
       // were paid for.
-      console.error('dodo_amount_mismatch_nonblocking', paymentId, itemId, paidCents, paidCurrency, expectedCents);
+      console.error('dodo_amount_mismatch_nonblocking', paymentId, itemId, paidCents, paidTax, paidCurrency, expectedCents);
     }
 
     // Idempotency — claim the ledger row FIRST (atomically, via the unique

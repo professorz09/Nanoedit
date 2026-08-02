@@ -338,7 +338,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
    flip above (#ddf7ec) — both are pale, low-contrast mint. Darken it here,
    same as the red-100/200/300 flip right above. */
 .thumb-light .text-thumb-green,
-.thumb-light .hover\:text-thumb-green:hover { color: #0d9668; }
+.thumb-light .hover\:text-thumb-green:hover { color: #087a56; }
 
 /* Dark surface fills → light (inputs, tracks). Overlays ≥40% stay dark. */
 .thumb-light .bg-black\/20,
