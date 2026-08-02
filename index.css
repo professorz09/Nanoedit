@@ -263,9 +263,12 @@ button:active:not(:disabled) { transform: scale(0.97); }
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
-.thumb-marquee { animation: thumb-marquee 32s linear infinite; }
+/* will-change promotes the row to its own GPU layer — without it, mobile
+   browsers can mis-composite the rounded, overflow-hidden cards mid-animation
+   and paint a blank/pale patch over part of a card until the next frame. */
+.thumb-marquee { animation: thumb-marquee 32s linear infinite; will-change: transform; }
 .thumb-marquee:hover { animation-play-state: paused; }
-.thumb-marquee-reverse { animation: thumb-marquee 32s linear infinite reverse; }
+.thumb-marquee-reverse { animation: thumb-marquee 32s linear infinite reverse; will-change: transform; }
 .thumb-marquee-reverse:hover { animation-play-state: paused; }
 
 /* Dark scrollbar when studio is active */

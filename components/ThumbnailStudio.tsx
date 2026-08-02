@@ -1864,8 +1864,14 @@ const ThumbnailStudio: React.FC<Props> = ({
             <div className="relative -mx-5 overflow-hidden space-y-4">
               <div className="flex gap-4 w-max thumb-marquee">
                 {[...SHOWCASE_ROW_1, ...SHOWCASE_ROW_1].map((src, i) => (
-                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
-                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card bg-thumb-soft shrink-0">
+                    {/* Eager, not lazy: these cards scroll into view purely via CSS
+                        transform (not real page scroll), which native lazy-loading's
+                        intersection check doesn't reliably re-run for — some images
+                        would sit half-loaded (a pale placeholder patch) as they
+                        drifted across the row. There are only a handful of small
+                        showcase images, so loading them all upfront is cheap. */}
+                    <img src={src} alt="" decoding="async" className="w-full h-full object-cover" />
                   </div>
                 ))}
               </div>
@@ -1874,8 +1880,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                   not just a reordering of row one's, so nothing repeats between rows. */}
               <div className="flex gap-4 w-max thumb-marquee-reverse">
                 {[...SHOWCASE_ROW_2.slice().reverse(), ...SHOWCASE_ROW_2.slice().reverse()].map((src, i) => (
-                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
-                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card bg-thumb-soft shrink-0">
+                    <img src={src} alt="" decoding="async" className="w-full h-full object-cover" />
                   </div>
                 ))}
               </div>
