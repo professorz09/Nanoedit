@@ -154,11 +154,11 @@ interface Props {
 }
 
 const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactElement }[] = [
+  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
   { id: 'templates', label: 'Styles', icon: I.Grid },
   { id: 'sketch', label: 'Sketch', icon: I.Brush },
   { id: 'prompt', label: 'Prompt', icon: I.Text },
   { id: 'reference', label: 'Image', icon: I.Image },
-  { id: 'youtube', label: 'YouTube', icon: I.Youtube },
 ];
 
 const TESTIMONIALS = [
@@ -441,13 +441,31 @@ const ThumbnailStudio: React.FC<Props> = ({
 
   // From the clean landing: jump to the generate page and, if the box has text, start immediately
   const startFromHome = () => {
+    const trimmed = promptText.trim();
+    const ytId = trimmed ? extractYouTubeId(trimmed) : null;
+    if (ytId) {
+      // Someone pasted a YouTube link into the plain description box (easy
+      // mistake — there's no separate box visible yet from the home page).
+      // Treating that URL as literal prompt text would just describe "a
+      // video at this URL" instead of actually using it — route to the real
+      // YouTube flow instead, pre-filled, so they land ready to Generate
+      // there rather than getting a broken result from the wrong mode.
+      setYoutubeUrl(trimmed);
+      setPromptText('');
+      setMode('youtube');
+      setNote(null);
+      setSection('generate');
+      setSidebarOpen(false);
+      setTimeout(() => document.getElementById('thumb-tool')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+      return;
+    }
     setMode('prompt');
     setNote(null);
     setSection('generate');
     if (configured && !user) { requireLogin('Log in to generate your thumbnail.'); return; }
     if (configured && user && !creditsLoading && totalCredits <= 0) { goPricing(); return; }
-    if (promptText.trim()) {
-      const prompt = `${promptText.trim()}. ${textDirective(titleText)} ${BASE_THUMB}`;
+    if (trimmed) {
+      const prompt = `${trimmed}. ${textDirective(titleText)} ${BASE_THUMB}`;
       onGenerate(prompt, [...uploads], { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash' });
       scrollToResults();
     } else {
@@ -816,8 +834,101 @@ const ThumbnailStudio: React.FC<Props> = ({
         prompt = `${tpl.style} ${usingTplRef ? 'Use the first reference image as the exact style, layout, composition and color template — closely match its framing, lighting and color grade while creating an original thumbnail for this topic (do not copy its subject verbatim). ' : ''}The video is about "${topic}". ${topicDirective(topic)}${hasFace ? 'Feature the person/photo from the uploaded reference as the main subject and preserve their likeness, blending them naturally into the template style. ' : ''}${textDirective(titleText)} ${BASE_THUMB}`;
       }
     } else if (mode === 'prompt') {
-      const faceDir = uploads.length > 0 ? 'Feature the person(s) from the uploaded photo(s) as the main subject and preserve their face and likeness accurately. ' : '';
-      prompt = `${promptText.trim()}. ${faceDir}${topicDirective(promptText)} ${BASE_THUMB}`;
+      // Same structure as YouTube mode: design two distinct AI concepts + a
+      // headline from the description first (free, best-effort — same as
+      // YouTube's transcript-based concept step), then auto-match a style
+      // from our own curated library and blend a different concept/style
+      // pairing into each variation slot, instead of generating from bare
+      // text alone. Handles its own onGenerate calls/return, same as
+      // YouTube mode, for the same reason.
+      const hasFace = uploads.length > 0;
+      const wantCount = Math.max(1, Math.min(4, genCount));
+      const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
+      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+
+      setBusy(true);
+      setNoteText('Designing two fresh thumbnail concepts…', 'info');
+      let conceptA = '', conceptB = '', headline = '';
+      try {
+        const raw = await generateText(
+          `You are a world-class YouTube thumbnail art director. Analyse the description below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
+          `Rules:\n` +
+          `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
+          `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
+          `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+          `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
+          `Reply in EXACTLY this format, nothing else:\n` +
+          `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+          `DESCRIPTION: ${promptText.trim()}`,
+          'concept'
+        );
+        const grab = (label: string) => {
+          const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
+          return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+        };
+        conceptA = grab('CONCEPT_A').slice(0, 400);
+        conceptB = grab('CONCEPT_B').slice(0, 400);
+        headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+        if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
+      } catch (_e) {
+        /* concept generation is free and best-effort — falls back to the raw description below */
+      }
+      const textSeed = headline || promptText.trim();
+
+      setNoteText('Designing your thumbnails…', 'info');
+      const matchQuery = promptText.trim().slice(0, 4000);
+      const matched = await matchStyles(matchQuery, 8, false);
+      const pool: { url: string; meta?: any }[] = matched.length
+        ? matched.map(m => ({ url: m.url, meta: m.meta }))
+        : (await fetchStyleImages()).map(u => ({ url: u }));
+
+      if (pool.length) {
+        const candidates = pool.slice(0, Math.min(pool.length, Math.max(5, wantCount + 2)));
+        for (let i = candidates.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
+        const chosen = Array.from({ length: wantCount }, (_, i) => candidates[i % candidates.length]);
+        const conceptPair = [conceptA || conceptB, conceptB || conceptA];
+        const concepts = Array.from({ length: wantCount }, (_, i) => conceptPair[i % 2]);
+
+        let launched = 0;
+        for (let i = 0; i < wantCount; i++) {
+          const style = chosen[i];
+          const meta = style.meta || {};
+          const concept = concepts[i] || '';
+          const styleB64 = await urlToBase64(style.url);
+          if (!styleB64) continue; // skip an unreadable style rather than falling back mid-loop
+
+          const styleHint = meta.summary ? `Reference style vibe: ${meta.summary}. ` : '';
+          const faceStyle = hasFace
+            ? "For the main person, use the person from the uploaded photo — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. Do NOT use the reference image's own person — that belongs to a different, unrelated thumbnail. "
+            : "Build the main subject from the concept below. Do NOT reuse the reference image's own specific person or face — that belongs to a different, unrelated thumbnail; invent a new subject that matches the concept instead. ";
+          const styleTexts = Array.isArray(meta.elements?.texts) ? meta.elements.texts : [];
+          const metaKnown = !!(meta.summary || meta.text_density || meta.elements);
+          const styleUsesText = styleTexts.length > 0
+            || meta.text_density === 'high' || meta.text_density === 'low'
+            || (!metaKnown && !!textSeed);
+          const originalWords = styleTexts.map((t: any) => t?.current).filter(Boolean).join('", "');
+          const noOldWords = originalWords ? `Specifically, do NOT render the reference image's own original words ("${originalWords}") anywhere — those belong to a different thumbnail. ` : '';
+          const textStyle = styleUsesText
+            ? `This style shows headline text — REPLACE it with a short punchy headline for THIS thumbnail (2-4 uppercase words) based on: "${textSeed}". Keep the SAME position, size and treatment as the style. Render ONLY this one new headline, correctly spelled — no other words, duplicates or gibberish. ${noOldWords}`
+            : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
+
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : `${promptText.trim()}. `}${styleHint}${faceStyle}${textStyle}${topicDirective(promptText)} ${BASE_THUMB}`;
+          onGenerate(finalize(p), [styleB64, ...uploads], genOpts);
+          launched++;
+        }
+        if (launched) { setBusy(false); setNote(null); scrollToResults(); return; }
+      }
+
+      // No usable style image at all (none readable, or the fetch failed) —
+      // fall back to a plain concept/prompt-only generation.
+      const faceDir = hasFace ? 'Feature the person(s) from the uploaded photo(s) as the main subject and preserve their face and likeness accurately. ' : '';
+      const fallbackConcepts = (conceptA && conceptB) ? [conceptA, conceptB] : [conceptA || conceptB || promptText.trim()];
+      const variants = Array.from({ length: wantCount }, (_, i) => finalize(`${fallbackConcepts[i % fallbackConcepts.length]}. ${faceDir}${topicDirective(promptText)} ${BASE_THUMB}`));
+      variants.forEach(v => onGenerate(v, [...uploads], genOpts));
+      setBusy(false);
+      setNote(null);
+      scrollToResults();
+      return;
     } else if (mode === 'sketch') {
       if (!sketchData) return;
       // The sketch goes FIRST so the model treats it as the layout blueprint;
@@ -1070,7 +1181,11 @@ const ThumbnailStudio: React.FC<Props> = ({
             <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-thumb-sub">
               <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Pro-grade AI models</span>
               <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> 4K · 16:9 exports</span>
-              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Cancel anytime</span>
+              {/* Plans are a one-time purchase, not a recurring subscription
+                  (see dodo-webhook) — there's no auto-renewal to "cancel" in
+                  the first place, so that claim was inaccurate. This is the
+                  truthful version of the same reassurance. */}
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> No auto-renewal</span>
             </div>
           </div>
         </section>
@@ -1862,6 +1977,19 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'pricing' && (
           <Suspense fallback={<PanelFallback />}>
             <Pricing onCheckout={startCheckout} onBuyAddon={buyAddon} onRequireLogin={() => requireLogin('Log in to upgrade.')} />
+            {/* TEMPORARY — admin-only $1 live-payment verification. Not part
+                of the normal pricing UI (see the matching catalog comment in
+                _shared/pricing.ts). Remove both once verified. */}
+            {profile?.is_admin && (
+              <div className="max-w-3xl mx-auto mt-6 px-1 text-center">
+                <button
+                  onClick={() => buyItem('plan:pro:monthly_livetest').catch((e: any) => setNoteText(e?.message || 'Could not start checkout.'))}
+                  className="text-xs font-bold text-thumb-sub border border-dashed border-thumb-line rounded-full px-4 py-2 hover:border-thumb-red/40 hover:text-thumb-red transition-colors"
+                >
+                  Admin: run $1 live payment verification
+                </button>
+              </div>
+            )}
           </Suspense>
         )}
 
@@ -1943,10 +2071,10 @@ const ThumbnailStudio: React.FC<Props> = ({
             {/* Capability stats */}
             <div className="mt-14 grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
               {[
-                { n: '~12s', accent: '', l: 'Avg. generation time' },
+                { n: '~30s', accent: '', l: 'Avg. generation time' },
                 { n: '10', accent: '+', l: 'Viral style templates' },
                 { n: '4K', accent: '', l: '16:9 export quality' },
-                { n: '5', accent: ' free', l: 'Thumbnails to start' },
+                { n: '$0.30', accent: '', l: 'Starting per thumbnail' },
               ].map(s => (
                 <div key={s.l} className="thumb-glass rounded-2xl px-4 py-6 text-center">
                   <p className="text-3xl sm:text-4xl font-black text-thumb-ink tracking-tight">{s.n}<span className="text-thumb-red">{s.accent}</span></p>
