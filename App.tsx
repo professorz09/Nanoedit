@@ -109,6 +109,12 @@ function App() {
   // "From styles" picker — pick a ready-made style thumbnail to add as a source layer.
   const [showStylePicker, setShowStylePicker] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // URLs deleted this session — checked by the gallery-restore effect below so
+  // a server hydration query already in flight when a delete happens can't
+  // resurrect it (the query only knows what was true when it started; without
+  // this, its merge would see the just-deleted url as "not seen locally" and
+  // add it right back).
+  const deletedUrlsRef = useRef<Set<string>>(new Set());
   // Annotation pins (Pin tool): click the image to drop a numbered marker + a note
   // describing the change you want there. Positions are normalized (0..1) to the image.
   const [annotations, setAnnotations] = useState<{ id: string; nx: number; ny: number; note: string }[]>([]);
@@ -203,7 +209,7 @@ function App() {
           }));
           setGeneratedImages(prev => {
               const seenUrls = new Set(prev.map(p => p.url));
-              const merged = [...prev, ...serverImages.filter(s => !seenUrls.has(s.url))];
+              const merged = [...prev, ...serverImages.filter(s => !seenUrls.has(s.url) && !deletedUrlsRef.current.has(s.url))];
               merged.sort((a, b) => b.timestamp - a.timestamp);
               return merged.slice(0, 50);
           });
@@ -504,16 +510,27 @@ function App() {
       const target = generatedImages.find(img => img.id === id);
       setGeneratedImages(prev => prev.filter(img => img.id !== id));
       if (viewedImage) setViewedImage(null);
-      // Best-effort server-side cleanup so it doesn't come back on refresh
-      // (see deleteGenerationOnServer) — local state above is already updated
-      // regardless of whether this succeeds.
-      if (target) deleteGenerationOnServer(target.url);
+      if (target) {
+        // Tombstone first — a gallery-restore hydration already in flight
+        // when this runs only knows what was locally present when IT started,
+        // so without this it could still merge the just-deleted url back in.
+        deletedUrlsRef.current.add(target.url);
+        // Best-effort server-side cleanup so it doesn't come back on refresh
+        // (see deleteGenerationOnServer) — local state above is already
+        // updated regardless of whether this succeeds.
+        deleteGenerationOnServer(target.url);
+      }
   };
-  
+
   const clearAllGeneratedImages = () => {
     if (window.confirm('Clear all generated images? This cannot be undone.')) {
+      const toDelete = generatedImages;
       setGeneratedImages([]);
       setTextResponse(null);
+      toDelete.forEach(img => {
+        deletedUrlsRef.current.add(img.url);
+        deleteGenerationOnServer(img.url);
+      });
     }
   };
 

@@ -70,7 +70,16 @@ Deno.serve(async (req) => {
     if (!rows || rows.length === 0) return json(200, { ok: true, skipped: 'no matching row' });
 
     const { error: storageErr } = await admin.storage.from('thumbnails').remove([path]);
-    if (storageErr) console.error('delete_generation_storage_failed', storageErr.message);
+    if (storageErr) {
+      // Leave the row in place so a retried delete (or the rolling
+      // MAX_THUMBNAILS_PER_USER cleanup in generate/index.ts, which prunes
+      // the same way) can still find and clean up the object later — a
+      // leftover DB row is harmless (worst case: a future cleanup pass finds
+      // nothing to remove), but an orphaned Storage object with no row
+      // pointing at it would never get cleaned up at all.
+      console.error('delete_generation_storage_failed', storageErr.message);
+      return json(200, { ok: true, storageCleanupFailed: true });
+    }
 
     const { error: delErr } = await admin.from('generations').delete().eq('user_id', uid).eq('path', path);
     if (delErr) {
