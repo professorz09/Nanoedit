@@ -215,6 +215,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [personaModalOpen, setPersonaModalOpen] = useState(false);
   const [styleModalOpen, setStyleModalOpen] = useState<'sketch' | 'youtube' | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
+  const [sketchAdvanced, setSketchAdvanced] = useState(false);
   // YouTube mode normally auto-matches a style per video (vector search over
   // the style pool) — this lets a user override that and force one specific
   // style instead, same picker as the Styles tab. null = keep auto-matching.
@@ -1074,13 +1075,10 @@ const ThumbnailStudio: React.FC<Props> = ({
           <div className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 lg:gap-8 items-start max-w-6xl mx-auto">
           {/* LEFT: generator controls */}
           <div className="thumb-glass thumb-float-red rounded-[28px] p-5 sm:p-8 max-w-3xl mx-auto w-full lg:max-w-none lg:sticky lg:top-24">
-            {/* Card header */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className="thumb-btn w-11 h-11 rounded-2xl flex items-center justify-center text-white shrink-0"><I.Wand className="w-5 h-5" /></div>
-              <div className="leading-tight">
-                <h2 className="text-lg font-black tracking-tight">AI Thumbnail Generator</h2>
-              </div>
-            </div>
+            {/* No card header here on purpose — the top nav already shows the
+                "Thumbnail" tab as active, so repeating "AI Thumbnail
+                Generator" just duplicated that and pushed the actual tools
+                further down, costing an extra scroll for nothing. */}
 
             {/* Tabs */}
             {/* Every tab is the same fixed-width grid cell at all times (icon +
@@ -1340,6 +1338,35 @@ const ThumbnailStudio: React.FC<Props> = ({
                     </button>
                     <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
                   </div>
+
+                  {/* Advanced (optional) — same collapsed-by-default pattern as
+                      YouTube mode. Sketch is overwhelmingly 16:9 thumbnails, so
+                      Format doesn't need to sit in the always-visible path
+                      between the canvas and the Generate button. */}
+                  <div className="border-t border-white/10 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setSketchAdvanced(v => !v)}
+                      className="flex items-center gap-2 text-[13px] font-bold text-thumb-sub hover:text-thumb-ink transition-colors"
+                    >
+                      <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      Advanced
+                    </button>
+
+                    {sketchAdvanced && (
+                      <div className="mt-3 space-y-1.5 animate-fade-in-up">
+                        <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                        <SegmentedControl
+                          value={format}
+                          onChange={setFormat}
+                          options={[
+                            { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                            { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                          ]}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1377,11 +1404,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Format: 16:9 thumbnail vs 9:16 Shorts — for YouTube mode this
-                  lives inside Advanced instead (see below), since 16:9 is the
-                  overwhelmingly common case there and doesn't need to be
-                  front and center every time. */}
-              {mode !== 'youtube' && (
+              {/* Format: 16:9 thumbnail vs 9:16 Shorts — for YouTube and Sketch
+                  this lives inside their own Advanced sections instead (see
+                  below), since 16:9 is the overwhelmingly common case and
+                  doesn't need to be front and center every time — every extra
+                  always-visible control here is more scrolling to reach
+                  Generate. */}
+              {mode !== 'youtube' && mode !== 'sketch' && (
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
                   <SegmentedControl
