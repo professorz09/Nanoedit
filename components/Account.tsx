@@ -216,7 +216,7 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
     <section className="pt-6 pb-16 max-w-3xl mx-auto">
       {/* Identity */}
       <div className="thumb-glass rounded-3xl p-6 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-thumb-redDark text-white flex items-center justify-center text-xl font-black shrink-0">
+        <div className="w-14 h-14 rounded-2xl bg-[#ff5d79] text-white flex items-center justify-center text-xl font-black shrink-0">
           {(user.email?.[0] || 'U').toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">

@@ -685,7 +685,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       if (selectedYtStyle) {
         pool = [{ url: selectedYtStyle }];
       } else {
-        setNoteText('Analyzing your video…', 'info');
+        setNoteText('Finding the best-matching style…', 'info');
         const matchQuery = [title, conceptA, conceptB, promptText].filter(v => v && v.trim()).join('. ').slice(0, 4000);
         const matched = await matchStyles(matchQuery, 8, onlyMyStyles);
         if (matched.length) {
@@ -718,7 +718,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         const conceptPair = [conceptA || conceptB, conceptB || conceptA];
         const concepts = Array.from({ length: wantCount }, (_, i) => conceptPair[i % 2]);
 
-        setNoteText('Designing your thumbnails…', 'info');
+        setNoteText('Designing your thumbnails in the best-matching style…', 'info');
         let launched = 0;
         for (let i = 0; i < wantCount; i++) {
           const style = chosen[i];
@@ -1206,22 +1206,18 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[13px] font-bold text-thumb-ink">Only use my custom styles</span>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={onlyMyStyles}
-                            aria-label="Only use my custom styles"
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={onlyMyStyles}
+                            onChange={e => setOnlyMyStyles(e.target.checked)}
                             disabled={!!selectedYtStyle}
-                            onClick={() => setOnlyMyStyles(v => !v)}
-                            className={`shrink-0 w-11 h-6 rounded-full border transition-colors disabled:opacity-40 ${onlyMyStyles ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
-                          >
-                            <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${onlyMyStyles ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
-                          </button>
-                        </div>
+                            className="w-4 h-4 rounded accent-thumb-red disabled:opacity-40"
+                          />
+                          <span className="text-[13px] font-bold text-thumb-ink">Only use my custom styles</span>
+                        </label>
                         {onlyMyStyles && (
-                          <p className="text-[11px] text-thumb-sub -mt-1">Only your own uploaded styles will be used — nothing else.</p>
+                          <p className="text-[11px] text-thumb-sub -mt-1">Matches only from styles you've uploaded on your Account page — never the shared pool.</p>
                         )}
 
                         {/* Format lives here (not always visible) — YouTube
