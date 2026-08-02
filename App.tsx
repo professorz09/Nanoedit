@@ -1045,89 +1045,100 @@ function App() {
               {viewedImage && (
                   <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => { if (!brushMode) setViewedImage(null); }}>
                       <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => brushMode ? cancelRemoveMode() : setViewedImage(null)}><IconX /></button>
-                      <div className="relative inline-block max-w-[92vw] lg:max-w-[70vw] max-h-[82vh]" onClick={e => e.stopPropagation()}>
-                          <RetryImage
-                              key={viewedImage}
-                              url={viewedImage}
-                              alt="Thumbnail"
-                              className="max-w-[92vw] lg:max-w-[70vw] max-h-[82vh] rounded-2xl shadow-2xl object-contain block"
-                              onLoad={e => {
-                                  if (brushMode && canvasRef.current) {
-                                      const img = e.target as HTMLImageElement;
-                                      canvasRef.current.width = img.naturalWidth;
-                                      canvasRef.current.height = img.naturalHeight;
-                                  }
-                              }}
-                          />
-                          {brushMode && (
-                              <canvas
-                                  ref={canvasRef}
-                                  className="absolute top-0 left-0 w-full h-full rounded-2xl cursor-crosshair touch-none select-none"
-                                  onMouseDown={startDrawing}
-                                  onMouseMove={draw}
-                                  onMouseUp={stopDrawing}
-                                  onMouseLeave={stopDrawing}
-                                  onTouchStart={startDrawing}
-                                  onTouchMove={draw}
-                                  onTouchEnd={stopDrawing}
+
+                      {/* Image + (desktop) side rail as ONE centered group. The rail
+                          used to be absolutely positioned at a fixed `right-6`,
+                          independent of the image's own centering — on any window
+                          where the image ended up height-constrained (max-h-[82vh]
+                          binding before max-w did) it rendered narrower than its
+                          width cap, so the two drifted apart: a dead gap on one
+                          side, the rail floating away from (or overlapping) the
+                          image's actual edge. Laying them out as flex siblings
+                          means they size and center together, every time. */}
+                      <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-6 max-w-full max-h-full" onClick={e => e.stopPropagation()}>
+                          <div className="relative inline-block max-w-[92vw] lg:max-w-[64vw] max-h-[82vh] lg:max-h-[85vh]">
+                              <RetryImage
+                                  key={viewedImage}
+                                  url={viewedImage}
+                                  alt="Thumbnail"
+                                  className="max-w-[92vw] lg:max-w-[64vw] max-h-[82vh] lg:max-h-[85vh] rounded-2xl shadow-2xl object-contain block"
+                                  onLoad={e => {
+                                      if (brushMode && canvasRef.current) {
+                                          const img = e.target as HTMLImageElement;
+                                          canvasRef.current.width = img.naturalWidth;
+                                          canvasRef.current.height = img.naturalHeight;
+                                      }
+                                  }}
                               />
-                          )}
-                      </div>
-                      {!brushMode ? (
-                          <>
-                              {/* Mobile/tablet: bottom bar, thumb reach. Desktop has room to
-                                  the side of the (now narrower, max-w-[70vw]) image instead —
-                                  a vertical rail there doesn't crowd the image or leave the
-                                  huge empty margins a centered bottom-md bar had on wide
-                                  screens. */}
-                              <div className="lg:hidden absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
-                                  <button onClick={startRemoveMode} title="Brush out unwanted parts" className="h-12 w-12 shrink-0 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center text-lg backdrop-blur-sm transition-colors">🖌️</button>
-                                  <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
-                                  <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
-                              </div>
-                              <div className="hidden lg:flex absolute right-6 top-1/2 -translate-y-1/2 w-52 flex-col gap-2.5" onClick={e => e.stopPropagation()}>
+                              {brushMode && (
+                                  <canvas
+                                      ref={canvasRef}
+                                      className="absolute top-0 left-0 w-full h-full rounded-2xl cursor-crosshair touch-none select-none"
+                                      onMouseDown={startDrawing}
+                                      onMouseMove={draw}
+                                      onMouseUp={stopDrawing}
+                                      onMouseLeave={stopDrawing}
+                                      onTouchStart={startDrawing}
+                                      onTouchMove={draw}
+                                      onTouchEnd={stopDrawing}
+                                  />
+                              )}
+                          </div>
+
+                          {/* Desktop rail — in-flow flex sibling now, not absolute. */}
+                          {!brushMode ? (
+                              <div className="hidden lg:flex w-52 shrink-0 flex-col gap-2.5">
                                   <button onClick={startRemoveMode} className="h-12 px-4 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-bold backdrop-blur-sm transition-colors">🖌️ Brush out</button>
                                   <button onClick={() => handleOpenEditor(viewedImage)} className="h-12 px-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 shadow-lg"><IconLayerPlus /> Edit</button>
                                   <button onClick={() => downloadImage(viewedImage!)} className="h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-lg"><IconDownload /> Download</button>
                               </div>
-                          </>
+                          ) : (
+                              <div className="hidden lg:flex w-72 shrink-0 flex-col gap-2.5">
+                                  <div className="flex items-center gap-2.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl px-3.5 py-2.5">
+                                      <span className="text-[11px] text-zinc-300 font-bold shrink-0">Brush size</span>
+                                      <input type="range" min="8" max="80" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
+                                  </div>
+                                  <input
+                                      type="text"
+                                      value={brushNote}
+                                      onChange={e => setBrushNote(e.target.value)}
+                                      placeholder="What to do here… (leave blank to just remove it)"
+                                      className="h-12 px-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl text-white text-sm placeholder-zinc-500 outline-none focus:border-white/40"
+                                  />
+                                  <div className="flex items-center gap-2.5">
+                                      <button onClick={clearBrushSelection} className="h-12 px-5 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl transition-colors backdrop-blur-sm">Clear</button>
+                                      <button onClick={applyRemoveSelection} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all shadow-lg">Apply</button>
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+
+                      {/* Mobile/tablet: bottom bar, thumb reach — unaffected by the
+                          desktop group above (that rail stays hidden below lg). */}
+                      {!brushMode ? (
+                          <div className="lg:hidden absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
+                              <button onClick={startRemoveMode} title="Brush out unwanted parts" className="h-12 w-12 shrink-0 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center text-lg backdrop-blur-sm transition-colors">🖌️</button>
+                              <button onClick={() => handleOpenEditor(viewedImage)} className="flex-1 h-12 px-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconLayerPlus /> Edit</button>
+                              <button onClick={() => downloadImage(viewedImage!)} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg"><IconDownload /> Download</button>
+                          </div>
                       ) : (
-                          <>
-                              <div className="lg:hidden absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex flex-col gap-2.5" onClick={e => e.stopPropagation()}>
-                                  <div className="flex items-center gap-2.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl px-3.5 py-2.5">
-                                      <span className="text-[11px] text-zinc-300 font-bold shrink-0">Brush size</span>
-                                      <input type="range" min="8" max="80" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
-                                  </div>
-                                  <input
-                                      type="text"
-                                      value={brushNote}
-                                      onChange={e => setBrushNote(e.target.value)}
-                                      placeholder="What to do here… (leave blank to just remove it)"
-                                      className="h-12 px-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl text-white text-sm placeholder-zinc-500 outline-none focus:border-white/40"
-                                  />
-                                  <div className="flex items-center gap-2.5">
-                                      <button onClick={clearBrushSelection} className="h-12 px-5 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl transition-colors backdrop-blur-sm">Clear</button>
-                                      <button onClick={applyRemoveSelection} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all shadow-lg">Apply</button>
-                                  </div>
+                          <div className="lg:hidden absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md flex flex-col gap-2.5" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center gap-2.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl px-3.5 py-2.5">
+                                  <span className="text-[11px] text-zinc-300 font-bold shrink-0">Brush size</span>
+                                  <input type="range" min="8" max="80" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
                               </div>
-                              <div className="hidden lg:flex absolute right-6 top-1/2 -translate-y-1/2 w-72 flex-col gap-2.5" onClick={e => e.stopPropagation()}>
-                                  <div className="flex items-center gap-2.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl px-3.5 py-2.5">
-                                      <span className="text-[11px] text-zinc-300 font-bold shrink-0">Brush size</span>
-                                      <input type="range" min="8" max="80" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
-                                  </div>
-                                  <input
-                                      type="text"
-                                      value={brushNote}
-                                      onChange={e => setBrushNote(e.target.value)}
-                                      placeholder="What to do here… (leave blank to just remove it)"
-                                      className="h-12 px-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl text-white text-sm placeholder-zinc-500 outline-none focus:border-white/40"
-                                  />
-                                  <div className="flex items-center gap-2.5">
-                                      <button onClick={clearBrushSelection} className="h-12 px-5 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl transition-colors backdrop-blur-sm">Clear</button>
-                                      <button onClick={applyRemoveSelection} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all shadow-lg">Apply</button>
-                                  </div>
+                              <input
+                                  type="text"
+                                  value={brushNote}
+                                  onChange={e => setBrushNote(e.target.value)}
+                                  placeholder="What to do here… (leave blank to just remove it)"
+                                  className="h-12 px-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl text-white text-sm placeholder-zinc-500 outline-none focus:border-white/40"
+                              />
+                              <div className="flex items-center gap-2.5">
+                                  <button onClick={clearBrushSelection} className="h-12 px-5 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl transition-colors backdrop-blur-sm">Clear</button>
+                                  <button onClick={applyRemoveSelection} className="flex-1 h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all shadow-lg">Apply</button>
                               </div>
-                          </>
+                          </div>
                       )}
                   </div>
               )}
