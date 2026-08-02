@@ -878,7 +878,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           <div className="flex items-center gap-2 sm:gap-3">
             {configured && user ? (
               <>
-                <button onClick={goPricing} title="Credits — tap to top up" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-2.5 pr-3 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
+                <button onClick={goPricing} title="Credits — tap to top up" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-xl pl-2.5 pr-3 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
                   <I.Bolt className="w-4 h-4 text-thumb-red" />
                   {creditsLoading
                     ? <span className="thumb-skeleton inline-block w-5 h-4 rounded align-middle" aria-label="Loading credits" />
