@@ -37,3 +37,10 @@ export const CATALOG: Record<string, CatalogItem> = {
   'addon:addon_small':   { kind: 'addon', credits: 25,  usd: 10, label: '25 credit pack' },
   'addon:addon_large':   { kind: 'addon', credits: 100, usd: 35, label: '100 credit pack' },
 };
+
+// Tier ordering — a plan purchase resets `profiles.credits` to the new
+// plan's allotment (see dodo-webhook), so buying a lower tier than the one
+// already active would silently wipe out unused credits. create-checkout
+// uses this to reject that server-side (the UI already hides/disables it,
+// but a direct API call could otherwise skip straight past that).
+export const PLAN_RANK: Record<'free' | 'pro' | 'studio', number> = { free: 0, pro: 1, studio: 2 };
