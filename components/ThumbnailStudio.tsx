@@ -11,6 +11,7 @@ import ResultThumb from './ResultThumb';
 import ChangeFaceModal from './ChangeFaceModal';
 import SketchCanvas from './SketchCanvas';
 import PersonaPicker from './PersonaPicker';
+import StylePickerModal from './StylePickerModal';
 import SegmentedControl from './SegmentedControl';
 import { savePersona } from '../services/personasService';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
@@ -206,11 +207,13 @@ const ThumbnailStudio: React.FC<Props> = ({
   }, [styleImages, selectedRef]);
   const [uploads, setUploads] = useState<string[]>([]);
   const [sketchData, setSketchData] = useState<string | null>(null);
-  // Sketch mode's optional extras (persona / style / photo upload) are
-  // collapsed behind one toggled panel at a time instead of always showing
-  // all three — keeps the composer compact since most sketches need none of them.
-  const [sketchPanel, setSketchPanel] = useState<'persona' | 'style' | 'upload' | null>(null);
   const [selectedSketchStyle, setSelectedSketchStyle] = useState<string | null>(null);
+  // Persona/Style popups are shared across Sketch and YouTube Advanced —
+  // only one of those sections is ever visible at a time, and each has its
+  // own "Persona"/"Style" button that just opens the matching popup directly
+  // (no inline panel to toggle first).
+  const [personaModalOpen, setPersonaModalOpen] = useState(false);
+  const [styleModalOpen, setStyleModalOpen] = useState<'sketch' | 'youtube' | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
   // YouTube mode normally auto-matches a style per video (vector search over
   // the style pool) — this lets a user override that and force one specific
@@ -1137,9 +1140,15 @@ const ThumbnailStudio: React.FC<Props> = ({
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Add a person's photo</label>
-                          <PersonaPicker enabled={mode === 'youtube' && ytAdvanced} refreshKey={personaRefreshKey} onPick={pickPersona} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={false} />
-                          {uploads.length > 0 ? (
+                          <div className="flex items-center justify-between">
+                            <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Extras (optional)</label>
+                            {selectedYtStyle && (
+                              <button type="button" onClick={() => setSelectedYtStyle(null)} className="text-[11px] font-bold text-thumb-red hover:underline">
+                                Auto-match style instead
+                              </button>
+                            )}
+                          </div>
+                          {uploads.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {uploads.map((u, i) => (
                                 <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-thumb-line group">
@@ -1149,45 +1158,32 @@ const ThumbnailStudio: React.FC<Props> = ({
                                 </div>
                               ))}
                             </div>
-                          ) : (
+                          )}
+                          {/* Same three equal-size buttons as Sketch mode — each acts
+                              immediately (opens its popup or the native file picker). */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                            >
+                              <I.FaceSwap className="w-4 h-4" /> Persona
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStyleModalOpen('youtube')}
+                              className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedYtStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                            >
+                              <I.Image className="w-4 h-4" /> Style
+                            </button>
                             <button
                               type="button"
                               onClick={triggerUpload}
-                              className="w-full border-2 border-dashed border-white/12 rounded-2xl p-4 flex items-center justify-center gap-2.5 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
                             >
-                              <I.Upload className="w-4 h-4" />
-                              <span className="text-sm font-bold">Upload a face/photo</span>
+                              <I.Upload className="w-4 h-4" /> Upload
                             </button>
-                          )}
-                          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Pick a style (optional)</label>
-                            {selectedYtStyle && (
-                              <button type="button" onClick={() => setSelectedYtStyle(null)} className="text-[11px] font-bold text-thumb-red hover:underline">
-                                Auto-match instead
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-thumb-sub -mt-1">Leave unpicked to auto-match the best style for this video, or force one yourself.</p>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[220px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
-                            {styleImages.map(src => {
-                              const active = selectedYtStyle === src;
-                              return (
-                                <button
-                                  key={src}
-                                  type="button"
-                                  onClick={() => setSelectedYtStyle(active ? null : src)}
-                                  className={`relative rounded-xl overflow-hidden border-2 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
-                                >
-                                  <div className="aspect-video overflow-hidden bg-black/40">
-                                    <img src={src} alt="Style reference" loading="lazy" className="w-full h-full object-cover" />
-                                  </div>
-                                  {active && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-thumb-red text-white flex items-center justify-center text-[10px] font-bold">✓</div>}
-                                </button>
-                              );
-                            })}
+                            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
                           </div>
                         </div>
                       </div>
@@ -1265,81 +1261,33 @@ const ThumbnailStudio: React.FC<Props> = ({
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
                   />
 
-                  {/* Three equal-size entry points for the optional extras — only one
-                      panel open at a time keeps this compact instead of always
-                      showing a face strip + style grid + dropzone together. */}
+                  {/* Three equal-size entry points — each acts immediately (opens
+                      its popup or the native file picker) instead of expanding an
+                      inline panel that needs a second tap. */}
                   <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
-                      onClick={() => setSketchPanel(p => (p === 'persona' ? null : 'persona'))}
-                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${sketchPanel === 'persona' ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                      onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
+                      className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
                     >
                       <I.FaceSwap className="w-4 h-4" /> Persona
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSketchPanel(p => (p === 'style' ? null : 'style'))}
-                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${sketchPanel === 'style' ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                      onClick={() => setStyleModalOpen('sketch')}
+                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedSketchStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
                     >
                       <I.Image className="w-4 h-4" /> Style
                     </button>
                     <button
                       type="button"
-                      onClick={() => { if (configured && !user) { requireLogin('Log in to upload photos.'); return; } setSketchPanel(p => (p === 'upload' ? null : 'upload')); }}
-                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${sketchPanel === 'upload' ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                      onClick={triggerUpload}
+                      className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
                     >
                       <I.Upload className="w-4 h-4" /> Upload
                     </button>
+                    <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
                   </div>
-
-                  {sketchPanel === 'persona' && (
-                    <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} />
-                  )}
-
-                  {sketchPanel === 'style' && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] text-thumb-sub">Match this style's look — the sketch still decides the layout.</p>
-                        {selectedSketchStyle && (
-                          <button type="button" onClick={() => setSelectedSketchStyle(null)} className="text-[11px] font-bold text-thumb-red hover:underline shrink-0">Clear</button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[220px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
-                        {styleImages.map(src => {
-                          const active = selectedSketchStyle === src;
-                          return (
-                            <button
-                              key={src}
-                              type="button"
-                              onClick={() => setSelectedSketchStyle(active ? null : src)}
-                              className={`relative rounded-xl overflow-hidden border-2 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
-                            >
-                              <div className="aspect-video overflow-hidden bg-black/40">
-                                <img src={src} alt="Style reference" loading="lazy" className="w-full h-full object-cover" />
-                              </div>
-                              {active && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-thumb-red text-white flex items-center justify-center text-[10px] font-bold">✓</div>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {sketchPanel === 'upload' && (
-                    <div>
-                      <div
-                        onClick={triggerUpload}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={e => { e.preventDefault(); dropFiles(Array.from(e.dataTransfer.files)); }}
-                        className="border-2 border-dashed border-white/12 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
-                      >
-                        <I.Upload className="w-5 h-5" />
-                        <span className="text-xs font-bold">Click or drag to upload</span>
-                        <span className="text-[11px] text-thumb-sub/80">Up to 4 images · PNG or JPG</span>
-                      </div>
-                      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -2149,6 +2097,33 @@ const ThumbnailStudio: React.FC<Props> = ({
           personaRefreshKey={personaRefreshKey}
         />
       )}
+
+      {/* ── Persona / Style popups shared by Sketch and YouTube Advanced ── */}
+      <PersonaPicker
+        enabled
+        loggedIn={!configured || !!user}
+        onRequireLogin={() => requireLogin('Log in to use saved faces.')}
+        refreshKey={personaRefreshKey}
+        onPick={pickPersona}
+        externalOpen={personaModalOpen}
+        onExternalClose={() => setPersonaModalOpen(false)}
+      />
+      <StylePickerModal
+        open={styleModalOpen === 'sketch'}
+        onClose={() => setStyleModalOpen(null)}
+        styleImages={styleImages}
+        selected={selectedSketchStyle}
+        onSelect={setSelectedSketchStyle}
+        hint="Match this style's look — the sketch still decides the layout."
+      />
+      <StylePickerModal
+        open={styleModalOpen === 'youtube'}
+        onClose={() => setStyleModalOpen(null)}
+        styleImages={styleImages}
+        selected={selectedYtStyle}
+        onSelect={setSelectedYtStyle}
+        hint="Leave unpicked to auto-match the best style for this video."
+      />
     </div>
   );
 };
