@@ -19,6 +19,11 @@
 //   toggle_picker — { id, show_in_picker } → show/hide a style in the manual
 //                   "Styles" picker ONLY — it stays fully eligible for YouTube
 //                   auto-matching either way (match_styles() never checks this)
+//   set_sort      — { id, sort } → position within the manual "Styles" picker;
+//                   lower sorts first (see stylesService.fetchStyleImages'
+//                   `.order('sort', { ascending: true })`). Purely a picker
+//                   position — doesn't affect YouTube auto-matching, which
+//                   ranks by embedding similarity, not this column.
 //   delete        — { id } → remove a global style's row + Storage object
 //
 // Deploy:  supabase functions deploy admin-styles --project-ref vowgdlbvundorxwjdntu --use-api
@@ -140,10 +145,13 @@ Deno.serve(async (req) => {
   const action = typeof body?.action === 'string' ? body.action : '';
 
   if (action === 'list') {
+    // Same order the picker itself uses (fetchStyleImages) so what the admin
+    // sees here matches what's actually shown first live.
     const { data, error } = await admin
       .from('style_images')
       .select('id, path, name, active, show_in_picker, meta, sort, created_at')
       .is('user_id', null)
+      .order('sort', { ascending: true })
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) return json(500, { error: 'Could not list styles.' });
@@ -168,6 +176,16 @@ Deno.serve(async (req) => {
     if (!id) return json(400, { error: 'Missing id' });
     if (typeof body?.show_in_picker !== 'boolean') return json(400, { error: 'Invalid show_in_picker' });
     const { error } = await admin.from('style_images').update({ show_in_picker: body.show_in_picker }).eq('id', id).is('user_id', null);
+    if (error) return json(500, { error: 'Could not update the style.' });
+    return json(200, { ok: true });
+  }
+
+  if (action === 'set_sort') {
+    const id = typeof body?.id === 'string' ? body.id : '';
+    if (!id) return json(400, { error: 'Missing id' });
+    const sort = Number(body?.sort);
+    if (!Number.isFinite(sort)) return json(400, { error: 'Invalid sort' });
+    const { error } = await admin.from('style_images').update({ sort }).eq('id', id).is('user_id', null);
     if (error) return json(500, { error: 'Could not update the style.' });
     return json(200, { ok: true });
   }

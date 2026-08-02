@@ -8,6 +8,7 @@ interface AdminStyle {
   active: boolean;
   show_in_picker: boolean;
   meta: any;
+  sort: number;
   url: string;
   created_at: string;
 }
@@ -133,6 +134,32 @@ const AdminStyles: React.FC = () => {
     }
   };
 
+  // Position within the manual "Styles" picker — lower shows first (see
+  // stylesService.fetchStyleImages' `.order('sort', { ascending: true })`).
+  // Local draft text per style so typing doesn't fight the input, committed
+  // on blur/Enter rather than on every keystroke.
+  const [sortDrafts, setSortDrafts] = useState<Record<string, string>>({});
+  const commitSort = async (s: AdminStyle) => {
+    const raw = sortDrafts[s.id];
+    if (raw === undefined) return;
+    const next = Number(raw);
+    if (!Number.isFinite(next) || next === s.sort) {
+      setSortDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n; });
+      return;
+    }
+    // Re-sort locally too, same order the server list/picker use, so the
+    // grid immediately reflects the new position instead of waiting for a
+    // manual refresh.
+    setStyles(prev => prev.map(x => x.id === s.id ? { ...x, sort: next } : x)
+      .sort((a, b) => a.sort - b.sort || (a.created_at < b.created_at ? 1 : -1)));
+    setSortDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n; });
+    try {
+      await callAdmin({ action: 'set_sort', id: s.id, sort: next });
+    } catch {
+      refresh(); // revert on failure
+    }
+  };
+
   const remove = async (s: AdminStyle) => {
     if (!window.confirm('Delete this style? This cannot be undone.')) return;
     setStyles(prev => prev.filter(x => x.id !== s.id)); // optimistic
@@ -150,6 +177,7 @@ const AdminStyles: React.FC = () => {
         Add, disable, or remove thumbnails in the shared style pool. Every style here is vision-tagged and
         embedded automatically, so it works in both the manual "Styles" picker and the YouTube auto-match flow.
         "Hide from picker" only affects the manual picker — the style stays fully eligible for auto-matching.
+        The small number on each card controls its position in the manual picker — lower shows first.
       </p>
 
       {/* Add new style */}
@@ -213,7 +241,19 @@ const AdminStyles: React.FC = () => {
               <div key={s.id} className={`rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card ${!s.active ? 'opacity-50' : ''}`}>
                 <div className="aspect-video bg-thumb-soft"><img src={s.url} alt="" className="w-full h-full object-cover" /></div>
                 <div className="p-2.5 space-y-1.5">
-                  <p className="text-xs font-bold text-thumb-ink truncate" title={s.name || ''}>{s.name || '(untitled)'}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-thumb-ink truncate flex-1" title={s.name || ''}>{s.name || '(untitled)'}</p>
+                    <input
+                      type="number"
+                      value={sortDrafts[s.id] ?? String(s.sort)}
+                      onChange={e => setSortDrafts(prev => ({ ...prev, [s.id]: e.target.value }))}
+                      onBlur={() => commitSort(s)}
+                      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                      title="Order in the manual Styles picker — lower shows first"
+                      aria-label="Picker order (lower shows first)"
+                      className="w-12 shrink-0 bg-thumb-soft border border-thumb-line rounded-md px-1.5 py-0.5 text-[11px] text-center outline-none focus:border-thumb-red/50"
+                    />
+                  </div>
                   {s.meta?.niche && <p className="text-[11px] text-thumb-sub truncate">{s.meta.niche}</p>}
                   {s.active && !s.show_in_picker && (
                     <p className="text-[10px] text-thumb-sub">Hidden from picker · still auto-matches</p>

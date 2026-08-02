@@ -39,7 +39,7 @@ const ConfirmModal: React.FC<Props> = ({ open, title, message, confirmLabel = 'D
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-3 rounded-2xl bg-thumb-red text-white text-sm font-black hover:bg-thumb-red/90 transition-colors"
+            className="flex-1 py-3 rounded-2xl bg-thumb-redDark text-white text-sm font-black hover:bg-thumb-red transition-colors"
           >
             {confirmLabel}
           </button>
