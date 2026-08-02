@@ -15,6 +15,14 @@
 //   3. Idempotently grant: skip if this payment already appears in the
 //      ledger, else update profiles (plan → set plan, ADD credits, reset
 //      renews_at; addon → bump addon_credits) and append a credit_ledger row.
+//   4. On `refund.succeeded` / `dispute.lost` — the merchant-of-record actually
+//      took the money back — claw back whatever that original payment granted:
+//      look the purchase up by payment_id in the ledger, subtract its credits
+//      (clamped at 0 — if the user already spent some/all of them, they just
+//      lose what's left, not a negative balance), and if the purchase was a
+//      plan and the account is STILL on that exact plan (hasn't since
+//      upgraded again), downgrade to free. Idempotent via a `refund:<id>`
+//      ledger row, same claim-first pattern as the grant.
 //
 // Auth: NOT a user-authenticated call — Dodo's servers call this directly, so
 // verify_jwt is disabled and the webhook signature IS the authentication.
@@ -36,6 +44,90 @@ function renewsAt(cycle?: string): string {
   if (cycle === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
   else d.setUTCMonth(d.getUTCMonth() + 1); // default: monthly
   return d.toISOString();
+}
+
+// A refund or a lost dispute means the money actually came back out of the
+// account — claw back whatever the original payment granted. The original
+// grant's ledger reason is `purchase:<plan|"addon">:<paymentId>` (see below),
+// so the payment_id on the refund/dispute event finds it directly; nothing
+// to do if it's not there (e.g. a payment we never granted for, or already
+// reversed and pruned).
+async function handleClawback(admin: any, event: any) {
+  const paymentId = event.data?.payment_id;
+  if (!paymentId) {
+    console.error('dodo_clawback_missing_payment_id', event?.type);
+    return json(200, { ok: true }); // ack — nothing actionable
+  }
+
+  const { data: original, error: findErr } = await admin
+    .from('credit_ledger')
+    .select('user_id, delta, reason')
+    .like('reason', `purchase:%:${paymentId}`)
+    .maybeSingle();
+  if (findErr) {
+    console.error('dodo_clawback_lookup_failed', paymentId, findErr.message);
+    return json(500, { error: 'Could not look up the original purchase.' });
+  }
+  if (!original) {
+    // Nothing granted for this payment (unknown item, missing metadata,
+    // failed grant, etc.) — nothing to claw back.
+    return json(200, { ok: true, skipped: 'no_matching_purchase' });
+  }
+
+  const uid = original.user_id;
+  const grantedCredits = original.delta as number;
+  // reason = "purchase:<kindOrPlan>:<paymentId>" — kindOrPlan is "addon" or
+  // the plan name ("pro"/"studio"); split with a limit so a payment_id that
+  // happens to contain ":" doesn't get chopped.
+  const kindOrPlan = String(original.reason).split(':')[1];
+
+  // Idempotency — same claim-first pattern as the grant (see migration
+  // 0021_credit_ledger_refund_unique.sql). A retried webhook delivery for
+  // the same refund can no longer double-claw-back.
+  const refundReason = `refund:${paymentId}`;
+  const { error: claimErr } = await admin
+    .from('credit_ledger').insert({ user_id: uid, delta: -grantedCredits, reason: refundReason });
+  if (claimErr) {
+    if (claimErr.code === '23505') return json(200, { ok: true, alreadyReversed: true });
+    console.error('dodo_clawback_claim_failed', paymentId, claimErr.message);
+    return json(500, { error: 'Could not record the refund.' });
+  }
+
+  try {
+    if (kindOrPlan === 'addon') {
+      const { data: prof, error: readErr } = await admin.from('profiles').select('addon_credits').eq('id', uid).single();
+      if (readErr) throw readErr;
+      // Clamp at 0 — if they already spent some/all of these, they just lose
+      // whatever's left, not a negative balance. There's no per-purchase
+      // tracking of which credits came from where once they're merged into
+      // one balance, so this is the fair floor rather than overdrawing into
+      // credits from a different, still-legitimate purchase.
+      const next = Math.max(0, (prof?.addon_credits ?? 0) - grantedCredits);
+      const { error } = await admin.from('profiles').update({ addon_credits: next, updated_at: new Date().toISOString() }).eq('id', uid);
+      if (error) throw error;
+    } else {
+      const { data: prof, error: readErr } = await admin.from('profiles').select('credits, plan').eq('id', uid).single();
+      if (readErr) throw readErr;
+      const next = Math.max(0, (prof?.credits ?? 0) - grantedCredits);
+      const update: Record<string, unknown> = { credits: next, updated_at: new Date().toISOString() };
+      // Only downgrade if they're STILL on the plan this purchase granted —
+      // if they've since upgraded again (a later, separate purchase), that
+      // newer purchase is what's actually active and this refund shouldn't
+      // touch it, just the credits.
+      if (prof?.plan === kindOrPlan) {
+        update.plan = 'free';
+        update.renews_at = null;
+      }
+      const { error } = await admin.from('profiles').update(update).eq('id', uid);
+      if (error) throw error;
+    }
+  } catch (e: any) {
+    console.error('dodo_clawback_apply_failed', paymentId, e?.message || String(e));
+    try { await admin.from('credit_ledger').delete().eq('user_id', uid).eq('reason', refundReason); } catch (_) { /* best-effort */ }
+    return json(500, { error: 'Refund recorded but reversal failed.' });
+  }
+
+  return json(200, { ok: true, reversed: grantedCredits, item: kindOrPlan });
 }
 
 Deno.serve(async (req) => {
@@ -79,10 +171,16 @@ Deno.serve(async (req) => {
     }
 
     const event = JSON.parse(rawBody);
+
+    if (event?.type === 'refund.succeeded' || event?.type === 'dispute.lost') {
+      return await handleClawback(admin, event);
+    }
+
     if (event?.type !== 'payment.succeeded') {
-      // Every other event (payment.failed/processing, subscriptions, etc.) —
-      // nothing for us to do; failed generations already refund on our side,
-      // and there's no separate "reserve then confirm" step to reconcile.
+      // Every other event (payment.failed/processing, subscription.*, other
+      // dispute states, etc.) — nothing for us to do; failed generations
+      // already refund on our side, and there's no separate "reserve then
+      // confirm" step to reconcile.
       return json(200, { ok: true, skipped: event?.type });
     }
 

@@ -20,8 +20,10 @@
 //                   "Styles" picker ONLY — it stays fully eligible for YouTube
 //                   auto-matching either way (match_styles() never checks this)
 //   set_sort      — { id, sort } → position within the manual "Styles" picker;
-//                   lower sorts first (see stylesService.fetchStyleImages'
-//                   `.order('sort', { ascending: true })`). Purely a picker
+//                   lower sorts first, null clears it back to "unranked"
+//                   (sorts after every ranked style — see
+//                   stylesService.fetchStyleImages' `.order('sort', {
+//                   ascending: true, nullsFirst: false })`). Purely a picker
 //                   position — doesn't affect YouTube auto-matching, which
 //                   ranks by embedding similarity, not this column.
 //   delete        — { id } → remove a global style's row + Storage object
@@ -146,12 +148,13 @@ Deno.serve(async (req) => {
 
   if (action === 'list') {
     // Same order the picker itself uses (fetchStyleImages) so what the admin
-    // sees here matches what's actually shown first live.
+    // sees here matches what's actually shown first live. Unranked styles
+    // (sort IS NULL) always sort after every ranked one.
     const { data, error } = await admin
       .from('style_images')
       .select('id, path, name, active, show_in_picker, meta, sort, created_at')
       .is('user_id', null)
-      .order('sort', { ascending: true })
+      .order('sort', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) return json(500, { error: 'Could not list styles.' });
@@ -183,8 +186,16 @@ Deno.serve(async (req) => {
   if (action === 'set_sort') {
     const id = typeof body?.id === 'string' ? body.id : '';
     if (!id) return json(400, { error: 'Missing id' });
-    const sort = Number(body?.sort);
-    if (!Number.isFinite(sort)) return json(400, { error: 'Invalid sort' });
+    // null clears it back to "unranked" (falls in behind every ranked style,
+    // in upload order) — distinct from 0, which is now a real top-priority rank.
+    let sort: number | null;
+    if (body?.sort === null) {
+      sort = null;
+    } else {
+      const n = Number(body?.sort);
+      if (!Number.isFinite(n)) return json(400, { error: 'Invalid sort' });
+      sort = n;
+    }
     const { error } = await admin.from('style_images').update({ sort }).eq('id', id).is('user_id', null);
     if (error) return json(500, { error: 'Could not update the style.' });
     return json(200, { ok: true });
@@ -267,7 +278,8 @@ Deno.serve(async (req) => {
         tagged_at: new Date().toISOString(),
         active: true,
         show_in_picker: true,
-        sort: 0,
+        // sort omitted — new styles start unranked (falls in behind any
+        // explicitly ranked style) until an admin promotes it.
         user_id: null,
       })
       .select('id, path, name, meta, active, show_in_picker, created_at')

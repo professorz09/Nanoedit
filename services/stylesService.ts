@@ -44,7 +44,7 @@ export const fetchStyleImages = async (): Promise<string[] | null> => {
         .select('path')
         .eq('active', true)
         .eq('show_in_picker', true)
-        .order('sort', { ascending: true })
+        .order('sort', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true });
       if (error || !data) return null;
       const paths = data.map((r: { path?: string }) => r.path).filter((p): p is string => !!p);

@@ -1861,23 +1861,39 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'home' && (SHOWCASE_IMAGES.length > 0 ? (
           <section className="pt-16">
             <p className="text-center text-[13px] font-bold uppercase tracking-[0.15em] text-thumb-sub mb-6">Thumbnails people actually clicked</p>
-            <div className="relative -mx-5 overflow-hidden space-y-4">
-              <div className="flex gap-4 w-max thumb-marquee">
-                {[...SHOWCASE_ROW_1, ...SHOWCASE_ROW_1].map((src, i) => (
-                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
-                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-              {/* Second row scrolls the opposite way AND draws from the other half
-                  of SHOWCASE_IMAGES (see SHOWCASE_ROW_2 above) — distinct photos,
-                  not just a reordering of row one's, so nothing repeats between rows. */}
-              <div className="flex gap-4 w-max thumb-marquee-reverse">
-                {[...SHOWCASE_ROW_2.slice().reverse(), ...SHOWCASE_ROW_2.slice().reverse()].map((src, i) => (
-                  <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card shrink-0">
-                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
-                  </div>
-                ))}
+            <div className="relative -mx-5 overflow-hidden">
+              {/* Rows live in their own space-y-4 wrapper — the fade divs below
+                  are siblings OUTSIDE it on purpose. space-y-4 puts margin-top
+                  on every non-first child of whatever div it's on, and the fades
+                  used to be direct children of the same div as the rows, so they
+                  silently got a 16px margin-top pushed onto them too: inset-y-0
+                  still set top:0, but margin-top shifted the rendered box down
+                  16px, leaving a hard, unfaded strip along the very top of the
+                  row instead of a smooth edge. */}
+              <div className="space-y-4">
+                <div className="flex gap-4 w-max thumb-marquee">
+                  {[...SHOWCASE_ROW_1, ...SHOWCASE_ROW_1].map((src, i) => (
+                    <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card bg-thumb-soft shrink-0">
+                      {/* Eager, not lazy: these cards scroll into view purely via CSS
+                          transform (not real page scroll), which native lazy-loading's
+                          intersection check doesn't reliably re-run for — some images
+                          would sit half-loaded (a pale placeholder patch) as they
+                          drifted across the row. There are only a handful of small
+                          showcase images, so loading them all upfront is cheap. */}
+                      <img src={src} alt="" decoding="async" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+                {/* Second row scrolls the opposite way AND draws from the other half
+                    of SHOWCASE_IMAGES (see SHOWCASE_ROW_2 above) — distinct photos,
+                    not just a reordering of row one's, so nothing repeats between rows. */}
+                <div className="flex gap-4 w-max thumb-marquee-reverse">
+                  {[...SHOWCASE_ROW_2.slice().reverse(), ...SHOWCASE_ROW_2.slice().reverse()].map((src, i) => (
+                    <div key={i} className="w-[260px] lg:w-[340px] aspect-video rounded-2xl overflow-hidden border border-thumb-line thumb-card bg-thumb-soft shrink-0">
+                      <img src={src} alt="" decoding="async" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
               </div>
               {/* Edge fades — softens the hard clip where the row is cut off.
                   Hidden on mobile: at narrow widths the fade covers too much
