@@ -1977,19 +1977,6 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'pricing' && (
           <Suspense fallback={<PanelFallback />}>
             <Pricing onCheckout={startCheckout} onBuyAddon={buyAddon} onRequireLogin={() => requireLogin('Log in to upgrade.')} />
-            {/* TEMPORARY — admin-only $1 live-payment verification. Not part
-                of the normal pricing UI (see the matching catalog comment in
-                _shared/pricing.ts). Remove both once verified. */}
-            {profile?.is_admin && (
-              <div className="max-w-3xl mx-auto mt-6 px-1 text-center">
-                <button
-                  onClick={() => buyItem('plan:pro:monthly_livetest').catch((e: any) => setNoteText(e?.message || 'Could not start checkout.'))}
-                  className="text-xs font-bold text-thumb-sub border border-dashed border-thumb-line rounded-full px-4 py-2 hover:border-thumb-red/40 hover:text-thumb-red transition-colors"
-                >
-                  Admin: run $1 live payment verification
-                </button>
-              </div>
-            )}
           </Suspense>
         )}
 
@@ -2060,12 +2047,11 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               </div>
               {/* Edge fades — softens the hard clip where the row is cut off.
-                  Hidden on mobile: at narrow widths the fade covers too much
-                  of each (small) card, hazing over the actual thumbnail. The
-                  row auto-scrolls on its own (thumb-marquee), so there's
-                  nothing a user manually scrolls to hint at either way. */}
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-28 hidden sm:block bg-gradient-to-r from-thumb-bg to-transparent" />
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-28 hidden sm:block bg-gradient-to-l from-thumb-bg to-transparent" />
+                  Narrower on mobile (was hidden there entirely, which lost
+                  the effect completely) so it still softens the edge without
+                  covering a big chunk of each small card. */}
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-10 sm:w-28 bg-gradient-to-r from-thumb-bg to-transparent" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 sm:w-28 bg-gradient-to-l from-thumb-bg to-transparent" />
             </div>
 
             {/* Capability stats */}
