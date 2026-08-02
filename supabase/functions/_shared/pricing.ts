@@ -36,15 +36,15 @@ export const CATALOG: Record<string, CatalogItem> = {
   'plan:pro:yearly':     { kind: 'plan',  plan: 'pro',    cycle: 'yearly',  credits: 130 * 12, usd: 390, label: 'Pro plan (yearly)' },
   'plan:studio:monthly': { kind: 'plan',  plan: 'studio', cycle: 'monthly', credits: 400,      usd: 79,  label: 'Studio plan (monthly)' },
   'plan:studio:yearly':  { kind: 'plan',  plan: 'studio', cycle: 'yearly',  credits: 400 * 12, usd: 790, label: 'Studio plan (yearly)' },
-  'addon:addon_small':   { kind: 'addon', credits: 25,  usd: 10, label: '25 credit pack' },
-  'addon:addon_large':   { kind: 'addon', credits: 100, usd: 35, label: '100 credit pack' },
-  // TEMPORARY — one-off $1 item for verifying the live Dodo integration
+  // TEMPORARY — repriced to $1 (was 10) to verify the live Dodo integration
   // end-to-end (real checkout → real charge → real webhook → credit grant)
-  // without spending a real plan's worth of money. Not listed in
-  // services/plans.ts, so it never appears in the normal Pricing UI — only
-  // reachable via the admin-only button in ThumbnailStudio's Pricing
-  // section. Remove this entry (and that button) once verified.
-  'plan:pro:monthly_livetest': { kind: 'plan', plan: 'pro', cycle: 'monthly', credits: 1, usd: 1, label: 'Live verification (temporary)' },
+  // without spending much. This is the REAL public add-on — anyone visiting
+  // Pricing during this window could also buy it at $1, so revert to 10
+  // right after testing. Chosen over a plan because add-on purchase is
+  // always enabled regardless of current plan (no "current"/downgrade
+  // disable state to work around).
+  'addon:addon_small':   { kind: 'addon', credits: 25,  usd: 1, label: '25 credit pack' },
+  'addon:addon_large':   { kind: 'addon', credits: 100, usd: 35, label: '100 credit pack' },
 };
 
 // Tier ordering — a plan purchase resets `profiles.credits` to the new

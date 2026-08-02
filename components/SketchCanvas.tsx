@@ -131,55 +131,63 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
 
   return (
     <div className="space-y-3 animate-fade-in-up">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-xl p-1.5">
-          {SKETCH_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => { setColor(c); setEraser(false); }}
-              aria-label={`Color ${c}`}
-              className={`w-6 h-6 rounded-full border transition-transform ${!eraser && color === c ? 'ring-2 ring-thumb-red ring-offset-2 ring-offset-thumb-soft scale-110' : 'border-black/10 hover:scale-110'}`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
+      {/* Toolbar — two explicit rows rather than one flex-wrap row for all
+          five groups: on narrow screens the old single row wrapped Undo and
+          Clear onto their own disconnected lines in whatever order they
+          happened to overflow. Colors + Clear share the top row (Clear
+          reachable without hunting for it), sizes/erase/undo sit below. */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-xl p-1.5">
+            {SKETCH_COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => { setColor(c); setEraser(false); }}
+                aria-label={`Color ${c}`}
+                className={`w-6 h-6 rounded-full border transition-transform ${!eraser && color === c ? 'ring-2 ring-thumb-red ring-offset-2 ring-offset-thumb-soft scale-110' : 'border-black/10 hover:scale-110'}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={clear}
+            className="h-9 px-3 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-sub text-xs font-bold flex items-center gap-1.5 hover:text-thumb-red hover:border-thumb-red/40 transition-colors shrink-0"
+          >
+            <I.Trash className="w-4 h-4" /> Clear
+          </button>
         </div>
-        <div className="flex items-center gap-1 bg-thumb-soft border border-thumb-line rounded-xl p-1">
-          {SKETCH_SIZES.map(s => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSize(s)}
-              aria-label={`Brush ${s}`}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${size === s ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-            >
-              <span className="rounded-full bg-current" style={{ width: s / 1.7 + 3, height: s / 1.7 + 3 }} />
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-thumb-soft border border-thumb-line rounded-xl p-1">
+            {SKETCH_SIZES.map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSize(s)}
+                aria-label={`Brush ${s}`}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${size === s ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
+              >
+                <span className="rounded-full bg-current" style={{ width: s / 1.7 + 3, height: s / 1.7 + 3 }} />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setEraser(v => !v)}
+            className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors ${eraser ? 'bg-thumb-red text-white border-thumb-red' : 'bg-thumb-soft border-thumb-line text-thumb-ink hover:border-thumb-red/40'}`}
+          >
+            <I.Eraser className="w-4 h-4" /> Erase
+          </button>
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            className="h-9 px-3 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-ink text-xs font-bold flex items-center gap-1.5 hover:border-thumb-red/40 transition-colors disabled:opacity-40"
+          >
+            <I.Undo className="w-4 h-4" /> Undo
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setEraser(v => !v)}
-          className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors ${eraser ? 'bg-thumb-red text-white border-thumb-red' : 'bg-thumb-soft border-thumb-line text-thumb-ink hover:border-thumb-red/40'}`}
-        >
-          <I.Eraser className="w-4 h-4" /> Erase
-        </button>
-        <button
-          type="button"
-          onClick={undo}
-          disabled={!canUndo}
-          className="h-9 px-3 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-ink text-xs font-bold flex items-center gap-1.5 hover:border-thumb-red/40 transition-colors disabled:opacity-40"
-        >
-          <I.Undo className="w-4 h-4" /> Undo
-        </button>
-        <button
-          type="button"
-          onClick={clear}
-          className="h-9 px-3 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-sub text-xs font-bold flex items-center gap-1.5 hover:text-thumb-red hover:border-thumb-red/40 transition-colors ml-auto"
-        >
-          <I.Trash className="w-4 h-4" /> Clear
-        </button>
       </div>
 
       {/* Drawing surface — 16:9, scales to fit; touch-action:none stops the page

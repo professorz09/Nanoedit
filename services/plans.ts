@@ -53,8 +53,11 @@ export interface AddonPack {
   priceUsd: number;
 }
 
+// TEMPORARY — addon_small repriced to $1 (was 10) for live-payment
+// verification, matching supabase/functions/_shared/pricing.ts. Revert both
+// together right after testing.
 export const ADDONS: AddonPack[] = [
-  { id: 'addon_small', credits: 25, priceUsd: 10 },
+  { id: 'addon_small', credits: 25, priceUsd: 1 },
   { id: 'addon_large', credits: 100, priceUsd: 35 },
 ];
 
