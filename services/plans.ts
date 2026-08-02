@@ -30,19 +30,19 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    credits: 200,
+    credits: 130,
     monthly: { priceUsd: 39 },
     yearly:  { priceUsd: 390 },
     highlight: true,
-    features: ['200 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
+    features: ['130 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
   },
   {
     id: 'studio',
     name: 'Studio',
-    credits: 750,
+    credits: 400,
     monthly: { priceUsd: 79 },
     yearly:  { priceUsd: 790 },
-    features: ['750 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
+    features: ['400 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
   },
 ];
 
@@ -54,8 +54,8 @@ export interface AddonPack {
 }
 
 export const ADDONS: AddonPack[] = [
-  { id: 'addon_small', credits: 100, priceUsd: 8 },
-  { id: 'addon_large', credits: 500, priceUsd: 30 },
+  { id: 'addon_small', credits: 25, priceUsd: 10 },
+  { id: 'addon_large', credits: 100, priceUsd: 35 },
 ];
 
 export const getPlan = (id: PlanId): Plan | undefined => PLANS.find(p => p.id === id);
