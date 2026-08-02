@@ -89,6 +89,14 @@ Deno.serve(async (req) => {
         product_cart: [{ product_id: DODO_PRODUCT_ID, quantity: 1, amount: amountCents }],
         customer: email ? { email } : null,
         return_url: `${appUrl}/?dodo_checkout=return&item=${encodeURIComponent(itemId)}`,
+        // Without this, Dodo can resolve a different billing currency for
+        // the customer (their card's country, IP geolocation, etc.) and
+        // silently convert the charge to it — a real Indian customer was
+        // charged in INR instead of the USD amount set above, which then
+        // failed dodo-webhook's amount/currency check and never granted
+        // credits despite a successful payment. Forcing USD here keeps the
+        // amount we quoted and the amount actually charged in sync.
+        billing_currency: 'USD',
         // Read back by dodo-webhook to know who to credit and for what.
         metadata: { uid, item: itemId },
         // NOT confirm:true — that requires complete billing/customer info

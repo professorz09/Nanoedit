@@ -101,17 +101,29 @@ Deno.serve(async (req) => {
     }
 
     // Defense in depth — never grant credits purely on the strength of the
-    // itemId in metadata. Re-confirm the amount Dodo actually says was paid
-    // matches what that item should cost (metadata is set by us at checkout
-    // creation and can't be forged without DODO_PAYMENTS_API_KEY, but this
-    // still guards against a future bug in create-checkout, or Dodo's
-    // checkout unexpectedly allowing the amount to be edited).
+    // itemId in metadata without SOME confirmation money actually moved.
+    // This used to require an exact match against the catalog's USD cents,
+    // but create-checkout now forces billing_currency: 'USD' precisely so
+    // that still means something; before that fix, a customer whose billing
+    // country Dodo resolved to e.g. India got charged in INR instead, which
+    // failed this exact-match check and silently ate a successful payment
+    // (no credits granted). Keep this as a floor against a $0/negative
+    // amount (a real bypass signal) rather than a strict equality check —
+    // metadata.uid/item is set server-side at checkout creation and can't
+    // be forged without DODO_PAYMENTS_API_KEY, so it's the trustworthy
+    // source for WHAT to grant; this only guards THAT something was paid.
     const expectedCents = Math.round(item.usd * 100);
     const paidCents = event.data?.total_amount;
     const paidCurrency = String(event.data?.currency ?? '').toUpperCase();
-    if (paidCents !== expectedCents || paidCurrency !== 'USD') {
-      console.error('dodo_amount_mismatch', paymentId, itemId, paidCents, paidCurrency, expectedCents);
-      return json(400, { error: 'Payment amount does not match the item.' });
+    if (typeof paidCents !== 'number' || paidCents <= 0) {
+      console.error('dodo_zero_amount', paymentId, itemId, paidCents, paidCurrency);
+      return json(400, { error: 'Payment amount looks invalid.' });
+    }
+    if (paidCurrency !== 'USD' || paidCents !== expectedCents) {
+      // Not a hard failure — log for visibility (e.g. billing_currency ever
+      // stops being honored) but still grant the credits the metadata says
+      // were paid for.
+      console.error('dodo_amount_mismatch_nonblocking', paymentId, itemId, paidCents, paidCurrency, expectedCents);
     }
 
     // Idempotency — claim the ledger row FIRST (atomically, via the unique
