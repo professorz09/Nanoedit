@@ -21,13 +21,20 @@ const PersonaPicker: React.FC<{
    *  upload dropzone/button right next to this — avoids two upload entry
    *  points doing the same thing. Saved-face thumbnails still show. */
   showAddTile?: boolean;
-}> = ({ enabled, refreshKey, onPick, loggedIn, onRequireLogin, showAddTile = true }) => {
+  /** When set, this renders ONLY the "pick a saved face" popup (no inline
+   *  Add/Pick tiles or strip) and its visibility is driven by these props
+   *  instead of an internal button — for callers with their own trigger
+   *  button that should open straight to picking, with no add option. */
+  externalOpen?: boolean;
+  onExternalClose?: () => void;
+}> = ({ enabled, refreshKey, onPick, loggedIn, onRequireLogin, showAddTile = true, externalOpen, onExternalClose }) => {
   const [personas, setPersonas] = useState<Persona[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const modalControlled = externalOpen !== undefined;
 
   useEffect(() => {
     if (!enabled || !loggedIn) { setPersonas(null); return; }
@@ -103,6 +110,48 @@ const PersonaPicker: React.FC<{
   };
 
   if (!enabled || !loggedIn) return null;
+
+  if (modalControlled) {
+    if (!externalOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onExternalClose}>
+        <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-black text-thumb-ink">Pick a saved face</h3>
+            <button onClick={onExternalClose} aria-label="Close" className="w-8 h-8 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><I.X className="w-4 h-4" /></button>
+          </div>
+          {personas?.length ? (
+            <div className="grid grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-0.5">
+              {personas.map(p => (
+                <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
+                  <button
+                    type="button"
+                    onClick={() => { pick(p); onExternalClose?.(); }}
+                    disabled={busyId === p.id}
+                    aria-label={p.name || 'Use this saved face'}
+                    className="w-full h-full block disabled:opacity-50"
+                  >
+                    <img src={p.url} alt={p.name || 'Saved face'} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(p)}
+                    aria-label="Remove saved face"
+                    className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                  >
+                    <I.X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-thumb-sub text-center py-8">No saved faces yet — upload a photo first, then save it for reuse.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!showAddTile && !personas?.length) return null;
 
   return (

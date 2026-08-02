@@ -198,9 +198,6 @@ const SketchCanvas: React.FC<{ onChange: (dataUrl: string | null) => void }> = (
           style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
         />
       </div>
-      <p className="text-[12px] text-thumb-sub leading-relaxed">
-        Rough it out — place the face, objects, arrows and where the title goes. The AI redraws your sketch into a polished HD thumbnail. Add a description below for best results.
-      </p>
     </div>
   );
 };
