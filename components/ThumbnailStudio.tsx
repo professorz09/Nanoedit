@@ -1879,9 +1879,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                   </div>
                 ))}
               </div>
-              {/* edge fades */}
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-16 sm:w-28 bg-gradient-to-r from-thumb-bg to-transparent" />
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-16 sm:w-28 bg-gradient-to-l from-thumb-bg to-transparent" />
+              {/* Edge fades — softens the hard clip where the row is cut off.
+                  Hidden on mobile: at narrow widths the fade covers too much
+                  of each (small) card, hazing over the actual thumbnail. The
+                  row auto-scrolls on its own (thumb-marquee), so there's
+                  nothing a user manually scrolls to hint at either way. */}
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-28 hidden sm:block bg-gradient-to-r from-thumb-bg to-transparent" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-28 hidden sm:block bg-gradient-to-l from-thumb-bg to-transparent" />
             </div>
 
             {/* Capability stats */}
