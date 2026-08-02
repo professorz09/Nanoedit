@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
   const text = typeof body?.text === 'string' ? body.text.trim().slice(0, MAX_TEXT) : '';
   if (!text) return json(400, { error: 'Missing text' });
   const count = Number.isFinite(body?.count) ? Math.max(1, Math.min(12, Math.floor(body.count))) : 8;
+  const ownOnly = body?.ownOnly === true;
 
   const ai = makeVertex();
   if (!ai) return json(500, { error: 'Match service is not configured.' });
@@ -125,11 +126,14 @@ Deno.serve(async (req) => {
   }
 
   // 2) Cosine-similarity search over the indexed styles — global defaults PLUS
-  // the caller's own custom styles (p_user_id filters to user_id IS NULL OR own).
+  // the caller's own custom styles (p_user_id filters to user_id IS NULL OR own),
+  // unless ownOnly restricts it to just the caller's own uploaded styles
+  // (migration 0019's 4-arg overload).
   const { data, error } = await admin.rpc('match_styles', {
     query_embedding: JSON.stringify(embedding),
     match_count: count,
     p_user_id: uid,
+    p_own_only: ownOnly,
   });
   if (error) {
     console.error('match_styles_failed', error.message);

@@ -30,7 +30,7 @@ const PanelFallback = () => (
 );
 import { getFromLocalStorage, saveToLocalStorage } from '../services/storageService';
 import { fetchTranscript, segmentsToText, generateText } from '../services/textService';
-import { useStyleImages, matchStyles, fetchStyleImages } from '../services/stylesService';
+import { useStyleImages, matchStyles, fetchStyleImages, fetchMyStyles } from '../services/stylesService';
 
 // Auto-load any real thumbnails dropped into attached_assets/showcase/ (16:9 jpg/png/webp).
 // No code changes needed — just add image files and they appear in the showcase gallery.
@@ -219,6 +219,11 @@ const ThumbnailStudio: React.FC<Props> = ({
   // the style pool) — this lets a user override that and force one specific
   // style instead, same picker as the Styles tab. null = keep auto-matching.
   const [selectedYtStyle, setSelectedYtStyle] = useState<string | null>(null);
+  // Restricts auto-style-matching to just the caller's own uploaded custom
+  // styles (Account page), excluding the global pool entirely. Irrelevant
+  // once a specific style is force-picked above (selectedYtStyle skips
+  // matching altogether).
+  const [onlyMyStyles, setOnlyMyStyles] = useState(false);
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
@@ -682,10 +687,24 @@ const ThumbnailStudio: React.FC<Props> = ({
       } else {
         setNoteText('Finding the best-matching style…', 'info');
         const matchQuery = [title, conceptA, conceptB, promptText].filter(v => v && v.trim()).join('. ').slice(0, 4000);
-        const matched = await matchStyles(matchQuery, 8);
-        pool = matched.length
-          ? matched.map(m => ({ url: m.url, meta: m.meta }))
-          : (await fetchStyleImages()).map(u => ({ url: u }));
+        const matched = await matchStyles(matchQuery, 8, onlyMyStyles);
+        if (matched.length) {
+          pool = matched.map(m => ({ url: m.url, meta: m.meta }));
+        } else if (onlyMyStyles) {
+          // No good semantic match among the user's own styles — still stay
+          // within their own pool (never fall back to the global one, that
+          // would defeat the toggle) by just using it unfiltered. Only error
+          // out if they genuinely have no custom styles at all yet.
+          const mine = await fetchMyStyles();
+          if (!mine.length) {
+            setBusy(false);
+            setNoteText("You don't have any custom styles yet — upload one from your Account page, or turn off \"Only my styles\".");
+            return;
+          }
+          pool = mine.map(s => ({ url: s.url }));
+        } else {
+          pool = (await fetchStyleImages()).map(u => ({ url: u }));
+        }
       }
 
       if (pool.length) {
@@ -825,7 +844,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, onlyMyStyles, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -1186,6 +1205,35 @@ const ThumbnailStudio: React.FC<Props> = ({
                             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
                           </div>
                         </div>
+
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={onlyMyStyles}
+                            onChange={e => setOnlyMyStyles(e.target.checked)}
+                            disabled={!!selectedYtStyle}
+                            className="w-4 h-4 rounded accent-thumb-red disabled:opacity-40"
+                          />
+                          <span className="text-[13px] font-bold text-thumb-ink">Only use my custom styles</span>
+                        </label>
+                        {onlyMyStyles && (
+                          <p className="text-[11px] text-thumb-sub -mt-1">Matches only from styles you've uploaded on your Account page — never the shared pool.</p>
+                        )}
+
+                        {/* Format lives here (not always visible) — YouTube
+                            is overwhelmingly 16:9, so it doesn't need to be
+                            front and center every time. */}
+                        <div className="space-y-1.5">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                          <SegmentedControl
+                            value={format}
+                            onChange={setFormat}
+                            options={[
+                              { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                              { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                            ]}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1325,18 +1373,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Format: 16:9 thumbnail vs 9:16 Shorts */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
-                <SegmentedControl
-                  value={format}
-                  onChange={setFormat}
-                  options={[
-                    { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
-                    { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
-                  ]}
-                />
-              </div>
+              {/* Format: 16:9 thumbnail vs 9:16 Shorts — for YouTube mode this
+                  lives inside Advanced instead (see below), since 16:9 is the
+                  overwhelmingly common case there and doesn't need to be
+                  front and center every time. */}
+              {mode !== 'youtube' && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                  <SegmentedControl
+                    value={format}
+                    onChange={setFormat}
+                    options={[
+                      { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                      { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                    ]}
+                  />
+                </div>
+              )}
 
               {/* Output options */}
               <div className="grid grid-cols-2 gap-2.5">
