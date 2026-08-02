@@ -2041,7 +2041,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           <div className="text-center mt-8">
             <h3 className="text-xl sm:text-2xl font-black">Turn underperformers into winners</h3>
             <p className="text-thumb-sub mt-2 max-w-lg mx-auto">Never let another video flatline. Create, test, iterate &amp; unlock more views.</p>
-            <button onClick={goGenerate} className="thumb-btn mt-5 px-6 py-3 rounded-xl text-white font-bold inline-flex items-center gap-2">
+            <button onClick={goGenerate} className="thumb-btn mt-5 px-6 py-3 rounded-full text-white font-bold inline-flex items-center gap-2">
               <I.Wand className="w-4 h-4" /> Create better thumbnails
             </button>
           </div>
