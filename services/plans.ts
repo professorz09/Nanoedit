@@ -1,7 +1,7 @@
 // ── Pricing config (DISPLAY only) ──────────────────────────
 // Edit prices/credits here for the UI. The amount actually charged is
 // computed server-side by the matching catalog entry in
-// supabase/functions/_shared/pricing.ts (Lemon Squeezy checkout creation +
+// supabase/functions/_shared/pricing.ts (Dodo Payments checkout creation +
 // webhook crediting) — keep the two in sync when changing a price or credit
 // amount, since the client here is never trusted for the charged amount.
 export type PlanId = 'free' | 'pro' | 'studio';
@@ -30,19 +30,19 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    credits: 200,
+    credits: 130,
     monthly: { priceUsd: 39 },
     yearly:  { priceUsd: 390 },
     highlight: true,
-    features: ['200 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
+    features: ['130 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
   },
   {
     id: 'studio',
     name: 'Studio',
-    credits: 750,
+    credits: 400,
     monthly: { priceUsd: 79 },
     yearly:  { priceUsd: 790 },
-    features: ['750 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
+    features: ['400 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
   },
 ];
 
@@ -54,8 +54,8 @@ export interface AddonPack {
 }
 
 export const ADDONS: AddonPack[] = [
-  { id: 'addon_small', credits: 100, priceUsd: 8 },
-  { id: 'addon_large', credits: 500, priceUsd: 30 },
+  { id: 'addon_small', credits: 25, priceUsd: 10 },
+  { id: 'addon_large', credits: 100, priceUsd: 35 },
 ];
 
 export const getPlan = (id: PlanId): Plan | undefined => PLANS.find(p => p.id === id);
