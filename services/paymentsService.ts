@@ -46,8 +46,8 @@ const authedFetch = async (path: string, body: unknown) => {
 };
 
 // create-checkout is a single idempotent-enough GET-like operation (it just
-// asks Dodo Payments to mint a fresh checkout session — retrying on a
-// transient failure costs nothing but a redundant, unused session).
+// asks Lemon Squeezy to mint a fresh checkout — retrying on a transient
+// failure costs nothing but a redundant, unused session).
 const authedFetchWithRetry = async (path: string, body: unknown) => {
   try {
     return await authedFetch(path, body);
@@ -58,12 +58,13 @@ const authedFetchWithRetry = async (path: string, body: unknown) => {
 };
 
 /**
- * Buys a catalog item (a plan cycle or an add-on pack) via Dodo Payments:
- * creates a server-side checkout session, then navigates the browser to
- * Dodo's hosted checkout page. There is no client-side "success" callback —
- * Dodo redirects back to the app's return_url once the customer finishes
- * checkout, and the actual credit grant happens server-side via the
- * "dodo-webhook" Edge Function once Dodo confirms the payment.
+ * Buys a catalog item (a plan cycle or an add-on pack) via Lemon Squeezy:
+ * creates a server-side checkout, then navigates the browser to Lemon
+ * Squeezy's hosted checkout page. There is no client-side "success"
+ * callback — Lemon Squeezy redirects back to the app's return_url once the
+ * customer finishes checkout, and the actual credit grant happens
+ * server-side via the "lemonsqueezy-webhook" Edge Function once Lemon
+ * Squeezy confirms the order.
  */
 export const buyItem = async (itemId: string): Promise<void> => {
   const session = await authedFetchWithRetry('create-checkout', { item: itemId }) as CheckoutResponse;

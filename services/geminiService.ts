@@ -300,3 +300,34 @@ export const editImageWithGemini = async (
     throw new Error(errMsg.length > 140 || errMsg.includes('{') ? 'Something went wrong. Please try again.' : errMsg);
   }
 };
+
+// Best-effort server-side cleanup for a deleted thumbnail (Storage object +
+// `generations` row — see supabase/functions/delete-generation). The client
+// only has SELECT access to `generations`, so without this a locally-deleted
+// thumbnail would just come back on the next reload's restore-from-server
+// merge. Deliberately swallows all errors — the local delete (removing it
+// from generatedImages/IndexedDB) already happened and should never be
+// undone or blocked by a network hiccup here; this is only cleanup so it
+// doesn't resurrect on refresh.
+export const deleteGenerationOnServer = async (url: string): Promise<void> => {
+  try {
+    if (!supabase) return;
+    const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+    const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+    if (!supaUrl) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+    await fetch(`${supaUrl}/functions/v1/delete-generation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: supaAnon ?? '',
+      },
+      body: JSON.stringify({ url }),
+    });
+  } catch (e) {
+    console.warn('deleteGenerationOnServer failed (non-fatal)', e);
+  }
+};

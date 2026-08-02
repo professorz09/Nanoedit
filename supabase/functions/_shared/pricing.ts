@@ -4,15 +4,17 @@
 // (e.g. "plan:pro:monthly"); the amount is computed here so a client can never
 // tamper with the price it's charged.
 //
-// Billed via Dodo Payments (merchant of record) in USD — `usd` here is the
+// Billed via Lemon Squeezy (merchant of record) in USD — `usd` here is the
 // exact amount charged, no currency conversion needed. Imported by
-// create-checkout + dodo-webhook.
+// create-checkout + lemonsqueezy-webhook.
+//
+// Every purchase uses the SAME store variant (LEMONSQUEEZY_VARIANT_ID secret)
+// — the actual price is set per-request via create-checkout's `custom_price`,
+// same "one variant, dynamic price" pattern as the old Dodo integration's
+// single "Pay What You Want" product. The variant/store IDs live in Supabase
+// secrets, not here, since they're account-specific and were never given to
+// this codebase directly.
 // ═══════════════════════════════════════════════════════════════════════════
-
-// The single "Pay What You Want" one-time-payment product created in the Dodo
-// dashboard — every purchase uses this same product, with the actual price
-// set per-request via create-checkout (see docs: dynamic pricing checkout).
-export const DODO_PRODUCT_ID = 'pdt_0NkS5eCDZFTWah6f5OH0u';
 
 export interface CatalogItem {
   kind: 'plan' | 'addon';

@@ -333,6 +333,12 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .thumb-light .text-red-200,
 .thumb-light .text-red-200\/90,
 .thumb-light .text-red-300 { color: #a3123a; }
+/* text-thumb-green (#2ee6a6) is bright enough to read on the dark mint fill
+   it was designed for, but nearly vanishes on bg-thumb-greenSoft's light
+   flip above (#ddf7ec) — both are pale, low-contrast mint. Darken it here,
+   same as the red-100/200/300 flip right above. */
+.thumb-light .text-thumb-green,
+.thumb-light .hover\:text-thumb-green:hover { color: #087a56; }
 
 /* Dark surface fills → light (inputs, tracks). Overlays ≥40% stay dark. */
 .thumb-light .bg-black\/20,
