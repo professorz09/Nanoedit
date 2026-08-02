@@ -885,7 +885,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                     : totalCredits}
                   <span className="hidden sm:inline text-thumb-sub font-semibold">credits</span>
                 </button>
-                <button onClick={goAccount} className="w-11 h-11 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
+                <button onClick={goAccount} className="w-11 h-11 rounded-2xl bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
                   {(user.email?.[0] || 'U').toUpperCase()}
                 </button>
               </>
@@ -964,7 +964,7 @@ const ThumbnailStudio: React.FC<Props> = ({
             {configured && user ? (
               <>
                 <button onClick={goAccount} className="w-full flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/5 transition-colors text-left">
-                  <div className="w-9 h-9 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0">{(user.email?.[0] || 'U').toUpperCase()}</div>
+                  <div className="w-9 h-9 rounded-xl bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0">{(user.email?.[0] || 'U').toUpperCase()}</div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-bold text-thumb-ink truncate">{user.email}</p>
                     <p className="text-[11px] text-thumb-sub flex items-center gap-1">
