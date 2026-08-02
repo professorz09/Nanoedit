@@ -86,8 +86,11 @@ export interface MatchedStyle {
  * "match-style" Edge Function), refunded on failure. Returns [] on any
  * problem (not signed in, no credits, network) — callers should fall back to
  * the plain style pool (fetchStyleImages/useStyleImages) rather than block.
+ *
+ * `ownOnly` restricts the search to just the caller's own uploaded custom
+ * styles, excluding the global pool entirely (migration 0019).
  */
-export const matchStyles = async (text: string, count = 8): Promise<MatchedStyle[]> => {
+export const matchStyles = async (text: string, count = 8, ownOnly = false): Promise<MatchedStyle[]> => {
   if (!supabase) return [];
   const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -99,7 +102,7 @@ export const matchStyles = async (text: string, count = 8): Promise<MatchedStyle
     const resp = await fetch(`${supaUrl}/functions/v1/match-style`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
-      body: JSON.stringify({ text, count }),
+      body: JSON.stringify({ text, count, ownOnly }),
     });
     if (!resp.ok) return [];
     const data = await resp.json().catch(() => ({}));
