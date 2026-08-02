@@ -14,6 +14,7 @@ import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, 
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
 import RetryImage from './components/RetryImage';
 import ConfirmModal from './components/ConfirmModal';
+import { I as ThumbI } from './components/ThumbIcons';
 // jszip (~95 KB) is loaded on demand in handleDownloadAll — kept out of the initial bundle.
 
 // The full-screen editor (~760 lines of markup) is split into its own chunk and
@@ -80,6 +81,13 @@ function App() {
 
   // State for Full Screen Image Viewer
   const [viewedImage, setViewedImage] = useState<string | null>(null);
+  // "Change face" target — lifted here (rather than local to ThumbnailStudio)
+  // so the Studio's own lightbox below can offer it too, not just the
+  // per-card button in the results grid. ThumbnailStudio still owns
+  // ChangeFaceModal itself and the actual apply logic (it needs the
+  // generation-queueing context that lives there); this is just the shared
+  // "which image is being face-swapped right now" state.
+  const [changeFaceTarget, setChangeFaceTarget] = useState<string | null>(null);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -1038,6 +1046,8 @@ function App() {
                   onOpenEditor={handleOpenEditor}
                   onRetry={retryQueueItem}
                   onCancel={cancelQueueItem}
+                  changeFaceTarget={changeFaceTarget}
+                  setChangeFaceTarget={setChangeFaceTarget}
               />
               {/* Lightweight lightbox for the studio (the full nano-editor's brush
                   lives in EditorView — this has its own minimal "mark + remove"
@@ -1089,6 +1099,7 @@ function App() {
                           {!brushMode ? (
                               <div className="hidden lg:flex w-52 shrink-0 flex-col gap-2.5">
                                   <button onClick={startRemoveMode} className="h-12 px-4 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-bold backdrop-blur-sm transition-colors">🖌️ Brush out</button>
+                                  <button onClick={() => setChangeFaceTarget(viewedImage)} className="h-12 px-4 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-bold backdrop-blur-sm transition-colors"><ThumbI.FaceSwap className="w-4 h-4" /> Change face</button>
                                   <button onClick={() => handleOpenEditor(viewedImage)} className="h-12 px-4 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2 shadow-lg"><IconLayerPlus /> Edit</button>
                                   <button onClick={() => downloadImage(viewedImage!)} className="h-12 px-4 bg-[#f5334c] text-white text-sm font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-lg"><IconDownload /> Download</button>
                               </div>
