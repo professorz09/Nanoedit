@@ -1033,7 +1033,12 @@ export default function EditorView(props: EditorViewProps) {
                           <span className="text-xs font-black text-white/90 tracking-wide flex items-center gap-1.5">
                               <span className="text-white/40 text-sm leading-none">⠿</span> EDIT TOOLS
                           </span>
-                          <button onClick={(e) => { e.stopPropagation(); setBrushPanelMin(true); }} title="Minimize" className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1">–</button>
+                          <button
+                              onPointerDown={e => e.stopPropagation()}
+                              onClick={(e) => { e.stopPropagation(); setBrushPanelMin(true); }}
+                              title="Minimize"
+                              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1"
+                          >–</button>
                       </div>
 
                       {/* Tool selection — Brush + Pin only */}
