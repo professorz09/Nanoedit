@@ -110,6 +110,30 @@ const TOPIC_HINTS: { re: RegExp; hint: string }[] = [
   { re: /\b(story|storytime|drama|exposed|expose|truth|shocking|secret|reaction)\b/i, hint: 'Dramatic storytelling look: expressive shocked face, bold arrows/circles highlighting the key element.' },
   { re: /\b(tutorial|how to|guide|learn|course|tips|hack)\b/i, hint: 'Clear educational look: clean layout, numbered/step feel, confident presenter, legible callouts.' },
 ];
+// Sample a transcript across its WHOLE length instead of just its first N
+// characters — a video's actual hook/dramatic moment can land anywhere
+// (an early cold-open, a mid-video twist, an ending payoff), not only in
+// the first couple of minutes a plain prefix-slice would capture. Splits
+// into a handful of evenly-spaced chunks by segment index and takes an
+// even slice of each, joined with a break so the model reads them as
+// separate excerpts rather than one continuous passage.
+const sampleTranscript = (segments: { start: number; text: string }[], maxChars: number): string => {
+  const full = segmentsToText(segments);
+  if (full.length <= maxChars) return full;
+  const CHUNKS = 5;
+  const perChunk = Math.max(1, Math.floor(segments.length / CHUNKS));
+  const budget = Math.floor(maxChars / CHUNKS);
+  const parts: string[] = [];
+  for (let i = 0; i < CHUNKS; i++) {
+    const start = i * perChunk;
+    if (start >= segments.length) break;
+    const end = i === CHUNKS - 1 ? segments.length : Math.min(segments.length, start + perChunk);
+    const chunkText = segmentsToText(segments.slice(start, end)).slice(0, budget);
+    if (chunkText) parts.push(chunkText);
+  }
+  return parts.join('\n[…]\n');
+};
+
 const topicDirective = (topic: string) => {
   const t = topic.trim();
   if (!t) return '';
@@ -235,9 +259,9 @@ const ThumbnailStudio: React.FC<Props> = ({
   // matching altogether).
   const [onlyMyStyles, setOnlyMyStyles] = useState(false);
   // Pushes both the AI concepts and the final render toward a bolder,
-  // more exaggerated/dramatic take on the topic (shock-value staging, a
-  // punchy callout + arrow instead of a plain headline) — off by default
-  // since it's less predictable than the standard photorealistic path.
+  // more visually unique/dramatic take on the topic (shock-value staging,
+  // unexpected composition) — off by default since it's less predictable
+  // than the standard photorealistic path.
   const [creativeMode, setCreativeMode] = useState(false);
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
@@ -593,11 +617,13 @@ const ThumbnailStudio: React.FC<Props> = ({
     let prompt = '';
     let sources: string[] = [...uploads];
     // Shared across every concept-driven mode (YouTube/Prompt/Styles/Sketch):
-    // bolder staging + a punchy callout-with-arrow instead of a plain
-    // headline — still photorealistic, just more dramatic/exaggerated. Off
-    // by default since it's less predictable for the model to render cleanly.
+    // hand the AI full creative freedom on the VISUAL staging instead of a
+    // prescriptive checklist — still photorealistic, just not a plain
+    // literal shot. Doesn't mandate any specific text/callout treatment
+    // (text still follows the normal headline rules elsewhere). Off by
+    // default since it's less predictable than the standard look.
     const creativeDirective = creativeMode
-      ? "Push the staging toward the boldest, most dramatic and exaggerated take on the concept — intense expressions, high-stakes framing, cinematic high-contrast lighting and colour grading, the kind of shocking or twist moment that stops a scroll. Render the on-image text as a short, punchy callout label with a bold directional arrow pointing at the exact dramatic detail in the frame — like top viral thumbnails — instead of a plain floating headline. "
+      ? "You have full creative freedom here — imagine and depict the topic in whatever bold, unexpected, visually striking way feels most fitting, not a plain literal shot. "
       : '';
 
     if (mode === 'youtube') {
@@ -622,8 +648,8 @@ const ThumbnailStudio: React.FC<Props> = ({
       // Best-effort — if the text model is unavailable we still generate from
       // the title and the original thumbnail. The concept step is free; the
       // credit check below is for the images that follow it.
-      let conceptA = '', conceptB = '', headline = '';
-      const transcriptText = segments ? segmentsToText(segments).slice(0, 3500) : '';
+      let conceptA = '', conceptB = '', headlineA = '', headlineB = '';
+      const transcriptText = segments ? sampleTranscript(segments, 3500) : '';
       if (title || transcriptText) {
         // Skip while the profile is still loading — totalCredits reads 0
         // until it resolves, which would otherwise redirect a user with
@@ -642,15 +668,15 @@ const ThumbnailStudio: React.FC<Props> = ({
         try {
           setNoteText('Designing two fresh thumbnail concepts…', 'info');
           const raw = await generateText(
-            `You are a world-class YouTube thumbnail art director. Analyse the video below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
+            `You are a world-class YouTube thumbnail art director. Analyse the video below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, each with its OWN short on-thumbnail headline that matches ITS specific scene.\n\n` +
             `Rules:\n` +
             `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
             `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
-            (creativeMode ? `- Push each concept toward the boldest, most dramatic and exaggerated angle on the topic — a shocking moment, a twist, high-stakes staging — the kind that stops a scroll, not a plain literal shot. Still grounded in what the video is actually about.\n` : '') +
-            `- HEADLINE: a punchy 2-4 word uppercase hook that captures the video's core topic (viewers must instantly get what it's about).\n\n` +
+            (creativeMode ? `- You have full creative freedom for these concepts — imagine the video in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction. Still grounded in what the video is actually about.\n` : '') +
+            `- Each HEADLINE: a punchy 2-4 word uppercase hook that fits ITS OWN concept's specific scene (not a generic title repeated for both) and still captures the video's core topic.\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
-            `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+            `CONCEPT_A: <sentence>\nHEADLINE_A: <2-4 words>\nCONCEPT_B: <sentence>\nHEADLINE_B: <2-4 words>\n\n` +
             `TITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
             'concept'
           );
@@ -660,7 +686,8 @@ const ThumbnailStudio: React.FC<Props> = ({
           };
           conceptA = grab('CONCEPT_A').slice(0, 400);
           conceptB = grab('CONCEPT_B').slice(0, 400);
-          headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+          headlineA = grab('HEADLINE_A').replace(/[."']+$/g, '').slice(0, 40);
+          headlineB = grab('HEADLINE_B').replace(/[."']+$/g, '').slice(0, 40);
           // If the model ignored the format, treat the whole reply as one concept.
           if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
         } catch (_e) {
@@ -695,14 +722,16 @@ const ThumbnailStudio: React.FC<Props> = ({
       // Premium + instantly-legible direction so the result matches the reference-style thumbnails.
       const ytPremium = "The thumbnail should communicate the video's topic at a glance — a viewer should quickly grasp what it's about — using a clear, expressive focal subject and topic-relevant visual cues. Make it look genuinely premium and high-end, on par with the best top-creator thumbnails: bold, polished, richly detailed and click-worthy. ";
       const realFootage = "Render it as authentic real-footage-style photography — like a genuine photo/still captured on a professional camera for THIS exact topic, with real depth of field and natural lighting; not an illustration, cartoon or generic stock art. ";
-      const textSeed = promptText.trim() || headline;
 
       // Concept-only prompt — the last resort if NOT A SINGLE style image is
       // readable. Builds from the video's topic/concept, NEVER recreating the
       // video's own (often low-res) thumbnail's layout — faceDir above still
-      // carries over the real person from it, if any, via thumbFaceRef.
-      const buildConceptOnly = (concept: string) => {
+      // carries over the real person from it, if any, via thumbFaceRef. Takes
+      // its OWN headline (paired with this specific concept), not one shared
+      // across every variant.
+      const buildConceptOnly = (concept: string, conceptHeadline: string) => {
         const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
+        const textSeed = promptText.trim() || conceptHeadline;
         return `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${creativeDirective}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
       };
 
@@ -759,6 +788,11 @@ const ThumbnailStudio: React.FC<Props> = ({
         const chosen = Array.from({ length: wantCount }, (_, i) => candidates[i % candidates.length]);
         const conceptPair = [conceptA || conceptB, conceptB || conceptA];
         const concepts = Array.from({ length: wantCount }, (_, i) => conceptPair[i % 2]);
+        // Each concept keeps ITS OWN paired headline (not one shared across
+        // every variant) — falls back to the other slot's headline if one
+        // side came back blank, same as conceptPair above.
+        const headlinePair = [headlineA || headlineB, headlineB || headlineA];
+        const headlines = Array.from({ length: wantCount }, (_, i) => headlinePair[i % 2]);
 
         setNoteText('Designing your thumbnails…', 'info');
         let launched = 0;
@@ -766,6 +800,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           const style = chosen[i];
           const meta = style.meta || {};
           const concept = concepts[i] || '';
+          const textSeed = promptText.trim() || headlines[i] || '';
           const styleB64 = await urlToBase64(style.url);
           if (!styleB64) continue; // skip an unreadable style rather than recreating the video's thumbnail
 
@@ -815,7 +850,8 @@ const ThumbnailStudio: React.FC<Props> = ({
       // layout — only (via faceDir/thumbFaceRef above) the real person in it, if
       // any. Still honours the Variations picker, cycling A/B when both concepts exist.
       const fallbackConcepts = (conceptA && conceptB) ? [conceptA, conceptB] : [conceptA || conceptB];
-      const variants = Array.from({ length: wantCount }, (_, i) => buildConceptOnly(fallbackConcepts[i % fallbackConcepts.length]));
+      const fallbackHeadlines = (conceptA && conceptB) ? [headlineA, headlineB] : [headlineA || headlineB];
+      const variants = Array.from({ length: wantCount }, (_, i) => buildConceptOnly(fallbackConcepts[i % fallbackConcepts.length], fallbackHeadlines[i % fallbackHeadlines.length] || ''));
       const fallbackFaceRefs = hasFace ? uploads : (thumbFaceRef ? [thumbFaceRef] : []);
       variants.forEach(v => onGenerate(finalize(v), [...fallbackFaceRefs], genOpts));
       setBusy(false);
@@ -860,7 +896,7 @@ const ThumbnailStudio: React.FC<Props> = ({
             `- Every concept must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
             (wantCount > 1 ? `- Make all ${wantCount} concepts genuinely distinct from EACH OTHER: different composition, subject framing, angle, setting or emotion — no two should be variations of the same shot.\n` : '') +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
-            (creativeMode ? `- Push each concept toward the boldest, most dramatic and exaggerated angle on the topic — a shocking moment, a twist, high-stakes staging — the kind that stops a scroll, not a plain literal shot.\n` : '') +
+            (creativeMode ? `- You have full creative freedom for these concepts — imagine the topic in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction.\n` : '') +
             `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
             `${labels.map(l => `${l}: <sentence>`).join('\n')}\nHEADLINE: <2-4 words>\n\n` +
@@ -936,7 +972,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
           `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
           `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
-          (creativeMode ? `- Push each concept toward the boldest, most dramatic and exaggerated angle on the topic — a shocking moment, a twist, high-stakes staging — the kind that stops a scroll, not a plain literal shot.\n` : '') +
+          (creativeMode ? `- You have full creative freedom for these concepts — imagine the topic in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction.\n` : '') +
           `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
           `Reply in EXACTLY this format, nothing else:\n` +
           `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
@@ -1049,7 +1085,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           `Rules:\n` +
           `- Do NOT change the layout, composition or what's in each region — that's fixed by the sketch. Only vary the visual treatment: mood, lighting, colour grade, and concrete real-world scene details.\n` +
           (wantCount > 1 ? `- Make all ${wantCount} genuinely distinct from EACH OTHER — different mood/lighting/detail, not near-duplicates of the same look.\n` : '') +
-          (creativeMode ? `- Push each concept's mood/lighting/detail toward the boldest, most dramatic and exaggerated take you can, within the sketch's fixed layout — high-stakes, high-contrast, the kind that stops a scroll.\n` : '') +
+          (creativeMode ? `- You have full creative freedom on mood, lighting and scene detail — imagine it in whatever bold, unexpected, visually striking way feels right, within the sketch's fixed layout.\n` : '') +
           `- Each concept: ONE vivid sentence, concrete and purely visual — no mention of "sketch" or "layout".\n\n` +
           `Reply in EXACTLY this format, nothing else:\n` +
           `${labels.map(l => `${l}: <sentence>`).join('\n')}\n\n` +
@@ -1088,18 +1124,11 @@ const ThumbnailStudio: React.FC<Props> = ({
       // reference ("Image" tab): same concept-first structure as the other
       // modes — design one distinct concept per requested variation instead
       // of generating every variation from the exact same shared prompt.
-      // Never renders on-image text (uploads here are arbitrary reference
-      // photos, not thumbnail templates with a headline to replace), so
-      // creativeMode's usual "punchy callout + arrow" text directive is
-      // skipped — only the bolder-staging half applies.
       const topic = titleText.trim();
       const hasFace = uploads.length > 0;
       const wantCount = Math.max(1, Math.min(4, genCount));
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
       const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
-      const creativeStagingOnly = creativeMode
-        ? "Push the staging toward the boldest, most dramatic and exaggerated take — intense mood, high-stakes framing, cinematic high-contrast lighting and colour grading, the kind that stops a scroll. "
-        : '';
 
       setNoteText(`Designing ${wantCount} fresh thumbnail concept${wantCount > 1 ? 's' : ''}…`, 'info');
       let concepts: string[] = [];
@@ -1109,7 +1138,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           `You are a world-class YouTube thumbnail art director. A creator has uploaded reference photo(s) for style and mood inspiration, plus an optional direction below. Design ${wantCount} clearly DIFFERENT way${wantCount > 1 ? 's' : ''} to build a brand-new thumbnail inspired by that reference — each with a distinct composition, mood, lighting or real-world scene detail.\n\n` +
           `Rules:\n` +
           (wantCount > 1 ? `- Make all ${wantCount} genuinely distinct from EACH OTHER — not near-duplicates of the same look.\n` : '') +
-          (creativeMode ? `- Push each toward the boldest, most dramatic and exaggerated take you can — high-stakes, high-contrast, the kind that stops a scroll.\n` : '') +
+          (creativeMode ? `- You have full creative freedom here — imagine it in whatever bold, unexpected, visually striking way feels right.\n` : '') +
           `- Each concept: ONE vivid sentence, concrete and purely visual.\n\n` +
           `Reply in EXACTLY this format, nothing else:\n` +
           `${labels.map(l => `${l}: <sentence>`).join('\n')}\n\n` +
@@ -1134,7 +1163,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       for (let i = 0; i < wantCount; i++) {
         const concept = usableConcepts[i % usableConcepts.length] || topic;
         const extra = concept ? `Concept: ${concept} ` : '';
-        const p = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${hasFace ? 'If a person appears, preserve their likeness. ' : ''}${extra}${creativeStagingOnly}${topicDirective(topic)}Do NOT add, invent or write any new text, letters, words, captions or labels anywhere on the image. ${BASE_THUMB}`;
+        const p = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${hasFace ? 'If a person appears, preserve their likeness. ' : ''}${extra}${creativeDirective}${topicDirective(topic)}Do NOT add, invent or write any new text, letters, words, captions or labels anywhere on the image. ${BASE_THUMB}`;
         onGenerate(finalize(p), [...uploads], genOpts);
         launched++;
       }
@@ -1547,7 +1576,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </button>
                         </div>
                         {creativeMode && (
-                          <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more exaggerated concepts and a punchy callout-with-arrow instead of a plain headline — less predictable than the standard look.</p>
+                          <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
                         )}
 
                         {/* Format lives here (not always visible) — YouTube
@@ -1639,7 +1668,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </button>
                         </div>
                         {creativeMode && (
-                          <p className="text-[11px] text-thumb-sub mt-1.5">Bolder, more exaggerated concepts and a punchy callout-with-arrow instead of a plain headline — less predictable than the standard look.</p>
+                          <p className="text-[11px] text-thumb-sub mt-1.5">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
                         )}
                       </div>
                     )}
@@ -1942,7 +1971,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </button>
                       </div>
                       {creativeMode && (
-                        <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more exaggerated concepts and a punchy callout-with-arrow instead of a plain headline — less predictable than the standard look.</p>
+                        <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
                       )}
                     </div>
                   )}
