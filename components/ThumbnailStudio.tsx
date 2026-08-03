@@ -831,18 +831,23 @@ const ThumbnailStudio: React.FC<Props> = ({
           return;
         }
 
-        setNoteText('Designing two fresh thumbnail concepts…', 'info');
-        let conceptA = '', conceptB = '', headline = '';
+        setNoteText(`Designing ${wantCount} fresh thumbnail concept${wantCount > 1 ? 's' : ''}…`, 'info');
+        // One DISTINCT concept per requested variation (not just two cycled
+        // to fill however many were asked for) — picking "4" should mean 4
+        // genuinely different angles, same as picking "1" means one.
+        let concepts: string[] = [];
+        let headline = '';
         try {
+          const labels = Array.from({ length: wantCount }, (_, i) => `CONCEPT_${i + 1}`);
           const raw = await generateText(
-            `You are a world-class YouTube thumbnail art director. Analyse the topic below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
+            `You are a world-class YouTube thumbnail art director. Analyse the topic below and design ${wantCount} clearly DIFFERENT, click-worthy thumbnail concept${wantCount > 1 ? 's' : ''} for it, plus one short on-thumbnail headline.\n\n` +
             `Rules:\n` +
-            `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
-            `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
+            `- Every concept must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
+            (wantCount > 1 ? `- Make all ${wantCount} concepts genuinely distinct from EACH OTHER: different composition, subject framing, angle, setting or emotion — no two should be variations of the same shot.\n` : '') +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
             `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
-            `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+            `${labels.map(l => `${l}: <sentence>`).join('\n')}\nHEADLINE: <2-4 words>\n\n` +
             `TOPIC: ${topic || "match the reference image's style and mood"}`,
             'concept'
           );
@@ -850,25 +855,26 @@ const ThumbnailStudio: React.FC<Props> = ({
             const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
             return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
           };
-          conceptA = grab('CONCEPT_A').slice(0, 400);
-          conceptB = grab('CONCEPT_B').slice(0, 400);
+          concepts = labels.map(l => grab(l).slice(0, 400)).filter(Boolean);
           headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
-          if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
+          if (!concepts.length && raw?.trim()) concepts = [raw.trim().slice(0, 400)];
         } catch (_e) {
           /* concept generation is free and best-effort — falls back to the typed topic below */
         }
         const textSeed = headline || topic;
 
         setNoteText('Designing your thumbnails…', 'info');
-        const conceptPair = [conceptA || conceptB, conceptB || conceptA];
-        const concepts = Array.from({ length: wantCount }, (_, i) => conceptPair[i % 2]);
+        // If the model returned fewer usable concepts than slots (bad
+        // formatting, one blank line, etc.), cycle what we did get rather
+        // than leaving later slots with nothing.
+        const usableConcepts = concepts.length ? concepts : [''];
         const faceStyle = hasFace
           ? "For the main person, use the person from the uploaded photo — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. Do NOT use the reference image's own person — that belongs to a different, unrelated thumbnail. "
           : "Build the main subject from the concept below. Do NOT reuse the reference image's own specific person or face — that belongs to a different, unrelated thumbnail; invent a new subject that matches the concept instead. ";
 
         let launched = 0;
         for (let i = 0; i < wantCount; i++) {
-          const concept = concepts[i] || topic;
+          const concept = usableConcepts[i % usableConcepts.length] || topic;
           const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : ''}${faceStyle}${textDirective(textSeed)}${topicDirective(topic)} ${BASE_THUMB}`;
           onGenerate(finalize(p), [refB64, ...uploads], genOpts);
           launched++;
