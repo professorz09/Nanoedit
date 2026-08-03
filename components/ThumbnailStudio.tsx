@@ -1628,19 +1628,27 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
+            </div>
+
+            {/* Sticky footer — the Generate button (and its status note) stays
+                reachable at the bottom of the viewport as you scroll through a
+                tall config (e.g. an expanded Advanced section) instead of
+                requiring extra scrolling past it every time. Bleeds to the
+                panel's own edges/corners via negative margins since it sits
+                inside the panel's padding. */}
+            <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-8 -mb-5 sm:-mb-8 mt-5 px-5 sm:px-8 pb-5 sm:pb-8 pt-4 rounded-b-[28px] thumb-glass-footer">
               {note && (
-                <div className={`text-xs rounded-xl px-4 py-3 leading-relaxed border ${
+                <div className={`text-xs rounded-xl px-4 py-3 mb-3 leading-relaxed border ${
                   note.kind === 'success' ? 'bg-thumb-greenSoft text-thumb-green border-thumb-green/30'
                   : note.kind === 'info' ? 'bg-thumb-soft text-thumb-sub border-thumb-line'
                   : 'bg-thumb-redSoft text-red-300 border-thumb-red/20'
                 }`}>{note.text}</div>
               )}
 
-              {/* Generate */}
               <button
                 onClick={handleGenerate}
                 disabled={!canGenerate}
-                className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70 mt-1"
+                className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70"
               >
                 {busy ? (
                   <>

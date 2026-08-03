@@ -198,6 +198,21 @@ button:active:not(:disabled) { transform: scale(0.97); }
     0 24px 60px -28px rgba(0,0,0,0.85);
 }
 
+/* ── Sticky footer bar inside a .thumb-glass panel (e.g. the Generate
+   button) — more opaque than the panel's own glass so it reads as sitting
+   in front of whatever's scrolled behind it, not just more of the same
+   translucent surface. ── */
+.thumb-glass-footer {
+  background: linear-gradient(180deg, rgba(38,38,52,0.94), rgba(20,20,30,0.92));
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.thumb-light .thumb-glass-footer {
+  background: linear-gradient(180deg, rgba(255,255,255,0.97), rgba(247,247,251,0.95));
+  border-top: 1px solid rgba(12,12,24,0.08);
+}
+
 /* ── Sidebar nav item: idle glass, hover lift, active red glow ── */
 .thumb-nav {
   position: relative;
