@@ -222,6 +222,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [styleModalOpen, setStyleModalOpen] = useState<'sketch' | 'youtube' | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
   const [sketchAdvanced, setSketchAdvanced] = useState(false);
+  const [templatesAdvanced, setTemplatesAdvanced] = useState(false);
   // YouTube mode normally auto-matches a style per video (vector search over
   // the style pool) — this lets a user override that and force one specific
   // style instead, same picker as the Styles tab. null = keep auto-matching.
@@ -1196,7 +1197,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         <section id="thumb-tool" className="scroll-mt-24 pt-10 pb-12">
           <div className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 lg:gap-8 items-start max-w-6xl mx-auto">
           {/* LEFT: generator controls */}
-          <div className="thumb-glass thumb-float-red rounded-[28px] p-5 sm:p-8 max-w-3xl mx-auto w-full lg:max-w-none lg:sticky lg:top-24">
+          <div className="thumb-glass thumb-float-red rounded-[28px] p-5 sm:p-8 max-w-3xl mx-auto w-full lg:max-w-none lg:sticky lg:top-24 lg:self-start">
             {/* No card header here on purpose — the top nav already shows the
                 "Thumbnail" tab as active, so repeating "AI Thumbnail
                 Generator" just duplicated that and pushed the actual tools
@@ -1260,10 +1261,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setYtAdvanced(v => !v)}
-                      className="flex items-center gap-2 text-[13px] font-bold text-thumb-sub hover:text-thumb-ink transition-colors"
+                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
                     >
-                      <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-                      Advanced
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                     </button>
 
                     {ytAdvanced && (
@@ -1422,70 +1426,85 @@ const ThumbnailStudio: React.FC<Props> = ({
               )}
 
               {mode === 'sketch' && (
-                <div className="space-y-3 animate-fade-in-up">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Sketch your thumbnail layout</label>
-                  <SketchCanvas onChange={setSketchData} />
-                  <textarea
-                    value={promptText}
-                    onChange={e => setPromptText(e.target.value)}
-                    rows={2}
-                    placeholder="Describe it and the title text — e.g. 'gaming video, shocked player, explosion behind, neon colors, text: INSANE COMEBACK'"
-                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
-                  />
+                <div className="space-y-4 animate-fade-in-up">
+                  <div className="space-y-2.5">
+                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Sketch your thumbnail layout</label>
+                    <SketchCanvas onChange={setSketchData} />
+                  </div>
 
-                  {/* Three equal-size entry points — each acts immediately (opens
-                      its popup or the native file picker) instead of expanding an
-                      inline panel that needs a second tap. */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
-                      className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
-                    >
-                      <I.FaceSwap className="w-4 h-4" /> Persona
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStyleModalOpen('sketch')}
-                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedSketchStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
-                    >
-                      <I.Image className="w-4 h-4" /> Style
-                    </button>
-                    <button
-                      type="button"
-                      onClick={triggerUpload}
-                      className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
-                    >
-                      <I.Upload className="w-4 h-4" /> Upload
-                    </button>
-                    <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                  <div className="space-y-2.5">
+                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe it &amp; the title text</label>
+                    <textarea
+                      value={promptText}
+                      onChange={e => setPromptText(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. 'gaming video, shocked player, explosion behind, neon colors, text: INSANE COMEBACK'"
+                      className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                    />
                   </div>
 
                   {/* Advanced (optional) — same collapsed-by-default pattern as
-                      YouTube mode. Sketch is overwhelmingly 16:9 thumbnails, so
-                      Format doesn't need to sit in the always-visible path
+                      YouTube mode. Sketch is overwhelmingly 16:9 thumbnails and
+                      most sketches don't need a persona/style/upload on top, so
+                      none of that needs to sit in the always-visible path
                       between the canvas and the Generate button. */}
                   <div className="border-t border-white/10 pt-3">
                     <button
                       type="button"
                       onClick={() => setSketchAdvanced(v => !v)}
-                      className="flex items-center gap-2 text-[13px] font-bold text-thumb-sub hover:text-thumb-ink transition-colors"
+                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
                     >
-                      <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-                      Advanced
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                     </button>
 
                     {sketchAdvanced && (
-                      <div className="mt-3 space-y-1.5 animate-fade-in-up">
-                        <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
-                        <SegmentedControl
-                          value={format}
-                          onChange={setFormat}
-                          options={[
-                            { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
-                            { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
-                          ]}
-                        />
+                      <div className="mt-3 space-y-4 animate-fade-in-up">
+                        <div className="space-y-1.5">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                          <SegmentedControl
+                            value={format}
+                            onChange={setFormat}
+                            options={[
+                              { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                              { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                            ]}
+                          />
+                        </div>
+
+                        {/* Three equal-size entry points — each acts immediately
+                            (opens its popup or the native file picker) instead
+                            of expanding an inline panel that needs a second tap. */}
+                        <div className="space-y-1.5">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Persona, style &amp; upload</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                            >
+                              <I.FaceSwap className="w-4 h-4" /> Persona
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStyleModalOpen('sketch')}
+                              className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedSketchStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                            >
+                              <I.Image className="w-4 h-4" /> Style
+                            </button>
+                            <button
+                              type="button"
+                              onClick={triggerUpload}
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                            >
+                              <I.Upload className="w-4 h-4" /> Upload
+                            </button>
+                            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1516,7 +1535,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                   single description field above. */}
               {(mode === 'templates' || mode === 'reference') && (
                 <div className="space-y-2.5">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">What to change</label>
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
@@ -1526,13 +1544,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Format: 16:9 thumbnail vs 9:16 Shorts — for YouTube and Sketch
-                  this lives inside their own Advanced sections instead (see
-                  below), since 16:9 is the overwhelmingly common case and
+              {/* Format: 16:9 thumbnail vs 9:16 Shorts — for YouTube, Sketch and
+                  Styles this lives inside their own Advanced sections instead
+                  (see below), since 16:9 is the overwhelmingly common case and
                   doesn't need to be front and center every time — every extra
                   always-visible control here is more scrolling to reach
                   Generate. */}
-              {mode !== 'youtube' && mode !== 'sketch' && (
+              {mode !== 'youtube' && mode !== 'sketch' && mode !== 'templates' && (
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
                   <SegmentedControl
@@ -1547,38 +1565,102 @@ const ThumbnailStudio: React.FC<Props> = ({
               )}
 
               {/* Output options */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
-                  <SegmentedControl
-                    value={String(genCount)}
-                    onChange={(v) => setGenCount(Number(v))}
-                    options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
-                  />
+              {mode !== 'templates' && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
+                    <SegmentedControl
+                      value={String(genCount)}
+                      onChange={(v) => setGenCount(Number(v))}
+                      options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                    <SegmentedControl
+                      value={genModel}
+                      onChange={setGenModel}
+                      options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
-                  <SegmentedControl
-                    value={genModel}
-                    onChange={setGenModel}
-                    options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
-                  />
-                </div>
-              </div>
+              )}
 
+              {/* Styles mode tucks Format/Variations/Quality into the same
+                  collapsed-by-default Advanced pattern as YouTube and Sketch —
+                  the style grid + "What to change" note are the only things
+                  that need to be front and center here. */}
+              {mode === 'templates' && (
+                <div className="border-t border-white/10 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setTemplatesAdvanced(v => !v)}
+                    className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                      <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                    </span>
+                    <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${templatesAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  </button>
+
+                  {templatesAdvanced && (
+                    <div className="mt-3 space-y-3 animate-fade-in-up">
+                      <div className="space-y-1.5">
+                        <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                        <SegmentedControl
+                          value={format}
+                          onChange={setFormat}
+                          options={[
+                            { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                            { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                          ]}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
+                          <SegmentedControl
+                            value={String(genCount)}
+                            onChange={(v) => setGenCount(Number(v))}
+                            options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                          <SegmentedControl
+                            value={genModel}
+                            onChange={setGenModel}
+                            options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+
+            {/* Sticky footer — the Generate button (and its status note) stays
+                reachable at the bottom of the viewport as you scroll through a
+                tall config (e.g. an expanded Advanced section) instead of
+                requiring extra scrolling past it every time. Bleeds to the
+                panel's own edges/corners via negative margins since it sits
+                inside the panel's padding. */}
+            <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-8 -mb-5 sm:-mb-8 mt-5 px-5 sm:px-8 pb-5 sm:pb-8 pt-4 rounded-b-[28px] thumb-glass-footer">
               {note && (
-                <div className={`text-xs rounded-xl px-4 py-3 leading-relaxed border ${
+                <div className={`text-xs rounded-xl px-4 py-3 mb-3 leading-relaxed border ${
                   note.kind === 'success' ? 'bg-thumb-greenSoft text-thumb-green border-thumb-green/30'
                   : note.kind === 'info' ? 'bg-thumb-soft text-thumb-sub border-thumb-line'
                   : 'bg-thumb-redSoft text-red-300 border-thumb-red/20'
                 }`}>{note.text}</div>
               )}
 
-              {/* Generate */}
               <button
                 onClick={handleGenerate}
                 disabled={!canGenerate}
-                className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70 mt-1"
+                className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70"
               >
                 {busy ? (
                   <>

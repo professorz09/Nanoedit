@@ -115,6 +115,28 @@ function App() {
       setBrushNote('');
     }
   }, [brushMode]);
+  // Natural (unscaled) size of the lightbox's <img>, captured on every load —
+  // see the effect below for why this is needed on top of the img's own
+  // onLoad handler.
+  const viewedImgNaturalRef = useRef<{ w: number; h: number } | null>(null);
+  // The lightbox <img> only fires onLoad once per `viewedImage`. Turning on
+  // brush mode via "Brush out" on an image that's already open (the common
+  // path — see startRemoveMode) doesn't remount or reload that <img>, so its
+  // onLoad-driven canvas resize (below, in the RetryImage onLoad prop) never
+  // runs, and the mask canvas is left at the browser's default 300x150
+  // internal resolution while CSS stretches it to the full displayed image.
+  // Strokes still look right on screen, but applyRemoveSelection's
+  // `drawImage(canvasRef.current, 0, 0)` then draws that 300x150 canvas at
+  // native size into the corner of the full-resolution merge — the mask ends
+  // up covering an unrelated sliver of the image instead of where the user
+  // painted. Re-sync explicitly whenever brush mode turns on, using the size
+  // captured from the last successful image load.
+  useEffect(() => {
+    if (brushMode && canvasRef.current && viewedImgNaturalRef.current) {
+      canvasRef.current.width = viewedImgNaturalRef.current.w;
+      canvasRef.current.height = viewedImgNaturalRef.current.h;
+    }
+  }, [brushMode]);
   // "From styles" picker — pick a ready-made style thumbnail to add as a source layer.
   const [showStylePicker, setShowStylePicker] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1073,8 +1095,9 @@ function App() {
                                   alt="Thumbnail"
                                   className="max-w-[92vw] lg:max-w-[64vw] max-h-[82vh] lg:max-h-[85vh] rounded-2xl shadow-2xl object-contain block"
                                   onLoad={e => {
+                                      const img = e.target as HTMLImageElement;
+                                      viewedImgNaturalRef.current = { w: img.naturalWidth, h: img.naturalHeight };
                                       if (brushMode && canvasRef.current) {
-                                          const img = e.target as HTMLImageElement;
                                           canvasRef.current.width = img.naturalWidth;
                                           canvasRef.current.height = img.naturalHeight;
                                       }
