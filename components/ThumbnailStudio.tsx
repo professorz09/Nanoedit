@@ -1426,48 +1426,27 @@ const ThumbnailStudio: React.FC<Props> = ({
               )}
 
               {mode === 'sketch' && (
-                <div className="space-y-3 animate-fade-in-up">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Sketch your thumbnail layout</label>
-                  <SketchCanvas onChange={setSketchData} />
-                  <textarea
-                    value={promptText}
-                    onChange={e => setPromptText(e.target.value)}
-                    rows={2}
-                    placeholder="Describe it and the title text — e.g. 'gaming video, shocked player, explosion behind, neon colors, text: INSANE COMEBACK'"
-                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
-                  />
+                <div className="space-y-4 animate-fade-in-up">
+                  <div className="space-y-2.5">
+                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Sketch your thumbnail layout</label>
+                    <SketchCanvas onChange={setSketchData} />
+                  </div>
 
-                  {/* Three equal-size entry points — each acts immediately (opens
-                      its popup or the native file picker) instead of expanding an
-                      inline panel that needs a second tap. */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
-                      className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
-                    >
-                      <I.FaceSwap className="w-4 h-4" /> Persona
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStyleModalOpen('sketch')}
-                      className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedSketchStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
-                    >
-                      <I.Image className="w-4 h-4" /> Style
-                    </button>
-                    <button
-                      type="button"
-                      onClick={triggerUpload}
-                      className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
-                    >
-                      <I.Upload className="w-4 h-4" /> Upload
-                    </button>
-                    <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                  <div className="space-y-2.5">
+                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe it &amp; the title text</label>
+                    <textarea
+                      value={promptText}
+                      onChange={e => setPromptText(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. 'gaming video, shocked player, explosion behind, neon colors, text: INSANE COMEBACK'"
+                      className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                    />
                   </div>
 
                   {/* Advanced (optional) — same collapsed-by-default pattern as
-                      YouTube mode. Sketch is overwhelmingly 16:9 thumbnails, so
-                      Format doesn't need to sit in the always-visible path
+                      YouTube mode. Sketch is overwhelmingly 16:9 thumbnails and
+                      most sketches don't need a persona/style/upload on top, so
+                      none of that needs to sit in the always-visible path
                       between the canvas and the Generate button. */}
                   <div className="border-t border-white/10 pt-3">
                     <button
@@ -1483,16 +1462,49 @@ const ThumbnailStudio: React.FC<Props> = ({
                     </button>
 
                     {sketchAdvanced && (
-                      <div className="mt-3 space-y-1.5 animate-fade-in-up">
-                        <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
-                        <SegmentedControl
-                          value={format}
-                          onChange={setFormat}
-                          options={[
-                            { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
-                            { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
-                          ]}
-                        />
+                      <div className="mt-3 space-y-4 animate-fade-in-up">
+                        <div className="space-y-1.5">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                          <SegmentedControl
+                            value={format}
+                            onChange={setFormat}
+                            options={[
+                              { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                              { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                            ]}
+                          />
+                        </div>
+
+                        {/* Three equal-size entry points — each acts immediately
+                            (opens its popup or the native file picker) instead
+                            of expanding an inline panel that needs a second tap. */}
+                        <div className="space-y-1.5">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Persona, style &amp; upload</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                            >
+                              <I.FaceSwap className="w-4 h-4" /> Persona
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStyleModalOpen('sketch')}
+                              className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedSketchStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                            >
+                              <I.Image className="w-4 h-4" /> Style
+                            </button>
+                            <button
+                              type="button"
+                              onClick={triggerUpload}
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                            >
+                              <I.Upload className="w-4 h-4" /> Upload
+                            </button>
+                            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
