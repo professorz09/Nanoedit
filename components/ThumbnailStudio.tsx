@@ -757,7 +757,13 @@ const ThumbnailStudio: React.FC<Props> = ({
         pool = [{ url: selectedYtStyle }];
       } else {
         setNoteText('Analyzing your video…', 'info');
-        const matchQuery = [title, conceptA, conceptB, promptText].filter(v => v && v.trim()).join('. ').slice(0, 4000);
+        // Concepts lead — they're rich visual scene descriptions, a much
+        // better signal for matching against a style pool indexed on visual
+        // content than the video's title (which the concepts were already
+        // generated from, so its topic signal is folded in either way).
+        // Title trails as a light supplementary hint rather than dominating
+        // the query.
+        const matchQuery = [conceptA, conceptB, promptText, title].filter(v => v && v.trim()).join('. ').slice(0, 4000);
         const matched = await matchStyles(matchQuery, 8, onlyMyStyles);
         if (matched.length) {
           pool = matched.map(m => ({ url: m.url, meta: m.meta }));
