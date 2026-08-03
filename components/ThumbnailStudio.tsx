@@ -232,6 +232,11 @@ const ThumbnailStudio: React.FC<Props> = ({
   // once a specific style is force-picked above (selectedYtStyle skips
   // matching altogether).
   const [onlyMyStyles, setOnlyMyStyles] = useState(false);
+  // Pushes both the AI concepts and the final render toward a bolder,
+  // more exaggerated/dramatic take on the topic (shock-value staging, a
+  // punchy callout + arrow instead of a plain headline) — off by default
+  // since it's less predictable than the standard photorealistic path.
+  const [creativeMode, setCreativeMode] = useState(false);
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
@@ -633,6 +638,7 @@ const ThumbnailStudio: React.FC<Props> = ({
             `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
             `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+            (creativeMode ? `- Push each concept toward the boldest, most dramatic and exaggerated angle on the topic — a shocking moment, a twist, high-stakes staging — the kind that stops a scroll, not a plain literal shot. Still grounded in what the video is actually about.\n` : '') +
             `- HEADLINE: a punchy 2-4 word uppercase hook that captures the video's core topic (viewers must instantly get what it's about).\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
             `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
@@ -681,6 +687,12 @@ const ThumbnailStudio: React.FC<Props> = ({
       const ytPremium = "The thumbnail should communicate the video's topic at a glance — a viewer should quickly grasp what it's about — using a clear, expressive focal subject and topic-relevant visual cues. Make it look genuinely premium and high-end, on par with the best top-creator thumbnails: bold, polished, richly detailed and click-worthy. ";
       const realFootage = "Render it as authentic real-footage-style photography — like a genuine photo/still captured on a professional camera for THIS exact topic, with real depth of field and natural lighting; not an illustration, cartoon or generic stock art. ";
       const textSeed = promptText.trim() || headline;
+      // Creative mode: bolder staging + a punchy callout-with-arrow instead
+      // of a plain floating headline — still photorealistic (realFootage
+      // above already rules out illustration), just more dramatic/exaggerated.
+      const creativeDirective = creativeMode
+        ? "Push the staging toward the boldest, most dramatic and exaggerated take on the concept — intense expressions, high-stakes framing, cinematic high-contrast lighting and colour grading, the kind of shocking or twist moment that stops a scroll. Render the on-image text as a short, punchy callout label with a bold directional arrow pointing at the exact dramatic detail in the frame — like top viral thumbnails — instead of a plain floating headline. "
+        : '';
 
       // Concept-only prompt — the last resort if NOT A SINGLE style image is
       // readable. Builds from the video's topic/concept, NEVER recreating the
@@ -688,7 +700,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       // carries over the real person from it, if any, via thumbFaceRef.
       const buildConceptOnly = (concept: string) => {
         const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
-        return `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
+        return `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${creativeDirective}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
       };
 
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
@@ -788,7 +800,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 : `This style shows headline text — add ONE short punchy 2-4 word uppercase headline capturing THIS video's hook, in the same position/treatment as the style; correctly spelled, no other words or gibberish. ${noOldWords}`)
             : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
 
-          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. CRITICAL: the FIRST image is from a completely different, unrelated video — its specific person/face, its props, and its exact on-image wording all belong to THAT video, not this one. Do NOT copy any of them — take ONLY the visual style and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. CRITICAL: the FIRST image is from a completely different, unrelated video — its specific person/face, its props, and its exact on-image wording all belong to THAT video, not this one. Do NOT copy any of them — take ONLY the visual style and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${creativeDirective}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
           onGenerate(finalize(p), [styleB64, ...faceRefImages], genOpts);
           launched++;
         }
@@ -1027,7 +1039,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, onlyMyStyles, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, onlyMyStyles, creativeMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -1409,6 +1421,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         {onlyMyStyles && (
                           <p className="text-[11px] text-thumb-sub -mt-1">Only your own uploaded styles will be used — nothing else.</p>
+                        )}
+
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={creativeMode}
+                            aria-label="Creative concepts"
+                            onClick={() => setCreativeMode(v => !v)}
+                            className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${creativeMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                          >
+                            <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${creativeMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                          </button>
+                        </div>
+                        {creativeMode && (
+                          <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more exaggerated concepts and a punchy callout-with-arrow instead of a plain headline — less predictable than the standard look.</p>
                         )}
 
                         {/* Format lives here (not always visible) — YouTube
