@@ -1681,12 +1681,13 @@ const ThumbnailStudio: React.FC<Props> = ({
           {/* RIGHT: generated thumbnails */}
           <div ref={resultsRef} className="scroll-mt-24 min-w-0">
             {(generatedImages.length > 0 || queue.length > 0) ? (
-              // A soft canvas surface behind the grid, matching the empty
-              // state's own boxed look below instead of leaving cards
-              // floating loose on the page background. No fixed height/
-              // overflow here — it grows with its content and scrolls with
-              // the page, same as the empty state already does.
-              <div className="bg-thumb-soft rounded-[28px] p-4 sm:p-6">
+              // Same frosted "canvas" surface (.thumb-glass) and generous
+              // min-height as the nano-editor's own results canvas — a flat
+              // bg-thumb-soft box here made every card blend into one flat
+              // gray slab instead of reading as cards sitting on a canvas.
+              // No fixed max-height/overflow-y-auto though — it still grows
+              // with its content and scrolls with the page.
+              <div className="thumb-glass rounded-[28px] p-4 sm:p-6 min-h-[60vh] lg:min-h-[calc(100vh-3rem)]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {sortedQueue.map(item => (
                     <div key={item.id} className="aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
