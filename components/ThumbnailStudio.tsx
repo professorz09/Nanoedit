@@ -1197,7 +1197,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         <section id="thumb-tool" className="scroll-mt-24 pt-10 pb-12">
           <div className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 lg:gap-8 items-start max-w-6xl mx-auto">
           {/* LEFT: generator controls */}
-          <div className="thumb-glass thumb-float-red rounded-[28px] p-5 sm:p-8 max-w-3xl mx-auto w-full lg:max-w-none lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto no-scrollbar">
+          <div className="thumb-glass thumb-float-red rounded-[28px] p-5 sm:p-8 max-w-3xl mx-auto w-full lg:max-w-none lg:sticky lg:top-24 lg:self-start">
             {/* No card header here on purpose — the top nav already shows the
                 "Thumbnail" tab as active, so repeating "AI Thumbnail
                 Generator" just duplicated that and pushed the actual tools
