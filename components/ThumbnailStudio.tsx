@@ -1261,11 +1261,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setYtAdvanced(v => !v)}
-                      className="group inline-flex items-center gap-2 pl-1.5 pr-3.5 py-1.5 rounded-full bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
                     >
-                      <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                      <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
-                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                     </button>
 
                     {ytAdvanced && (
@@ -1471,11 +1473,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setSketchAdvanced(v => !v)}
-                      className="group inline-flex items-center gap-2 pl-1.5 pr-3.5 py-1.5 rounded-full bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
                     >
-                      <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                      <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
-                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                     </button>
 
                     {sketchAdvanced && (
@@ -1519,7 +1523,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                   single description field above. */}
               {(mode === 'templates' || mode === 'reference') && (
                 <div className="space-y-2.5">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">What to change</label>
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
@@ -1580,11 +1583,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <button
                     type="button"
                     onClick={() => setTemplatesAdvanced(v => !v)}
-                    className="group inline-flex items-center gap-2 pl-1.5 pr-3.5 py-1.5 rounded-full bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                    className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
                   >
-                    <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                    <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
-                    <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all ${templatesAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                    <span className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                      <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                    </span>
+                    <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${templatesAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                   </button>
 
                   {templatesAdvanced && (
