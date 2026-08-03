@@ -222,6 +222,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [styleModalOpen, setStyleModalOpen] = useState<'sketch' | 'youtube' | null>(null);
   const [ytAdvanced, setYtAdvanced] = useState(false);
   const [sketchAdvanced, setSketchAdvanced] = useState(false);
+  const [templatesAdvanced, setTemplatesAdvanced] = useState(false);
   // YouTube mode normally auto-matches a style per video (vector search over
   // the style pool) — this lets a user override that and force one specific
   // style instead, same picker as the Styles tab. null = keep auto-matching.
@@ -1260,10 +1261,11 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setYtAdvanced(v => !v)}
-                      className="flex items-center gap-2 text-[13px] font-bold text-thumb-sub hover:text-thumb-ink transition-colors"
+                      className="group inline-flex items-center gap-2 pl-1.5 pr-3.5 py-1.5 rounded-full bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
                     >
-                      <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-                      Advanced
+                      <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                      <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                     </button>
 
                     {ytAdvanced && (
@@ -1469,10 +1471,11 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setSketchAdvanced(v => !v)}
-                      className="flex items-center gap-2 text-[13px] font-bold text-thumb-sub hover:text-thumb-ink transition-colors"
+                      className="group inline-flex items-center gap-2 pl-1.5 pr-3.5 py-1.5 rounded-full bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
                     >
-                      <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-                      Advanced
+                      <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                      <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                     </button>
 
                     {sketchAdvanced && (
@@ -1526,13 +1529,13 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Format: 16:9 thumbnail vs 9:16 Shorts — for YouTube and Sketch
-                  this lives inside their own Advanced sections instead (see
-                  below), since 16:9 is the overwhelmingly common case and
+              {/* Format: 16:9 thumbnail vs 9:16 Shorts — for YouTube, Sketch and
+                  Styles this lives inside their own Advanced sections instead
+                  (see below), since 16:9 is the overwhelmingly common case and
                   doesn't need to be front and center every time — every extra
                   always-visible control here is more scrolling to reach
                   Generate. */}
-              {mode !== 'youtube' && mode !== 'sketch' && (
+              {mode !== 'youtube' && mode !== 'sketch' && mode !== 'templates' && (
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
                   <SegmentedControl
@@ -1547,24 +1550,78 @@ const ThumbnailStudio: React.FC<Props> = ({
               )}
 
               {/* Output options */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
-                  <SegmentedControl
-                    value={String(genCount)}
-                    onChange={(v) => setGenCount(Number(v))}
-                    options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
-                  />
+              {mode !== 'templates' && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
+                    <SegmentedControl
+                      value={String(genCount)}
+                      onChange={(v) => setGenCount(Number(v))}
+                      options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                    <SegmentedControl
+                      value={genModel}
+                      onChange={setGenModel}
+                      options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
-                  <SegmentedControl
-                    value={genModel}
-                    onChange={setGenModel}
-                    options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
-                  />
+              )}
+
+              {/* Styles mode tucks Format/Variations/Quality into the same
+                  collapsed-by-default Advanced pattern as YouTube and Sketch —
+                  the style grid + "What to change" note are the only things
+                  that need to be front and center here. */}
+              {mode === 'templates' && (
+                <div className="border-t border-white/10 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setTemplatesAdvanced(v => !v)}
+                    className="group inline-flex items-center gap-2 pl-1.5 pr-3.5 py-1.5 rounded-full bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                  >
+                    <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                    <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                    <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all ${templatesAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  </button>
+
+                  {templatesAdvanced && (
+                    <div className="mt-3 space-y-3 animate-fade-in-up">
+                      <div className="space-y-1.5">
+                        <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                        <SegmentedControl
+                          value={format}
+                          onChange={setFormat}
+                          options={[
+                            { value: 'thumb', label: <><span className="w-5 h-3 rounded-[3px] border-2 border-current shrink-0" /> Thumbnail <span className="text-[10px] font-semibold opacity-70">16:9</span></> },
+                            { value: 'short', label: <><span className="w-3 h-4 rounded-[3px] border-2 border-current shrink-0" /> Shorts <span className="text-[10px] font-semibold opacity-70">9:16</span></> },
+                          ]}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
+                          <SegmentedControl
+                            value={String(genCount)}
+                            onChange={(v) => setGenCount(Number(v))}
+                            options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                          <SegmentedControl
+                            value={genModel}
+                            onChange={setGenModel}
+                            options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
               {note && (
                 <div className={`text-xs rounded-xl px-4 py-3 leading-relaxed border ${

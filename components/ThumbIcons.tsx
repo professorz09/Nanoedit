@@ -30,4 +30,5 @@ export const I = {
   Brush: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9.06 11.9 3 18v3h3l6.1-6.06M14 6l4 4M20.7 7.3a2.5 2.5 0 0 0-3.5-3.5L8 13l3 3 9.7-8.7z" /></svg>),
   Eraser: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M7 21h13M15.5 4.5l4 4a2 2 0 0 1 0 2.83l-7.09 7.08a2 2 0 0 1-2.83 0l-4-4a2 2 0 0 1 0-2.82l7.09-7.09a2 2 0 0 1 2.83 0z" /></svg>),
   Undo: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg>),
+  Sliders: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 21V14M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 12h6" /></svg>),
 };
