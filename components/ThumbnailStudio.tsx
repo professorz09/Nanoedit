@@ -223,6 +223,8 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [ytAdvanced, setYtAdvanced] = useState(false);
   const [sketchAdvanced, setSketchAdvanced] = useState(false);
   const [templatesAdvanced, setTemplatesAdvanced] = useState(false);
+  const [promptAdvanced, setPromptAdvanced] = useState(false);
+  const [referenceAdvanced, setReferenceAdvanced] = useState(false);
   // YouTube mode normally auto-matches a style per video (vector search over
   // the style pool) — this lets a user override that and force one specific
   // style instead, same picker as the Styles tab. null = keep auto-matching.
@@ -590,6 +592,13 @@ const ThumbnailStudio: React.FC<Props> = ({
     setNote(null);
     let prompt = '';
     let sources: string[] = [...uploads];
+    // Shared across every concept-driven mode (YouTube/Prompt/Styles/Sketch):
+    // bolder staging + a punchy callout-with-arrow instead of a plain
+    // headline — still photorealistic, just more dramatic/exaggerated. Off
+    // by default since it's less predictable for the model to render cleanly.
+    const creativeDirective = creativeMode
+      ? "Push the staging toward the boldest, most dramatic and exaggerated take on the concept — intense expressions, high-stakes framing, cinematic high-contrast lighting and colour grading, the kind of shocking or twist moment that stops a scroll. Render the on-image text as a short, punchy callout label with a bold directional arrow pointing at the exact dramatic detail in the frame — like top viral thumbnails — instead of a plain floating headline. "
+      : '';
 
     if (mode === 'youtube') {
       const id = extractYouTubeId(youtubeUrl);
@@ -687,12 +696,6 @@ const ThumbnailStudio: React.FC<Props> = ({
       const ytPremium = "The thumbnail should communicate the video's topic at a glance — a viewer should quickly grasp what it's about — using a clear, expressive focal subject and topic-relevant visual cues. Make it look genuinely premium and high-end, on par with the best top-creator thumbnails: bold, polished, richly detailed and click-worthy. ";
       const realFootage = "Render it as authentic real-footage-style photography — like a genuine photo/still captured on a professional camera for THIS exact topic, with real depth of field and natural lighting; not an illustration, cartoon or generic stock art. ";
       const textSeed = promptText.trim() || headline;
-      // Creative mode: bolder staging + a punchy callout-with-arrow instead
-      // of a plain floating headline — still photorealistic (realFootage
-      // above already rules out illustration), just more dramatic/exaggerated.
-      const creativeDirective = creativeMode
-        ? "Push the staging toward the boldest, most dramatic and exaggerated take on the concept — intense expressions, high-stakes framing, cinematic high-contrast lighting and colour grading, the kind of shocking or twist moment that stops a scroll. Render the on-image text as a short, punchy callout label with a bold directional arrow pointing at the exact dramatic detail in the frame — like top viral thumbnails — instead of a plain floating headline. "
-        : '';
 
       // Concept-only prompt — the last resort if NOT A SINGLE style image is
       // readable. Builds from the video's topic/concept, NEVER recreating the
@@ -857,6 +860,7 @@ const ThumbnailStudio: React.FC<Props> = ({
             `- Every concept must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
             (wantCount > 1 ? `- Make all ${wantCount} concepts genuinely distinct from EACH OTHER: different composition, subject framing, angle, setting or emotion — no two should be variations of the same shot.\n` : '') +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+            (creativeMode ? `- Push each concept toward the boldest, most dramatic and exaggerated angle on the topic — a shocking moment, a twist, high-stakes staging — the kind that stops a scroll, not a plain literal shot.\n` : '') +
             `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
             `${labels.map(l => `${l}: <sentence>`).join('\n')}\nHEADLINE: <2-4 words>\n\n` +
@@ -887,7 +891,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         let launched = 0;
         for (let i = 0; i < wantCount; i++) {
           const concept = usableConcepts[i % usableConcepts.length] || topic;
-          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : ''}${faceStyle}${textDirective(textSeed)}${topicDirective(topic)} ${BASE_THUMB}`;
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : ''}${faceStyle}${textDirective(textSeed)}${creativeDirective}${topicDirective(topic)} ${BASE_THUMB}`;
           onGenerate(finalize(p), [refB64, ...uploads], genOpts);
           launched++;
         }
@@ -932,6 +936,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
           `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
           `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+          (creativeMode ? `- Push each concept toward the boldest, most dramatic and exaggerated angle on the topic — a shocking moment, a twist, high-stakes staging — the kind that stops a scroll, not a plain literal shot.\n` : '') +
           `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
           `Reply in EXACTLY this format, nothing else:\n` +
           `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
@@ -988,7 +993,7 @@ const ThumbnailStudio: React.FC<Props> = ({
             ? `This style shows headline text — REPLACE it with a short punchy headline for THIS thumbnail (2-4 uppercase words) based on: "${textSeed}". Keep the SAME position, size and treatment as the style. Render ONLY this one new headline, correctly spelled — no other words, duplicates or gibberish. ${noOldWords}`
             : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
 
-          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : `${promptText.trim()}. `}${styleHint}${faceStyle}${textStyle}${topicDirective(promptText)} ${BASE_THUMB}`;
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : `${promptText.trim()}. `}${styleHint}${faceStyle}${textStyle}${creativeDirective}${topicDirective(promptText)} ${BASE_THUMB}`;
           onGenerate(finalize(p), [styleB64, ...uploads], genOpts);
           launched++;
         }
@@ -999,7 +1004,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       // fall back to a plain concept/prompt-only generation.
       const faceDir = hasFace ? 'Feature the person(s) from the uploaded photo(s) as the main subject and preserve their face and likeness accurately. ' : '';
       const fallbackConcepts = (conceptA && conceptB) ? [conceptA, conceptB] : [conceptA || conceptB || promptText.trim()];
-      const variants = Array.from({ length: wantCount }, (_, i) => finalize(`${fallbackConcepts[i % fallbackConcepts.length]}. ${faceDir}${topicDirective(promptText)} ${BASE_THUMB}`));
+      const variants = Array.from({ length: wantCount }, (_, i) => finalize(`${fallbackConcepts[i % fallbackConcepts.length]}. ${faceDir}${creativeDirective}${topicDirective(promptText)} ${BASE_THUMB}`));
       variants.forEach(v => onGenerate(v, [...uploads], genOpts));
       setBusy(false);
       setNote(null);
@@ -1044,6 +1049,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           `Rules:\n` +
           `- Do NOT change the layout, composition or what's in each region — that's fixed by the sketch. Only vary the visual treatment: mood, lighting, colour grade, and concrete real-world scene details.\n` +
           (wantCount > 1 ? `- Make all ${wantCount} genuinely distinct from EACH OTHER — different mood/lighting/detail, not near-duplicates of the same look.\n` : '') +
+          (creativeMode ? `- Push each concept's mood/lighting/detail toward the boldest, most dramatic and exaggerated take you can, within the sketch's fixed layout — high-stakes, high-contrast, the kind that stops a scroll.\n` : '') +
           `- Each concept: ONE vivid sentence, concrete and purely visual — no mention of "sketch" or "layout".\n\n` +
           `Reply in EXACTLY this format, nothing else:\n` +
           `${labels.map(l => `${l}: <sentence>`).join('\n')}\n\n` +
@@ -1068,7 +1074,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       for (let i = 0; i < wantCount; i++) {
         const concept = usableConcepts[i % usableConcepts.length] || topic;
         const extra = concept ? `Extra direction: ${concept}. ` : '';
-        const p = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${styleDir}${extra}${topicDirective(promptText)}${textDirective(promptText)} ${BASE_THUMB}`;
+        const p = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${styleDir}${extra}${topicDirective(promptText)}${textDirective(promptText)}${creativeMode ? 'Within the sketch\'s fixed layout, push the lighting, colour grade and mood toward the boldest, most dramatic and high-contrast take possible. ' : ''} ${BASE_THUMB}`;
         // Same source order as before: sketch (layout blueprint) first, then
         // any uploaded face photo, then the style reference last.
         const variantSources = styleB64 ? [sketchData, ...uploads, styleB64] : [sketchData, ...uploads];
@@ -1079,10 +1085,62 @@ const ThumbnailStudio: React.FC<Props> = ({
       if (launched) { setNote(null); scrollToResults(); }
       return;
     } else {
-      // reference — single field, same instruction-only pipeline as Styles/templates:
-      // it's creative direction for the model, never auto-rendered as on-image text.
-      const extra = titleText.trim() ? `Apply this direction: ${titleText.trim()}. ` : '';
-      prompt = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${uploads.length ? 'If a person appears, preserve their likeness. ' : ''}${extra}${topicDirective(titleText)}Do NOT add, invent or write any new text, letters, words, captions or labels anywhere on the image. ${BASE_THUMB}`;
+      // reference ("Image" tab): same concept-first structure as the other
+      // modes — design one distinct concept per requested variation instead
+      // of generating every variation from the exact same shared prompt.
+      // Never renders on-image text (uploads here are arbitrary reference
+      // photos, not thumbnail templates with a headline to replace), so
+      // creativeMode's usual "punchy callout + arrow" text directive is
+      // skipped — only the bolder-staging half applies.
+      const topic = titleText.trim();
+      const hasFace = uploads.length > 0;
+      const wantCount = Math.max(1, Math.min(4, genCount));
+      const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
+      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+      const creativeStagingOnly = creativeMode
+        ? "Push the staging toward the boldest, most dramatic and exaggerated take — intense mood, high-stakes framing, cinematic high-contrast lighting and colour grading, the kind that stops a scroll. "
+        : '';
+
+      setNoteText(`Designing ${wantCount} fresh thumbnail concept${wantCount > 1 ? 's' : ''}…`, 'info');
+      let concepts: string[] = [];
+      try {
+        const labels = Array.from({ length: wantCount }, (_, i) => `CONCEPT_${i + 1}`);
+        const raw = await generateText(
+          `You are a world-class YouTube thumbnail art director. A creator has uploaded reference photo(s) for style and mood inspiration, plus an optional direction below. Design ${wantCount} clearly DIFFERENT way${wantCount > 1 ? 's' : ''} to build a brand-new thumbnail inspired by that reference — each with a distinct composition, mood, lighting or real-world scene detail.\n\n` +
+          `Rules:\n` +
+          (wantCount > 1 ? `- Make all ${wantCount} genuinely distinct from EACH OTHER — not near-duplicates of the same look.\n` : '') +
+          (creativeMode ? `- Push each toward the boldest, most dramatic and exaggerated take you can — high-stakes, high-contrast, the kind that stops a scroll.\n` : '') +
+          `- Each concept: ONE vivid sentence, concrete and purely visual.\n\n` +
+          `Reply in EXACTLY this format, nothing else:\n` +
+          `${labels.map(l => `${l}: <sentence>`).join('\n')}\n\n` +
+          `DIRECTION: ${topic || "match the uploaded reference's own style and mood"}`,
+          'concept'
+        );
+        const grab = (label: string) => {
+          const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
+          return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+        };
+        concepts = labels.map(l => grab(l).slice(0, 400)).filter(Boolean);
+        if (!concepts.length && raw?.trim()) concepts = [raw.trim().slice(0, 400)];
+      } catch (_e) {
+        /* concept generation is free and best-effort — falls back to the typed direction below */
+      }
+      // If the model returned fewer usable concepts than slots, cycle what
+      // we did get rather than leaving later slots with nothing.
+      const usableConcepts = concepts.length ? concepts : [topic];
+
+      setNoteText('Designing your thumbnails…', 'info');
+      let launched = 0;
+      for (let i = 0; i < wantCount; i++) {
+        const concept = usableConcepts[i % usableConcepts.length] || topic;
+        const extra = concept ? `Concept: ${concept} ` : '';
+        const p = `Using the uploaded reference image(s) as strong inspiration for style, mood and composition, create a brand-new original thumbnail (do not copy it exactly). ${hasFace ? 'If a person appears, preserve their likeness. ' : ''}${extra}${creativeStagingOnly}${topicDirective(topic)}Do NOT add, invent or write any new text, letters, words, captions or labels anywhere on the image. ${BASE_THUMB}`;
+        onGenerate(finalize(p), [...uploads], genOpts);
+        launched++;
+      }
+      setBusy(false);
+      if (launched) { setNote(null); scrollToResults(); }
+      return;
     }
 
     // Shorts mode: swap the landscape base directive for the vertical one (every
@@ -1540,15 +1598,52 @@ const ThumbnailStudio: React.FC<Props> = ({
               )}
 
               {mode === 'prompt' && (
-                <div className="space-y-2.5 animate-fade-in-up">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe your thumbnail idea</label>
-                  <textarea
-                    value={promptText}
-                    onChange={e => setPromptText(e.target.value)}
-                    rows={4}
-                    placeholder="Tell us about your video and the thumbnail you want — e.g. A gaming video about a crazy comeback; I want a shocked gamer with a glowing headset, explosion behind, neon RGB lighting, and the text 'INSANE COMEBACK'."
-                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
-                  />
+                <div className="space-y-3 animate-fade-in-up">
+                  <div className="space-y-2.5">
+                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe your thumbnail idea</label>
+                    <textarea
+                      value={promptText}
+                      onChange={e => setPromptText(e.target.value)}
+                      rows={4}
+                      placeholder="Tell us about your video and the thumbnail you want — e.g. A gaming video about a crazy comeback; I want a shocked gamer with a glowing headset, explosion behind, neon RGB lighting, and the text 'INSANE COMEBACK'."
+                      className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                    />
+                  </div>
+
+                  <div className="border-t border-white/10 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setPromptAdvanced(v => !v)}
+                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${promptAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                    </button>
+
+                    {promptAdvanced && (
+                      <div className="mt-3 animate-fade-in-up">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={creativeMode}
+                            aria-label="Creative concepts"
+                            onClick={() => setCreativeMode(v => !v)}
+                            className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${creativeMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                          >
+                            <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${creativeMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                          </button>
+                        </div>
+                        {creativeMode && (
+                          <p className="text-[11px] text-thumb-sub mt-1.5">Bolder, more exaggerated concepts and a punchy callout-with-arrow instead of a plain headline — less predictable than the standard look.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1566,6 +1661,41 @@ const ThumbnailStudio: React.FC<Props> = ({
                     <span className="text-xs text-thumb-sub/80">Up to 4 images · PNG or JPG</span>
                   </div>
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+
+                  <div className="border-t border-white/10 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setReferenceAdvanced(v => !v)}
+                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
+                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${referenceAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                    </button>
+
+                    {referenceAdvanced && (
+                      <div className="mt-3 animate-fade-in-up">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={creativeMode}
+                            aria-label="Creative concepts"
+                            onClick={() => setCreativeMode(v => !v)}
+                            className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${creativeMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                          >
+                            <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${creativeMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                          </button>
+                        </div>
+                        {creativeMode && (
+                          <p className="text-[11px] text-thumb-sub mt-1.5">Bolder, more exaggerated staging — less predictable than the standard look.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1648,6 +1778,25 @@ const ThumbnailStudio: React.FC<Props> = ({
                             </button>
                             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
                           </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={creativeMode}
+                              aria-label="Creative concepts"
+                              onClick={() => setCreativeMode(v => !v)}
+                              className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${creativeMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                            >
+                              <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${creativeMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                            </button>
+                          </div>
+                          {creativeMode && (
+                            <p className="text-[11px] text-thumb-sub mt-1.5">Bolder, more exaggerated mood/lighting within the sketch's layout — less predictable than the standard look.</p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1779,6 +1928,22 @@ const ThumbnailStudio: React.FC<Props> = ({
                           />
                         </div>
                       </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={creativeMode}
+                          aria-label="Creative concepts"
+                          onClick={() => setCreativeMode(v => !v)}
+                          className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${creativeMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                        >
+                          <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${creativeMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                        </button>
+                      </div>
+                      {creativeMode && (
+                        <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more exaggerated concepts and a punchy callout-with-arrow instead of a plain headline — less predictable than the standard look.</p>
+                      )}
                     </div>
                   )}
                 </div>
