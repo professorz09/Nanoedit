@@ -1681,15 +1681,12 @@ const ThumbnailStudio: React.FC<Props> = ({
           {/* RIGHT: generated thumbnails */}
           <div ref={resultsRef} className="scroll-mt-24 min-w-0">
             {(generatedImages.length > 0 || queue.length > 0) ? (
-              <>
-                <div className="flex items-center justify-between mb-5">
-                  {/* Each queue card already shows its own progress (spinner,
-                      elapsed time, step list) — a separate "Generating…"
-                      heading up here was redundant, floating text disconnected
-                      from any card. Keep this a plain, constant section title. */}
-                  <h2 className="text-2xl font-black">Your thumbnails</h2>
-                </div>
-
+              // A soft canvas surface behind the grid, matching the empty
+              // state's own boxed look below instead of leaving cards
+              // floating loose on the page background. No fixed height/
+              // overflow here — it grows with its content and scrolls with
+              // the page, same as the empty state already does.
+              <div className="bg-thumb-soft rounded-[28px] p-4 sm:p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {sortedQueue.map(item => (
                     <div key={item.id} className="aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
@@ -1773,7 +1770,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                     </div>
                   )}
                 </div>
-              </>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center text-center rounded-[28px] border-2 border-dashed border-thumb-line bg-thumb-soft min-h-[280px] lg:min-h-[440px] px-8">
                 <div className="w-14 h-14 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center mb-4"><I.Image className="w-7 h-7" /></div>
