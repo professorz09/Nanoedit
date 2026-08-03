@@ -171,9 +171,11 @@ for (const name of files) {
     for (const p of tagResult?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
     const meta = parseJson(text);
     if (!meta) throw new Error('could not parse tagger output');
-    if (title) meta.title = title;
+    // title is used above (buildPrompt) and below (embedText) as a tagging/
+    // matching hint only — never persisted into meta. It describes the
+    // SOURCE video this thumbnail came from, not this style itself.
 
-    // 2) Embed the topic fingerprint (title + vision fields).
+    // 2) Embed the topic fingerprint (vision fields + title hint).
     const embedResult = await ai.models.embedContent({
       model: EMBED_MODEL,
       contents: embedText(meta, title),

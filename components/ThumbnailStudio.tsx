@@ -134,6 +134,21 @@ const sampleTranscript = (segments: { start: number; text: string }[], maxChars:
   return parts.join('\n[…]\n');
 };
 
+// Candidate pool for a style-matched variant slot: the top TOP_N genuine
+// matches, PLUS one deliberate "wildcard" drawn from the rest of the pool
+// (rank TOP_N+1 onward, not just the top handful) — giving a style outside
+// the usual top matches a lucky chance to occasionally appear too, instead
+// of every variant only ever coming from the same few top results. Flat
+// TOP_N regardless of how many variations were requested (wantCount) — a
+// bigger shared candidate pool just means more shuffle variety, it isn't
+// meant to scale with the output count.
+const TOP_N = 5;
+const buildCandidatePool = <T,>(pool: T[]): T[] => {
+  const ranked = pool.slice(0, Math.min(pool.length, TOP_N));
+  const rest = pool.slice(ranked.length);
+  return rest.length ? [...ranked, rest[Math.floor(Math.random() * rest.length)]] : ranked;
+};
+
 const topicDirective = (topic: string) => {
   const t = topic.trim();
   if (!t) return '';
@@ -785,9 +800,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       }
 
       if (pool.length) {
-        // Pull enough distinct candidates to fill every requested slot (plus a
-        // couple of spares in case some style images turn out unreadable).
-        const candidates = pool.slice(0, Math.min(pool.length, Math.max(5, wantCount + 2)));
+        const candidates = buildCandidatePool(pool);
         for (let i = candidates.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
         // Cycle through the shuffled candidates so every slot gets a real
         // (not necessarily unique, once the pool is smaller than wantCount) style.
@@ -1006,7 +1019,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         : (await fetchStyleImages()).map(u => ({ url: u }));
 
       if (pool.length) {
-        const candidates = pool.slice(0, Math.min(pool.length, Math.max(5, wantCount + 2)));
+        const candidates = buildCandidatePool(pool);
         for (let i = candidates.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
         const chosen = Array.from({ length: wantCount }, (_, i) => candidates[i % candidates.length]);
         const conceptPair = [conceptA || conceptB, conceptB || conceptA];

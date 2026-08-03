@@ -27,6 +27,10 @@
 //                   position — doesn't affect YouTube auto-matching, which
 //                   ranks by embedding similarity, not this column.
 //   delete        — { id } → remove a global style's row + Storage object
+//   update_meta   — { id, meta: { niche?, emotion?, composition?, summary?,
+//                   text_density?, keywords?, colors? } } → hand-correct a
+//                   style's tags (e.g. a wrong niche) and re-embed with the
+//                   corrected metadata, so matching reflects the fix too
 //
 // Deploy:  supabase functions deploy admin-styles --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text" / "index-style").
@@ -216,6 +220,60 @@ Deno.serve(async (req) => {
     return json(200, { ok: true });
   }
 
+  if (action === 'update_meta') {
+    // Lets an admin correct a wrong tag (e.g. niche/keywords) by hand instead
+    // of only ever being able to re-run AI vision tagging from scratch. Only
+    // fields we actually match/display are editable — has_face and elements
+    // are AI-derived structure the edit form doesn't expose.
+    const id = typeof body?.id === 'string' ? body.id : '';
+    if (!id) return json(400, { error: 'Missing id' });
+    const input = body?.meta;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return json(400, { error: 'Invalid meta' });
+    const { data: existing, error: readErr } = await admin
+      .from('style_images').select('meta').eq('id', id).is('user_id', null).single();
+    if (readErr || !existing) return json(404, { error: 'Style not found.' });
+
+    const asStr = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    const asList = (v: unknown, max: number) =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map(x => x.trim().slice(0, max)).filter(Boolean).slice(0, 12) : [];
+    const meta = {
+      ...existing.meta,
+      niche: asStr(input.niche, 60),
+      emotion: asStr(input.emotion, 40),
+      composition: asStr(input.composition, 160),
+      summary: asStr(input.summary, 240),
+      text_density: ['none', 'low', 'high'].includes(input.text_density) ? input.text_density : existing.meta?.text_density,
+      keywords: asList(input.keywords, 40),
+      colors: asList(input.colors, 30),
+    };
+
+    // Re-embed with the corrected metadata so MATCHING reflects the fix too
+    // — relabeling the displayed tags without re-embedding would leave the
+    // style matching (or failing to match) exactly as it did before.
+    const ai = makeVertex();
+    if (!ai) return json(500, { error: 'Indexing service is not configured.' });
+    let embedding: number[] | null = null;
+    try {
+      const r: any = await ai.models.embedContent({
+        model: EMBED_MODEL,
+        contents: embedText(meta, null),
+        config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_DOCUMENT' },
+      });
+      embedding = r?.embeddings?.[0]?.values ?? null;
+    } catch (e: any) {
+      console.error('embed_failed', e?.message || String(e));
+    }
+    if (!embedding?.length) return json(502, { error: 'Could not re-index this style. Please try again.' });
+
+    const { error: updErr } = await admin
+      .from('style_images')
+      .update({ meta, embedding: JSON.stringify(embedding), tagged_at: new Date().toISOString() })
+      .eq('id', id)
+      .is('user_id', null);
+    if (updErr) return json(500, { error: 'Could not update the style.' });
+    return json(200, { ok: true, meta });
+  }
+
   if (action === 'add') {
     const imageBase64 = typeof body?.imageBase64 === 'string' ? body.imageBase64 : '';
     const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 120) : null;
@@ -243,7 +301,9 @@ Deno.serve(async (req) => {
       console.error('tag_failed', e?.message || String(e));
     }
     if (!meta) return json(502, { error: 'Could not analyse the image. Please try a clearer thumbnail.' });
-    if (title) meta.title = title;
+    // title is used above (buildPrompt) and below (embedText) as a tagging/
+    // matching hint only — never persisted into meta. It describes the
+    // SOURCE video this thumbnail came from, not this style itself.
 
     // 2) Embed.
     let embedding: number[] | null = null;

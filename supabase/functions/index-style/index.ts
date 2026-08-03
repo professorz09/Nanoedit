@@ -204,7 +204,11 @@ Deno.serve(async (req) => {
     console.error('tag_failed', e?.message || String(e));
   }
   if (!meta) return json(502, { error: 'Could not analyse the image. Please try a clearer thumbnail.' });
-  if (title) meta.title = title;
+  // title is used above (buildPrompt) and below (embedText) as a tagging/
+  // matching hint only — never persisted into meta. It describes the
+  // SOURCE video this thumbnail came from, not this style itself, and
+  // isn't something a future viewer/editor of this style's tags should see
+  // or need to touch.
 
   // 3) Embed the topic fingerprint (same model + dims + taskType as the index).
   let embedding: number[] | null = null;

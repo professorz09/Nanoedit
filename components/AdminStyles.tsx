@@ -176,6 +176,55 @@ const AdminStyles: React.FC = () => {
     }
   };
 
+  // Hand-correct a style's tags (e.g. a wrong niche) instead of only ever
+  // being able to re-run AI vision tagging from scratch. One form open at a
+  // time; a comma-joined string in the UI for the list fields (keywords/
+  // colors), split back into arrays on save.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ niche: string; emotion: string; composition: string; summary: string; text_density: string; keywords: string; colors: string } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const startEdit = (s: AdminStyle) => {
+    const m = s.meta || {};
+    setEditingId(s.id);
+    setEditError(null);
+    setEditDraft({
+      niche: m.niche || '',
+      emotion: m.emotion || '',
+      composition: m.composition || '',
+      summary: m.summary || '',
+      text_density: m.text_density || 'none',
+      keywords: Array.isArray(m.keywords) ? m.keywords.join(', ') : '',
+      colors: Array.isArray(m.colors) ? m.colors.join(', ') : '',
+    });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft(null); setEditError(null); };
+
+  const saveEdit = async (s: AdminStyle) => {
+    if (!editDraft) return;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const meta = {
+        niche: editDraft.niche.trim(),
+        emotion: editDraft.emotion.trim(),
+        composition: editDraft.composition.trim(),
+        summary: editDraft.summary.trim(),
+        text_density: editDraft.text_density,
+        keywords: editDraft.keywords.split(',').map(k => k.trim()).filter(Boolean),
+        colors: editDraft.colors.split(',').map(c => c.trim()).filter(Boolean),
+      };
+      const data = await callAdmin({ action: 'update_meta', id: s.id, meta });
+      setStyles(prev => prev.map(x => x.id === s.id ? { ...x, meta: data.meta ?? { ...x.meta, ...meta } } : x));
+      cancelEdit();
+    } catch (e: any) {
+      setEditError(e?.message || 'Could not save these tags.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <section className="pt-6 pb-16 max-w-5xl mx-auto">
       <h1 className="text-2xl font-black tracking-tight">Admin — Global styles</h1>
@@ -200,14 +249,14 @@ const AdminStyles: React.FC = () => {
 
         <div className="space-y-3">
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Video title (recommended)</label>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Video title (optional)</label>
             <input
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="e.g. How I Made $10,000 in a Week Trading Crypto"
               className="w-full mt-1 bg-thumb-soft border border-thumb-line rounded-xl px-4 py-2.5 text-sm outline-none focus:border-thumb-red/50"
             />
-            <p className="text-[11px] text-thumb-sub mt-1">Improves matching — the title carries topic signal the image alone can't.</p>
+            <p className="text-[11px] text-thumb-sub mt-1">Only a minor hint to break a tie when the image alone is ambiguous — tagging is based on what's actually in the image, and the title itself isn't stored.</p>
           </div>
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Display name (optional)</label>
@@ -280,6 +329,71 @@ const AdminStyles: React.FC = () => {
                   >
                     {s.show_in_picker ? 'Hide from picker' : 'Show in picker'}
                   </button>
+                  <button
+                    onClick={() => editingId === s.id ? cancelEdit() : startEdit(s)}
+                    className="w-full py-1.5 rounded-lg bg-thumb-soft border border-thumb-line text-[11px] font-bold hover:border-thumb-red/40 transition-colors"
+                  >
+                    {editingId === s.id ? 'Cancel' : 'Edit tags'}
+                  </button>
+
+                  {editingId === s.id && editDraft && (
+                    <div className="space-y-1.5 pt-1.5 border-t border-thumb-line">
+                      <input
+                        value={editDraft.niche}
+                        onChange={e => setEditDraft(d => d && { ...d, niche: e.target.value })}
+                        placeholder="Niche (e.g. finance)"
+                        className="w-full bg-thumb-soft border border-thumb-line rounded-md px-2 py-1 text-[11px] outline-none focus:border-thumb-red/50"
+                      />
+                      <input
+                        value={editDraft.keywords}
+                        onChange={e => setEditDraft(d => d && { ...d, keywords: e.target.value })}
+                        placeholder="Keywords, comma separated"
+                        className="w-full bg-thumb-soft border border-thumb-line rounded-md px-2 py-1 text-[11px] outline-none focus:border-thumb-red/50"
+                      />
+                      <input
+                        value={editDraft.emotion}
+                        onChange={e => setEditDraft(d => d && { ...d, emotion: e.target.value })}
+                        placeholder="Emotion (e.g. shock)"
+                        className="w-full bg-thumb-soft border border-thumb-line rounded-md px-2 py-1 text-[11px] outline-none focus:border-thumb-red/50"
+                      />
+                      <input
+                        value={editDraft.colors}
+                        onChange={e => setEditDraft(d => d && { ...d, colors: e.target.value })}
+                        placeholder="Colors, comma separated"
+                        className="w-full bg-thumb-soft border border-thumb-line rounded-md px-2 py-1 text-[11px] outline-none focus:border-thumb-red/50"
+                      />
+                      <input
+                        value={editDraft.composition}
+                        onChange={e => setEditDraft(d => d && { ...d, composition: e.target.value })}
+                        placeholder="Composition"
+                        className="w-full bg-thumb-soft border border-thumb-line rounded-md px-2 py-1 text-[11px] outline-none focus:border-thumb-red/50"
+                      />
+                      <select
+                        value={editDraft.text_density}
+                        onChange={e => setEditDraft(d => d && { ...d, text_density: e.target.value })}
+                        className="w-full bg-thumb-soft border border-thumb-line rounded-md px-2 py-1 text-[11px] outline-none focus:border-thumb-red/50"
+                      >
+                        <option value="none">Text: none</option>
+                        <option value="low">Text: low</option>
+                        <option value="high">Text: high</option>
+                      </select>
+                      <textarea
+                        value={editDraft.summary}
+                        onChange={e => setEditDraft(d => d && { ...d, summary: e.target.value })}
+                        placeholder="Summary"
+                        rows={2}
+                        className="w-full bg-thumb-soft border border-thumb-line rounded-md px-2 py-1 text-[11px] outline-none focus:border-thumb-red/50 resize-none"
+                      />
+                      {editError && <p className="text-[10px] text-thumb-red">{editError}</p>}
+                      <button
+                        onClick={() => saveEdit(s)}
+                        disabled={savingEdit}
+                        className="w-full py-1.5 rounded-lg thumb-btn text-white text-[11px] font-bold disabled:opacity-50"
+                      >
+                        {savingEdit ? 'Saving + re-indexing…' : 'Save tags'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
