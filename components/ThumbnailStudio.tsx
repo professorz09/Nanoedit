@@ -1007,25 +1007,77 @@ const ThumbnailStudio: React.FC<Props> = ({
       return;
     } else if (mode === 'sketch') {
       if (!sketchData) return;
-      // The sketch goes FIRST so the model treats it as the layout blueprint;
-      // any uploaded photo follows as the real face/subject to render in.
-      sources = [sketchData, ...sources];
+      // Same concept-first structure as YouTube/Prompt/Styles: the sketch
+      // fixes the LAYOUT (that never changes — a concept can't move where
+      // the sketch put things), but design one DISTINCT visual concept per
+      // requested variation — different mood, lighting, colour palette or
+      // scene detail — so multiple variations actually differ instead of
+      // being carbon copies from one shared prompt. Handles its own
+      // onGenerate calls/return, same reason as those modes.
       const hasFace = uploads.length > 0;
-      // An optional style reference goes LAST — kept clearly separate from the
-      // sketch/face sources so the "match style only, not layout" instruction
-      // below has one unambiguous image to point at.
+      const topic = promptText.trim();
+      const wantCount = Math.max(1, Math.min(4, genCount));
+      const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
+      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+
+      // Optional style reference — converted once, reused for every slot.
+      // Kept clearly separate from the sketch/face sources so the "match
+      // style only, not layout" instruction below has one unambiguous image
+      // to point at.
+      let styleB64: string | null = null;
       let styleDir = '';
       if (selectedSketchStyle) {
         setBusy(true);
-        const styleB64 = await urlToBase64(selectedSketchStyle);
+        styleB64 = await urlToBase64(selectedSketchStyle);
         setBusy(false);
         if (styleB64) {
-          sources = [...sources, styleB64];
           styleDir = 'A final reference image is provided purely for visual STYLE — match its color grading, lighting mood and art treatment only. Do NOT copy its layout, composition or subjects; the hand-drawn sketch above always decides where everything goes. ';
         }
       }
-      const extra = promptText.trim() ? `Extra direction: ${promptText.trim()}. ` : '';
-      prompt = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${styleDir}${extra}${topicDirective(promptText)}${textDirective(promptText)} ${BASE_THUMB}`;
+
+      setNoteText(`Designing ${wantCount} fresh thumbnail concept${wantCount > 1 ? 's' : ''}…`, 'info');
+      let concepts: string[] = [];
+      try {
+        const labels = Array.from({ length: wantCount }, (_, i) => `CONCEPT_${i + 1}`);
+        const raw = await generateText(
+          `You are a world-class YouTube thumbnail art director. A creator has sketched a rough thumbnail layout and described their idea below. Design ${wantCount} clearly DIFFERENT visual take${wantCount > 1 ? 's' : ''} on rendering that same sketch — same idea, same layout — but each with a distinct mood, lighting, colour palette or real-world scene detail.\n\n` +
+          `Rules:\n` +
+          `- Do NOT change the layout, composition or what's in each region — that's fixed by the sketch. Only vary the visual treatment: mood, lighting, colour grade, and concrete real-world scene details.\n` +
+          (wantCount > 1 ? `- Make all ${wantCount} genuinely distinct from EACH OTHER — different mood/lighting/detail, not near-duplicates of the same look.\n` : '') +
+          `- Each concept: ONE vivid sentence, concrete and purely visual — no mention of "sketch" or "layout".\n\n` +
+          `Reply in EXACTLY this format, nothing else:\n` +
+          `${labels.map(l => `${l}: <sentence>`).join('\n')}\n\n` +
+          `IDEA: ${topic || "match the sketch's own implied mood"}`,
+          'concept'
+        );
+        const grab = (label: string) => {
+          const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
+          return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+        };
+        concepts = labels.map(l => grab(l).slice(0, 400)).filter(Boolean);
+        if (!concepts.length && raw?.trim()) concepts = [raw.trim().slice(0, 400)];
+      } catch (_e) {
+        /* concept generation is free and best-effort — falls back to the typed idea below */
+      }
+      // If the model returned fewer usable concepts than slots, cycle what
+      // we did get rather than leaving later slots with nothing.
+      const usableConcepts = concepts.length ? concepts : [topic];
+
+      setNoteText('Designing your thumbnails…', 'info');
+      let launched = 0;
+      for (let i = 0; i < wantCount; i++) {
+        const concept = usableConcepts[i % usableConcepts.length] || topic;
+        const extra = concept ? `Extra direction: ${concept}. ` : '';
+        const p = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${styleDir}${extra}${topicDirective(promptText)}${textDirective(promptText)} ${BASE_THUMB}`;
+        // Same source order as before: sketch (layout blueprint) first, then
+        // any uploaded face photo, then the style reference last.
+        const variantSources = styleB64 ? [sketchData, ...uploads, styleB64] : [sketchData, ...uploads];
+        onGenerate(finalize(p), variantSources, genOpts);
+        launched++;
+      }
+      setBusy(false);
+      if (launched) { setNote(null); scrollToResults(); }
+      return;
     } else {
       // reference — single field, same instruction-only pipeline as Styles/templates:
       // it's creative direction for the model, never auto-rendered as on-image text.
