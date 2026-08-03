@@ -811,14 +811,71 @@ const ThumbnailStudio: React.FC<Props> = ({
       const topic = titleText.trim();
       const hasFace = uploads.length > 0;
       if (selectedRef) {
-        // Recreate = EDIT the chosen REAL thumbnail directly. Keep it exactly as-is and
-        // only apply the requested change (e.g. swap the face). The typed instruction is
-        // an edit directive — it must NOT be rendered as overlay text on the image.
+        // Same structure as YouTube/Prompt mode: design two distinct AI
+        // concepts + a headline from the typed topic first (free, best-
+        // effort), then use the picked reference ONLY as a visual STYLE
+        // template for each variation slot — never an exact reproduction of
+        // it — so the result is a new thumbnail for the user's own topic in
+        // that style, the same way YouTube/Prompt mode use their matched
+        // style images. Handles its own onGenerate calls/return, same reason
+        // as those modes.
+        const wantCount = Math.max(1, Math.min(4, genCount));
+        const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
+        const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+
         setBusy(true);
         const refB64 = await urlToBase64(selectedRef);
+        if (!refB64) {
+          setBusy(false);
+          setNoteText('Could not load that style image. Please try again.');
+          return;
+        }
+
+        setNoteText('Designing two fresh thumbnail concepts…', 'info');
+        let conceptA = '', conceptB = '', headline = '';
+        try {
+          const raw = await generateText(
+            `You are a world-class YouTube thumbnail art director. Analyse the topic below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, plus one short on-thumbnail headline.\n\n` +
+            `Rules:\n` +
+            `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what this thumbnail is about — no abstract art, no invented unrelated imagery.\n` +
+            `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
+            `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+            `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
+            `Reply in EXACTLY this format, nothing else:\n` +
+            `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+            `TOPIC: ${topic || "match the reference image's style and mood"}`,
+            'concept'
+          );
+          const grab = (label: string) => {
+            const m = new RegExp(`${label}\\s*:\\s*(.+)`, 'i').exec(raw || '');
+            return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+          };
+          conceptA = grab('CONCEPT_A').slice(0, 400);
+          conceptB = grab('CONCEPT_B').slice(0, 400);
+          headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+          if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
+        } catch (_e) {
+          /* concept generation is free and best-effort — falls back to the typed topic below */
+        }
+        const textSeed = headline || topic;
+
+        setNoteText('Designing your thumbnails…', 'info');
+        const conceptPair = [conceptA || conceptB, conceptB || conceptA];
+        const concepts = Array.from({ length: wantCount }, (_, i) => conceptPair[i % 2]);
+        const faceStyle = hasFace
+          ? "For the main person, use the person from the uploaded photo — swap in their face and likeness accurately and photorealistically, matching this style's pose, scale and lighting. Do NOT use the reference image's own person — that belongs to a different, unrelated thumbnail. "
+          : "Build the main subject from the concept below. Do NOT reuse the reference image's own specific person or face — that belongs to a different, unrelated thumbnail; invent a new subject that matches the concept instead. ";
+
+        let launched = 0;
+        for (let i = 0; i < wantCount; i++) {
+          const concept = concepts[i] || topic;
+          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : ''}${faceStyle}${textDirective(textSeed)}${topicDirective(topic)} ${BASE_THUMB}`;
+          onGenerate(finalize(p), [refB64, ...uploads], genOpts);
+          launched++;
+        }
         setBusy(false);
-        if (refB64) sources = [refB64, ...sources];
-        prompt = `You are EDITING the FIRST image — an existing, finished YouTube thumbnail. Reproduce it faithfully: keep its EXACT composition, layout, framing, background, props, graphics, lighting, color grade and any text that is already in it. Do not restyle, redraw or move the parts that are not being changed. ${hasFace ? 'Replace the main person with the person from the uploaded photo (the SECOND image): swap in their face and full likeness accurately and photorealistically, matching the original pose, head angle, expression, scale and lighting so they blend in seamlessly and look real. ' : ''}${topic ? `Apply ONLY this change and nothing else: ${topic}. ` : ''}Do NOT add, invent, duplicate or write any new text, letters, words, captions, labels or watermarks anywhere on the image, and do not change the existing text unless the requested change explicitly says to. Keep the result photorealistic with natural skin texture and a sharp, fully-detailed face, rendered at maximum fidelity — crisp 4K-level detail, no blur, noise, artifacts, warping or distorted anatomy. Output the image in the SAME aspect ratio and shape as the reference thumbnail.`;
+        if (launched) { setNote(null); scrollToResults(); }
+        return;
       } else {
         const tpl = THUMBNAIL_TEMPLATES.find(t => t.id === selectedTemplate)!;
         // If this template has a real preview image, send it as a style reference so the
@@ -1538,7 +1595,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
-                    placeholder="e.g. Replace the face with my photo · change the title to 'MODI JI'"
+                    placeholder={mode === 'templates' ? "e.g. A gaming video about a crazy comeback" : "e.g. Replace the face with my photo · change the title to 'MODI JI'"}
                     className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
                   />
                 </div>
