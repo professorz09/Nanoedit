@@ -320,6 +320,12 @@ export default function EditorView(props: EditorViewProps) {
   const didDragRef = React.useRef(false);
 
   const onPanelDragStart = (e: any) => {
+    // Desktop panel is fixed, right-docked, and always expanded (mirrors the
+    // thumbnail-maker's brush rail) — no drag, no minimize, so there's
+    // nothing to move or hide from. Only phones (narrow) still get the
+    // floating/draggable/minimizable behavior, since there's no room for a
+    // permanent side panel there.
+    if (!isNarrow) return;
     e.stopPropagation();
     const el = panelRef.current;
     if (!el) return;
@@ -331,7 +337,7 @@ export default function EditorView(props: EditorViewProps) {
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* no-op */ }
   };
   const onPanelDragMove = (e: any) => {
-    if (!dragOff.current) return;
+    if (!isNarrow || !dragOff.current) return;
     e.preventDefault?.();
     const p = dragPointFromEvent(e);
     if (dragStartPoint.current && Math.hypot(p.x - dragStartPoint.current.x, p.y - dragStartPoint.current.y) > 6) {
@@ -358,11 +364,11 @@ export default function EditorView(props: EditorViewProps) {
   // Default (undragged) panel placement + size — bottom sheet on phones,
   // right-docked floating panel on larger screens. Once the user drags it
   // (panelPos set) it always floats at the exact dropped position/size.
-  const panelPositionStyle: React.CSSProperties = panelPos
-    ? { left: panelPos.x, top: panelPos.y, right: 'auto', bottom: 'auto' }
-    : isNarrow
-      ? { left: 8, right: 8, bottom: 8, top: 'auto' }
-      : { right: 12, top: '50%', transform: 'translateY(-50%)' };
+  const panelPositionStyle: React.CSSProperties = !isNarrow
+    ? { right: 12, top: '50%', transform: 'translateY(-50%)' }
+    : panelPos
+      ? { left: panelPos.x, top: panelPos.y, right: 'auto', bottom: 'auto' }
+      : { left: 8, right: 8, bottom: 8, top: 'auto' };
   const panelWidthClass = panelPos || !isNarrow ? 'w-[min(80vw,248px)]' : 'w-auto';
   // Minimized toggle: same shared panelPos when dragged, otherwise its own
   // small default (right-middle) rather than the full panel's docked spot.
@@ -997,9 +1003,13 @@ export default function EditorView(props: EditorViewProps) {
                   <button className="absolute top-4 right-4 z-[120] p-2 bg-zinc-800/80 hover:bg-zinc-700 rounded-full text-white transition-colors backdrop-blur-sm" onClick={() => { setViewedImage(null); setBrushMode(false); setSelectedArea(null); }}><IconX /></button>
               )}
 
-              {/* Editor toolbar — docked to the RIGHT so it never covers the image, and
-                  minimizable so you can see the full frame while working. */}
-              {brushMode && brushPanelMin && (
+              {/* Editor toolbar — docked to the RIGHT so it never covers the image.
+                  On desktop it's fixed and always expanded, same as the
+                  thumbnail-maker's brush rail: no drag, no minimize, nothing
+                  to fight with. Phones still get the old floating/draggable/
+                  minimizable bottom sheet since there's no room for a
+                  permanent side panel there. */}
+              {brushMode && isNarrow && brushPanelMin && (
                   <button
                       ref={panelRef as React.RefObject<HTMLButtonElement>}
                       onClick={e => e.stopPropagation()}
@@ -1012,33 +1022,36 @@ export default function EditorView(props: EditorViewProps) {
                       style={togglePositionStyle}
                   >🖌️</button>
               )}
-              {brushMode && !brushPanelMin && (
+              {brushMode && (!isNarrow || !brushPanelMin) && (
                   <div
                       ref={panelRef}
                       className={`fixed z-[120] ${panelWidthClass} max-h-[80vh] flex flex-col bg-black/85 backdrop-blur-xl border border-white/15 rounded-2xl p-3 shadow-2xl`}
                       style={panelPositionStyle}
                       onClick={e => e.stopPropagation()}
                   >
-                      {/* Draggable header — grab this to move the panel to any side
-                          (works with touch too — pointer events cover both). A tall
-                          tap target makes it easy to grab with a finger on phones.
-                          Minimize collapses it; exit is handled by the top Cancel button. */}
+                      {/* Draggable header (phones only) — grab this to move the panel
+                          to any side (works with touch too — pointer events cover
+                          both). A tall tap target makes it easy to grab with a
+                          finger. Minimize collapses it; exit is handled by the top
+                          Cancel button. On desktop this is just a static title bar. */}
                       <div
-                          className="flex items-center justify-between mb-3 -mx-1 px-1 py-2.5 rounded-lg cursor-move touch-none select-none hover:bg-white/5"
+                          className={`flex items-center justify-between mb-3 -mx-1 px-1 py-2.5 rounded-lg touch-none select-none ${isNarrow ? 'cursor-move hover:bg-white/5' : ''}`}
                           onPointerDown={onPanelDragStart}
                           onPointerMove={onPanelDragMove}
                           onPointerUp={onPanelDragEnd}
                           onPointerCancel={onPanelDragEnd}
                       >
                           <span className="text-xs font-black text-white/90 tracking-wide flex items-center gap-1.5">
-                              <span className="text-white/40 text-sm leading-none">⠿</span> EDIT TOOLS
+                              {isNarrow && <span className="text-white/40 text-sm leading-none">⠿</span>} EDIT TOOLS
                           </span>
-                          <button
-                              onPointerDown={e => e.stopPropagation()}
-                              onClick={(e) => { e.stopPropagation(); setBrushPanelMin(true); }}
-                              title="Minimize"
-                              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1"
-                          >–</button>
+                          {isNarrow && (
+                              <button
+                                  onPointerDown={e => e.stopPropagation()}
+                                  onClick={(e) => { e.stopPropagation(); setBrushPanelMin(true); }}
+                                  title="Minimize"
+                                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg leading-none pb-1"
+                              >–</button>
+                          )}
                       </div>
 
                       {/* Tool selection — Brush + Pin only */}
