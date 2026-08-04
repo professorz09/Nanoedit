@@ -249,14 +249,14 @@ const AdminStyles: React.FC = () => {
 
         <div className="space-y-3">
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Video title (optional)</label>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Video title (recommended)</label>
             <input
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="e.g. How I Made $10,000 in a Week Trading Crypto"
               className="w-full mt-1 bg-thumb-soft border border-thumb-line rounded-xl px-4 py-2.5 text-sm outline-none focus:border-thumb-red/50"
             />
-            <p className="text-[11px] text-thumb-sub mt-1">Only a minor hint to break a tie when the image alone is ambiguous — tagging is based on what's actually in the image, and the title itself isn't stored.</p>
+            <p className="text-[11px] text-thumb-sub mt-1">Improves matching — the title carries topic signal the image alone can't.</p>
           </div>
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Display name (optional)</label>

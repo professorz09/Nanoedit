@@ -26,7 +26,7 @@
 //   VERTEX_FLASH_MODEL       = gemini-3.1-flash-image         (optional override; 1K/Fast + Pro degrade)
 //   OPENROUTER_API_KEY       = <openrouter key>               (fallback)
 //   OPENROUTER_IMAGE_MODEL   = openai/gpt-5.4-image-2         (optional override; GPT fallback)
-//   MAX_THUMBNAILS_PER_USER  = 50                             (optional override)
+//   MAX_THUMBNAILS_PER_USER  = 200                            (optional override)
 //   (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
@@ -359,19 +359,29 @@ Deno.serve(async (req) => {
     return json(502, { error: 'Generated, but saving failed. Please try again.' });
   }
 
-  // 6) Rolling cap — keep only the newest N per user; delete older file(s) + row(s).
-  //    Best-effort: never fail the response over cleanup.
+  // 6) Rolling cap — once a user hits CAP saved thumbnails, evict the oldest
+  //    EVICT_BATCH in one go (dropping back to CAP - EVICT_BATCH) rather than
+  //    trimming down to CAP on every single generation — turns cleanup into
+  //    an occasional batch instead of a delete + storage-remove call on every
+  //    request. Best-effort: never fail the response over cleanup.
   try {
-    const cap = parseInt(Deno.env.get('MAX_THUMBNAILS_PER_USER') || '50', 10) || 50;
-    const { data: stale } = await admin
+    const cap = parseInt(Deno.env.get('MAX_THUMBNAILS_PER_USER') || '200', 10) || 200;
+    const evictBatch = 20;
+    const { count } = await admin
       .from('generations')
-      .select('id, path')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .range(cap, cap + 199); // rows beyond the cap
-    if (stale && stale.length) {
-      await admin.storage.from('thumbnails').remove(stale.map((r: any) => r.path));
-      await admin.from('generations').delete().in('id', stale.map((r: any) => r.id));
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+    if ((count ?? 0) >= cap) {
+      const { data: stale } = await admin
+        .from('generations')
+        .select('id, path')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true }) // oldest first
+        .limit(evictBatch);
+      if (stale && stale.length) {
+        await admin.storage.from('thumbnails').remove(stale.map((r: any) => r.path));
+        await admin.from('generations').delete().in('id', stale.map((r: any) => r.id));
+      }
     }
   } catch (capErr: any) {
     console.error('cap_cleanup_failed', capErr?.message || capErr);

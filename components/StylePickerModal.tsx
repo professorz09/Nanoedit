@@ -37,9 +37,9 @@ const StylePickerModal: React.FC<{
                 key={src + i}
                 type="button"
                 onClick={() => { onSelect(active ? null : src); onClose(); }}
-                className={`relative aspect-video rounded-xl overflow-hidden border-2 transition-colors ${active ? 'border-thumb-red shadow-md' : 'border-thumb-line hover:border-thumb-red/50'}`}
+                className={`relative aspect-video rounded-xl overflow-hidden border-2 bg-black/40 transition-colors ${active ? 'border-thumb-red shadow-md' : 'border-thumb-line hover:border-thumb-red/50'}`}
               >
-                <img src={src} alt={`Style ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />
+                <img src={src} alt={`Style ${i + 1}`} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                 {active && <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-thumb-red text-white flex items-center justify-center text-[11px] font-bold">✓</div>}
               </button>
             );
