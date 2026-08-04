@@ -264,6 +264,10 @@ const ThumbnailStudio: React.FC<Props> = ({
   // unexpected composition) — off by default since it's less predictable
   // than the standard photorealistic path.
   const [creativeMode, setCreativeMode] = useState(false);
+  // YouTube-only: ground concepts strictly in the transcript's actual main
+  // topics instead of one loosely-inspired vivid scene — off by default
+  // since the freer, more vivid-scene concept style is still the default.
+  const [accurateMode, setAccurateMode] = useState(false);
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
@@ -681,6 +685,7 @@ const ThumbnailStudio: React.FC<Props> = ({
             `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
             `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+            (accurateMode ? `- Accuracy over invention: first identify the video's distinct main topics/segments from the transcript, then base CONCEPT_A and CONCEPT_B on two DIFFERENT real topics it actually covers — not two takes on the same one, and not a topic that's only briefly mentioned in passing. Keep each concept short and literal: a faithful, accurate depiction of that specific topic, grounded strictly in what the transcript actually says, never a generic or imagined scene.\n` : '') +
             (creativeMode ? `- You have full creative freedom for these concepts — imagine the video in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction. Still grounded in what the video is actually about.\n` : '') +
             `- Each HEADLINE: a punchy 2-4 word uppercase hook that fits ITS OWN concept's specific scene (not a generic title repeated for both) and still captures the video's core topic.\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
@@ -1183,7 +1188,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, onlyMyStyles, creativeMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, onlyMyStyles, creativeMode, accurateMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -1582,6 +1587,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         {creativeMode && (
                           <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
+                        )}
+
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-bold text-thumb-ink">Stick to video's topics</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={accurateMode}
+                            aria-label="Stick to video's topics"
+                            onClick={() => setAccurateMode(v => !v)}
+                            className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${accurateMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                          >
+                            <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${accurateMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                          </button>
+                        </div>
+                        {accurateMode && (
+                          <p className="text-[11px] text-thumb-sub -mt-1">Shorter, more literal concepts grounded in the transcript's real main topics — each variation covers a genuinely different topic instead of a stylistic variation of the same idea.</p>
                         )}
 
                         {/* Format lives here (not always visible) — YouTube
