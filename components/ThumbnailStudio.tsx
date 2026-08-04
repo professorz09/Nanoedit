@@ -1407,10 +1407,6 @@ const ThumbnailStudio: React.FC<Props> = ({
             <span className="text-thumb-ink">Thumbnails</span>
           </h1>
 
-          <p className="mt-4 max-w-2xl mx-auto text-sm sm:text-base text-thumb-sub leading-relaxed">
-            The best free AI thumbnail maker for YouTube — make high-quality thumbnails with AI from a prompt, photo, or YouTube video link. No Photoshop or Adobe Express needed. Also turns any YouTube link into AI titles &amp; timestamps.
-          </p>
-
           {/* One clean prompt box — click sends you into the generator and starts */}
           <div className="mt-9 max-w-3xl mx-auto text-left">
             <div className="thumb-glass thumb-float-red rounded-[28px] p-3.5 sm:p-4">
