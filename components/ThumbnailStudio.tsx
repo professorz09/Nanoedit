@@ -508,8 +508,8 @@ const ThumbnailStudio: React.FC<Props> = ({
     setSection('generate');
     if (configured && !user) { requireLogin('Log in to generate your thumbnail.'); return; }
     if (configured && user && !creditsLoading && totalCredits <= 0) { goPricing(); return; }
-    const prompt = `${trimmed}. ${textDirective(titleText)} ${format === 'short' ? BASE_SHORT : BASE_THUMB}`;
-    onGenerate(prompt, [...uploads], { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
+    const prompt = `${trimmed}. ${textDirective(titleText)} ${BASE_THUMB}`;
+    onGenerate(prompt, [...uploads], { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash' });
     scrollToResults();
   };
 
