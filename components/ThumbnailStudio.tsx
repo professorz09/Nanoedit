@@ -492,18 +492,25 @@ const ThumbnailStudio: React.FC<Props> = ({
       setTimeout(() => document.getElementById('thumb-tool')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
       return;
     }
+    if (!trimmed) {
+      // Nothing typed — land on the primary YouTube-link flow rather than
+      // defaulting into Prompt mode, which only makes sense once there's
+      // actual description text to act on.
+      setMode('youtube');
+      setNote(null);
+      setSection('generate');
+      setSidebarOpen(false);
+      setTimeout(() => document.getElementById('thumb-tool')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+      return;
+    }
     setMode('prompt');
     setNote(null);
     setSection('generate');
     if (configured && !user) { requireLogin('Log in to generate your thumbnail.'); return; }
     if (configured && user && !creditsLoading && totalCredits <= 0) { goPricing(); return; }
-    if (trimmed) {
-      const prompt = `${trimmed}. ${textDirective(titleText)} ${BASE_THUMB}`;
-      onGenerate(prompt, [...uploads], { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash' });
-      scrollToResults();
-    } else {
-      setTimeout(() => document.getElementById('thumb-tool')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
-    }
+    const prompt = `${trimmed}. ${textDirective(titleText)} ${BASE_THUMB}`;
+    onGenerate(prompt, [...uploads], { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash' });
+    scrollToResults();
   };
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1612,11 +1619,9 @@ const ThumbnailStudio: React.FC<Props> = ({
                         <button
                           key={src}
                           onClick={() => setSelectedRef(src)}
-                          className={`relative rounded-2xl overflow-hidden border-2 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
+                          className={`relative aspect-video rounded-2xl overflow-hidden border-2 bg-black/40 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
                         >
-                          <div className="aspect-video overflow-hidden bg-black/40">
-                            <img src={src} alt="Style reference" loading="lazy" className="w-full h-full object-cover" />
-                          </div>
+                          <img src={src} alt="Style reference" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                           {active && <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-thumb-red text-white flex items-center justify-center text-[11px] font-bold">✓</div>}
                         </button>
                       );

@@ -66,8 +66,8 @@ const AssetLibrary: React.FC<{
           <p className="col-span-full text-sm text-thumb-sub self-center">Loading…</p>
         ) : (
           items.map(it => (
-            <div key={it.id} className="relative aspect-square rounded-2xl overflow-hidden border border-thumb-line group">
-              <img src={it.url} alt={it.name || ''} className="w-full h-full object-cover" />
+            <div key={it.id} className="relative aspect-square rounded-2xl overflow-hidden border border-thumb-line bg-black/40 group">
+              <img src={it.url} alt={it.name || ''} className="absolute inset-0 w-full h-full object-cover" />
               <button
                 type="button"
                 onClick={() => onRemove(it.id)}
