@@ -698,9 +698,9 @@ const ThumbnailStudio: React.FC<Props> = ({
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
             (accurateApplies ? `- Accuracy over invention: first identify the video's distinct main topics/segments from the transcript, then base CONCEPT_A and CONCEPT_B on two DIFFERENT real topics it actually covers — not two takes on the same one, and not a topic that's only briefly mentioned in passing. Keep each concept short and literal: a faithful, accurate depiction of that specific topic, grounded strictly in what the transcript actually says, never a generic or imagined scene.\n` : '') +
             (creativeMode ? `- You have full creative freedom for these concepts — imagine the video in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction. Still grounded in what the video is actually about.\n` : '') +
-            `- Each HEADLINE: a punchy 2-4 word uppercase hook that fits ITS OWN concept's specific scene (not a generic title repeated for both) and still captures the video's core topic.\n\n` +
+            `- Decide for each concept whether on-image text actually helps: most great thumbnails work purely through the visual — only give a concept a headline if it genuinely adds punch beyond what the image already communicates. If a headline helps, it must be a punchy 2-4 word hook, NEVER the title restated or any full sentence. If a concept doesn't need one, reply its HEADLINE as NONE — do not force one just to fill the field.\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
-            `CONCEPT_A: <sentence>\nHEADLINE_A: <2-4 words>\nCONCEPT_B: <sentence>\nHEADLINE_B: <2-4 words>\n\n` +
+            `CONCEPT_A: <sentence>\nHEADLINE_A: <2-4 words, or NONE>\nCONCEPT_B: <sentence>\nHEADLINE_B: <2-4 words, or NONE>\n\n` +
             `TITLE: ${title || '(unknown)'}\n\nTRANSCRIPT (excerpt):\n${transcriptText || '(no transcript available)'}`,
             'concept'
           );
@@ -712,6 +712,8 @@ const ThumbnailStudio: React.FC<Props> = ({
           conceptB = grab('CONCEPT_B').slice(0, 400);
           headlineA = grab('HEADLINE_A').replace(/[."']+$/g, '').slice(0, 40);
           headlineB = grab('HEADLINE_B').replace(/[."']+$/g, '').slice(0, 40);
+          if (/^none$/i.test(headlineA.trim())) headlineA = '';
+          if (/^none$/i.test(headlineB.trim())) headlineB = '';
           // If the model ignored the format, treat the whole reply as one concept.
           if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
         } catch (_e) {
