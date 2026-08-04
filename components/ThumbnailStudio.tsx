@@ -1061,6 +1061,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       // scene detail — so multiple variations actually differ instead of
       // being carbon copies from one shared prompt. Handles its own
       // onGenerate calls/return, same reason as those modes.
+      setBusy(true);
       const hasFace = uploads.length > 0;
       const topic = promptText.trim();
       const wantCount = Math.max(1, Math.min(4, genCount));
@@ -1074,9 +1075,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       let styleB64: string | null = null;
       let styleDir = '';
       if (selectedSketchStyle) {
-        setBusy(true);
         styleB64 = await urlToBase64(selectedSketchStyle);
-        setBusy(false);
         if (styleB64) {
           styleDir = 'A final reference image is provided purely for visual STYLE — match its color grading, lighting mood and art treatment only. Do NOT copy its layout, composition or subjects; the hand-drawn sketch above always decides where everything goes. ';
         }
