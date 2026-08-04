@@ -200,6 +200,8 @@ const FAQS = [
   { q: 'How does the YouTube link option work?', a: 'Paste any video link and we pull its current thumbnail as a reference, then generate improved, more click-worthy versions that keep the same theme.' },
   { q: 'What size are the thumbnails?', a: 'Full 16:9 HD, ready to upload straight to YouTube. Every result downloads at high resolution with no watermark.' },
   { q: 'Can I edit a thumbnail after generating?', a: 'Yes. Send any result to the built-in editor to tweak text, swap backgrounds, brush-select areas, remove background, and more.' },
+  { q: 'Is PodcastFlux really free to use?', a: 'Yes — new accounts start on a free plan with generation credits included, so you can try the AI thumbnail maker at no cost before upgrading for more credits.' },
+  { q: 'Can it also generate YouTube titles and timestamps?', a: 'Yes. Paste a YouTube video link into the Title Generator for AI-written, click-worthy titles, or into the Chapter Maker to auto-generate accurate timestamps — both free tools built into PodcastFlux alongside the thumbnail maker.' },
 ];
 
 // Steps shown while a thumbnail is being generated (advance ~every 4s of elapsed time)
@@ -1404,6 +1406,10 @@ const ThumbnailStudio: React.FC<Props> = ({
             >Premium</span>{' '}
             <span className="text-thumb-ink">Thumbnails</span>
           </h1>
+
+          <p className="mt-4 max-w-2xl mx-auto text-sm sm:text-base text-thumb-sub leading-relaxed">
+            The best free AI thumbnail maker for YouTube — make high-quality thumbnails with AI from a prompt, photo, or YouTube video link. No Photoshop or Adobe Express needed. Also turns any YouTube link into AI titles &amp; timestamps.
+          </p>
 
           {/* One clean prompt box — click sends you into the generator and starts */}
           <div className="mt-9 max-w-3xl mx-auto text-left">
@@ -2730,7 +2736,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <div className="thumb-btn w-8 h-8 rounded-xl flex items-center justify-center text-white"><I.Wand className="w-4 h-4" /></div>
                 <span className="text-lg font-extrabold tracking-tight text-thumb-ink">PodcastFlux</span>
               </div>
-              <p className="text-sm text-thumb-sub leading-relaxed">The AI thumbnail maker for YouTube — turn a prompt, photo, or video link into click-worthy HD thumbnails in seconds.</p>
+              <p className="text-sm text-thumb-sub leading-relaxed">The best free AI thumbnail maker for YouTube — turn a prompt, photo, or YouTube video link into high-quality, click-worthy HD thumbnails, titles &amp; timestamps in seconds.</p>
             </div>
             <div className="flex flex-wrap gap-x-12 gap-y-6">
               <div>
@@ -2738,7 +2744,9 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <ul className="space-y-2 text-sm">
                   <li><button onClick={goHome} className="text-thumb-ink hover:text-thumb-red transition-colors">Home</button></li>
                   <li><button onClick={() => setSection('pricing')} className="text-thumb-ink hover:text-thumb-red transition-colors">Pricing</button></li>
-                  <li><button onClick={() => setSection('generate')} className="text-thumb-ink hover:text-thumb-red transition-colors">Thumbnail Maker</button></li>
+                  <li><button onClick={() => setSection('generate')} className="text-thumb-ink hover:text-thumb-red transition-colors">AI Thumbnail Maker</button></li>
+                  <li><button onClick={goTitle} className="text-thumb-ink hover:text-thumb-red transition-colors">YouTube Title Generator</button></li>
+                  <li><button onClick={goChapters} className="text-thumb-ink hover:text-thumb-red transition-colors">YouTube Timestamps Maker</button></li>
                 </ul>
               </div>
               <div>
@@ -2775,8 +2783,8 @@ const ThumbnailStudio: React.FC<Props> = ({
             <div className="space-y-4 text-sm text-thumb-sub leading-relaxed">
               {legal === 'about' && (
                 <>
-                  <p>PodcastFlux is an AI thumbnail maker built for YouTube creators. Describe your idea, upload a photo, or paste a video link, and our AI designs high-converting HD 16:9 thumbnails in seconds — no design skills or editing software required.</p>
-                  <p>Our goal is simple: help creators get more clicks with less effort. We combine state-of-the-art image models with creator-tested templates so every result is upload-ready.</p>
+                  <p>PodcastFlux is a free AI thumbnail maker built for YouTube creators. Describe your idea, upload a photo, or paste a YouTube video link, and our AI designs high-quality, high-converting HD 16:9 thumbnails in seconds — no Photoshop, Adobe Express, or design skills required.</p>
+                  <p>Our goal is simple: help creators get more clicks with less effort. We combine state-of-the-art AI image models with creator-tested templates so every result is upload-ready — plus a free AI title generator and YouTube timestamps maker to round out your upload.</p>
                   <p>Questions or feedback? Email us at <a href="mailto:support@rmind.com" className="text-thumb-red font-semibold">support@rmind.com</a>.</p>
                 </>
               )}
