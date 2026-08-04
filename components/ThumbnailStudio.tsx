@@ -984,9 +984,9 @@ const ThumbnailStudio: React.FC<Props> = ({
           `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
           `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
           (creativeMode ? `- You have full creative freedom for these concepts — imagine the topic in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction.\n` : '') +
-          `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
+          `- Decide for yourself whether on-image text actually helps: most great thumbnails work purely through the visual — only add a headline if it genuinely adds punch beyond what the image already communicates. If a headline helps, it must be a punchy 2-4 word hook, NEVER the description restated or any full sentence. If no headline is genuinely needed, reply HEADLINE: NONE — do not force one just to fill the field.\n\n` +
           `Reply in EXACTLY this format, nothing else:\n` +
-          `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+          `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words, or NONE>\n\n` +
           `DESCRIPTION: ${promptText.trim()}`,
           'concept'
         );
@@ -997,11 +997,17 @@ const ThumbnailStudio: React.FC<Props> = ({
         conceptA = grab('CONCEPT_A').slice(0, 400);
         conceptB = grab('CONCEPT_B').slice(0, 400);
         headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+        if (/^none$/i.test(headline.trim())) headline = '';
         if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
       } catch (_e) {
         /* concept generation is free and best-effort — falls back to the raw description below */
       }
-      const textSeed = headline || promptText.trim();
+      // NEVER fall back to the raw typed description here — that's an idea
+      // to build a VISUAL from, not text meant to appear on the thumbnail.
+      // If the AI didn't produce a genuine short headline, textDirective('')
+      // correctly keeps the image clean instead of an image model rendering
+      // the whole description verbatim as an on-image caption.
+      const textSeed = headline;
 
       setNoteText('Designing your thumbnails…', 'info');
       const matchQuery = promptText.trim().slice(0, 4000);
@@ -1036,8 +1042,12 @@ const ThumbnailStudio: React.FC<Props> = ({
             || (!metaKnown && !!textSeed);
           const originalWords = styleTexts.map((t: any) => t?.current).filter(Boolean).join('", "');
           const noOldWords = originalWords ? `Specifically, do NOT render the reference image's own original words ("${originalWords}") anywhere — those belong to a different thumbnail. ` : '';
+          // The style ITSELF displays text in its design — leaving that box
+          // blank would look broken, so it always needs SOME replacement
+          // headline here even if the AI decided the concept didn't need one.
+          const basedOn = textSeed || concept || promptText.trim();
           const textStyle = styleUsesText
-            ? `This style shows headline text — REPLACE it with a short punchy headline for THIS thumbnail (2-4 uppercase words) based on: "${textSeed}". Keep the SAME position, size and treatment as the style. Render ONLY this one new headline, correctly spelled — no other words, duplicates or gibberish. ${noOldWords}`
+            ? `This style shows headline text — REPLACE it with a short punchy headline for THIS thumbnail (2-4 uppercase words) based on: "${basedOn}". Keep the SAME position, size and treatment as the style. Render ONLY this one new headline, correctly spelled — no other words, duplicates or gibberish. ${noOldWords}`
             : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
 
           const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : `${promptText.trim()}. `}${styleHint}${faceStyle}${textStyle}${creativeDirective}${topicDirective(promptText)} ${BASE_THUMB}`;
