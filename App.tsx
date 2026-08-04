@@ -71,10 +71,10 @@ function App() {
   // Generation queue — parallel processing, per-item timers, cancel/retry.
   const { queue, setQueue, isProcessing, itemTimers, cancelQueueItem, retryQueueItem } = useImageQueue({
     // Capped to match the server's own rolling cleanup (MAX_THUMBNAILS_PER_USER
-    // in the "generate" Edge Function, default 50) — without this, the local
+    // in the "generate" Edge Function, default 200) — without this, the local
     // IndexedDB history grows forever (never pruned client-side), well past
     // what the server actually still has in Storage.
-    onGenerated: (newImages) => setGeneratedImages(prev => [...newImages, ...prev].slice(0, 50)),
+    onGenerated: (newImages) => setGeneratedImages(prev => [...newImages, ...prev].slice(0, 200)),
     onText: (text) => setTextResponse(text),
     onError: (message) => setGlobalError(message),
   });
@@ -230,7 +230,7 @@ function App() {
               .from('generations')
               .select('id, prompt, path, created_at')
               .order('created_at', { ascending: false })
-              .limit(50);
+              .limit(200);
           if (!alive || error || !data) return;
           const serverImages: GeneratedImage[] = data.map((r: any) => ({
               id: `srv-${r.id}`,
@@ -242,7 +242,7 @@ function App() {
               const seenUrls = new Set(prev.map(p => p.url));
               const merged = [...prev, ...serverImages.filter(s => !seenUrls.has(s.url) && !deletedUrlsRef.current.has(s.url))];
               merged.sort((a, b) => b.timestamp - a.timestamp);
-              return merged.slice(0, 50);
+              return merged.slice(0, 200);
           });
       })();
       return () => { alive = false; };
