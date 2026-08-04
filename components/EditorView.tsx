@@ -891,7 +891,7 @@ export default function EditorView(props: EditorViewProps) {
                       </div>
                       <button onClick={() => setShowStylePicker(false)} className="w-8 h-8 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><IconX /></button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto no-scrollbar pr-1">
+                  <div className="grid grid-cols-2 gap-3 overflow-y-auto no-scrollbar pr-1">
                       {styleImages.map((src, i) => (
                           <button
                               key={i}

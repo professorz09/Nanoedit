@@ -1664,12 +1664,12 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <label className="text-sm font-bold text-thumb-ink flex items-center gap-2">
                     <I.Image className="w-4 h-4 text-thumb-red" /> Pick a style to recreate
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
-                    {styleImages.map(src => {
+                  <div className="grid grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto no-scrollbar pr-0.5 -mr-0.5">
+                    {styleImages.map((src, i) => {
                       const active = selectedRef === src;
                       return (
                         <button
-                          key={src}
+                          key={src + i}
                           onClick={() => setSelectedRef(src)}
                           className={`relative aspect-video rounded-2xl overflow-hidden border-2 bg-black/40 transition-all ${active ? 'border-thumb-red shadow-md' : 'border-transparent hover:border-thumb-line'}`}
                         >

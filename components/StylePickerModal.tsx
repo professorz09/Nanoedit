@@ -29,7 +29,7 @@ const StylePickerModal: React.FC<{
             Clear selection
           </button>
         )}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto no-scrollbar pr-1 mt-2">
+        <div className="grid grid-cols-2 gap-3 overflow-y-auto no-scrollbar pr-1 mt-2">
           {styleImages.map((src, i) => {
             const active = selected === src;
             return (
