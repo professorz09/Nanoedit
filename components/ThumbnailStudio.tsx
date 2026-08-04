@@ -135,18 +135,23 @@ const sampleTranscript = (segments: { start: number; text: string }[], maxChars:
 };
 
 // Candidate pool for a style-matched variant slot: the top TOP_N genuine
-// matches, PLUS one deliberate "wildcard" drawn from the rest of the pool
-// (rank TOP_N+1 onward, not just the top handful) — giving a style outside
-// the usual top matches a lucky chance to occasionally appear too, instead
-// of every variant only ever coming from the same few top results. Flat
-// TOP_N regardless of how many variations were requested (wantCount) — a
-// bigger shared candidate pool just means more shuffle variety, it isn't
-// meant to scale with the output count.
+// matches, PLUS — only WILDCARD_CHANCE of the time — one wildcard drawn from
+// the rest of the pool (rank TOP_N+1 onward), giving a style outside the
+// usual top matches a rare lucky chance to appear too, instead of every
+// variant only ever coming from the same few top results. Gated behind a low
+// probability rather than always added: with wantCount picks made from a
+// shuffled pool, an always-present wildcard competes on equal footing with
+// the ranked matches (e.g. ~1-in-3 odds of landing in a 2-thumbnail batch),
+// which surfaced an off-topic style far too often. Flat TOP_N regardless of
+// how many variations were requested — a bigger shared candidate pool just
+// means more shuffle variety, it isn't meant to scale with the output count.
 const TOP_N = 5;
+const WILDCARD_CHANCE = 0.2;
 const buildCandidatePool = <T,>(pool: T[]): T[] => {
   const ranked = pool.slice(0, Math.min(pool.length, TOP_N));
   const rest = pool.slice(ranked.length);
-  return rest.length ? [...ranked, rest[Math.floor(Math.random() * rest.length)]] : ranked;
+  if (!rest.length || Math.random() >= WILDCARD_CHANCE) return ranked;
+  return [...ranked, rest[Math.floor(Math.random() * rest.length)]];
 };
 
 const topicDirective = (topic: string) => {
