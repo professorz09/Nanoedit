@@ -264,6 +264,10 @@ const ThumbnailStudio: React.FC<Props> = ({
   // unexpected composition) — off by default since it's less predictable
   // than the standard photorealistic path.
   const [creativeMode, setCreativeMode] = useState(false);
+  // YouTube-only: ground concepts strictly in the transcript's actual main
+  // topics instead of one loosely-inspired vivid scene — off by default
+  // since the freer, more vivid-scene concept style is still the default.
+  const [accurateMode, setAccurateMode] = useState(false);
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
@@ -673,14 +677,26 @@ const ThumbnailStudio: React.FC<Props> = ({
           goPricing();
           return;
         }
-        try {
+        // Accurate mode's whole premise is grounding in the transcript — with
+        // none available it can't honour that, so it only applies when there's
+        // actually transcript text to ground in (silently falling back to the
+        // normal title-driven concept style otherwise, same as the toggle
+        // being off, rather than sending a self-contradicting "ground this in
+        // the transcript" instruction alongside "(no transcript available)").
+        const accurateApplies = accurateMode && !!transcriptText;
+        if (accurateMode && !transcriptText) {
+          setNoteText("No transcript available for this video — designing from the title instead.", 'info');
+        } else {
           setNoteText('Designing two fresh thumbnail concepts…', 'info');
+        }
+        try {
           const raw = await generateText(
             `You are a world-class YouTube thumbnail art director. Analyse the video below and design TWO clearly DIFFERENT, click-worthy thumbnail concepts for it, each with its OWN short on-thumbnail headline that matches ITS specific scene.\n\n` +
             `Rules:\n` +
             `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
             `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
+            (accurateApplies ? `- Accuracy over invention: first identify the video's distinct main topics/segments from the transcript, then base CONCEPT_A and CONCEPT_B on two DIFFERENT real topics it actually covers — not two takes on the same one, and not a topic that's only briefly mentioned in passing. Keep each concept short and literal: a faithful, accurate depiction of that specific topic, grounded strictly in what the transcript actually says, never a generic or imagined scene.\n` : '') +
             (creativeMode ? `- You have full creative freedom for these concepts — imagine the video in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction. Still grounded in what the video is actually about.\n` : '') +
             `- Each HEADLINE: a punchy 2-4 word uppercase hook that fits ITS OWN concept's specific scene (not a generic title repeated for both) and still captures the video's core topic.\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
@@ -903,9 +919,9 @@ const ThumbnailStudio: React.FC<Props> = ({
             (wantCount > 1 ? `- Make all ${wantCount} concepts genuinely distinct from EACH OTHER: different composition, subject framing, angle, setting or emotion — no two should be variations of the same shot.\n` : '') +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
             (creativeMode ? `- You have full creative freedom for these concepts — imagine the topic in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction.\n` : '') +
-            `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
+            `- Decide for yourself whether on-image text actually helps: most great thumbnails work purely through the visual — only add a headline if it genuinely adds punch beyond what the image already communicates. If a headline helps, it must be a punchy 2-4 word hook, NEVER the topic restated or any full sentence. If no headline is genuinely needed, reply HEADLINE: NONE — do not force one just to fill the field.\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
-            `${labels.map(l => `${l}: <sentence>`).join('\n')}\nHEADLINE: <2-4 words>\n\n` +
+            `${labels.map(l => `${l}: <sentence>`).join('\n')}\nHEADLINE: <2-4 words, or NONE>\n\n` +
             `TOPIC: ${topic || "match the reference image's style and mood"}`,
             'concept'
           );
@@ -915,11 +931,17 @@ const ThumbnailStudio: React.FC<Props> = ({
           };
           concepts = labels.map(l => grab(l).slice(0, 400)).filter(Boolean);
           headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+          if (/^none$/i.test(headline.trim())) headline = '';
           if (!concepts.length && raw?.trim()) concepts = [raw.trim().slice(0, 400)];
         } catch (_e) {
           /* concept generation is free and best-effort — falls back to the typed topic below */
         }
-        const textSeed = headline || topic;
+        // NEVER fall back to the raw typed topic here — that's an idea to
+        // build a VISUAL from, not text meant to appear on the thumbnail. If
+        // the AI didn't produce a genuine short headline, textDirective('')
+        // correctly keeps the image clean instead of forcing the topic text
+        // itself onto the image.
+        const textSeed = headline;
 
         setNoteText('Designing your thumbnails…', 'info');
         // If the model returned fewer usable concepts than slots (bad
@@ -979,9 +1001,9 @@ const ThumbnailStudio: React.FC<Props> = ({
           `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
           `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
           (creativeMode ? `- You have full creative freedom for these concepts — imagine the topic in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction.\n` : '') +
-          `- HEADLINE: a punchy 2-4 word uppercase hook that captures the core topic (viewers must instantly get what it's about).\n\n` +
+          `- Decide for yourself whether on-image text actually helps: most great thumbnails work purely through the visual — only add a headline if it genuinely adds punch beyond what the image already communicates. If a headline helps, it must be a punchy 2-4 word hook, NEVER the description restated or any full sentence. If no headline is genuinely needed, reply HEADLINE: NONE — do not force one just to fill the field.\n\n` +
           `Reply in EXACTLY this format, nothing else:\n` +
-          `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words>\n\n` +
+          `CONCEPT_A: <sentence>\nCONCEPT_B: <sentence>\nHEADLINE: <2-4 words, or NONE>\n\n` +
           `DESCRIPTION: ${promptText.trim()}`,
           'concept'
         );
@@ -992,11 +1014,17 @@ const ThumbnailStudio: React.FC<Props> = ({
         conceptA = grab('CONCEPT_A').slice(0, 400);
         conceptB = grab('CONCEPT_B').slice(0, 400);
         headline = grab('HEADLINE').replace(/[."']+$/g, '').slice(0, 40);
+        if (/^none$/i.test(headline.trim())) headline = '';
         if (!conceptA && !conceptB && raw?.trim()) conceptA = raw.trim().slice(0, 400);
       } catch (_e) {
         /* concept generation is free and best-effort — falls back to the raw description below */
       }
-      const textSeed = headline || promptText.trim();
+      // NEVER fall back to the raw typed description here — that's an idea
+      // to build a VISUAL from, not text meant to appear on the thumbnail.
+      // If the AI didn't produce a genuine short headline, textDirective('')
+      // correctly keeps the image clean instead of an image model rendering
+      // the whole description verbatim as an on-image caption.
+      const textSeed = headline;
 
       setNoteText('Designing your thumbnails…', 'info');
       const matchQuery = promptText.trim().slice(0, 4000);
@@ -1031,8 +1059,12 @@ const ThumbnailStudio: React.FC<Props> = ({
             || (!metaKnown && !!textSeed);
           const originalWords = styleTexts.map((t: any) => t?.current).filter(Boolean).join('", "');
           const noOldWords = originalWords ? `Specifically, do NOT render the reference image's own original words ("${originalWords}") anywhere — those belong to a different thumbnail. ` : '';
+          // The style ITSELF displays text in its design — leaving that box
+          // blank would look broken, so it always needs SOME replacement
+          // headline here even if the AI decided the concept didn't need one.
+          const basedOn = textSeed || concept || promptText.trim();
           const textStyle = styleUsesText
-            ? `This style shows headline text — REPLACE it with a short punchy headline for THIS thumbnail (2-4 uppercase words) based on: "${textSeed}". Keep the SAME position, size and treatment as the style. Render ONLY this one new headline, correctly spelled — no other words, duplicates or gibberish. ${noOldWords}`
+            ? `This style shows headline text — REPLACE it with a short punchy headline for THIS thumbnail (2-4 uppercase words) based on: "${basedOn}". Keep the SAME position, size and treatment as the style. Render ONLY this one new headline, correctly spelled — no other words, duplicates or gibberish. ${noOldWords}`
             : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
 
           const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement, for a brand-new thumbnail. CRITICAL: the FIRST image is from a completely different, unrelated thumbnail — its specific person/face, its props, and its exact on-image wording all belong to that one, not this. Do NOT copy any of them — take ONLY the visual style. ${concept ? `Concept: ${concept} ` : `${promptText.trim()}. `}${styleHint}${faceStyle}${textStyle}${creativeDirective}${topicDirective(promptText)} ${BASE_THUMB}`;
@@ -1061,6 +1093,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       // scene detail — so multiple variations actually differ instead of
       // being carbon copies from one shared prompt. Handles its own
       // onGenerate calls/return, same reason as those modes.
+      setBusy(true);
       const hasFace = uploads.length > 0;
       const topic = promptText.trim();
       const wantCount = Math.max(1, Math.min(4, genCount));
@@ -1074,9 +1107,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       let styleB64: string | null = null;
       let styleDir = '';
       if (selectedSketchStyle) {
-        setBusy(true);
         styleB64 = await urlToBase64(selectedSketchStyle);
-        setBusy(false);
         if (styleB64) {
           styleDir = 'A final reference image is provided purely for visual STYLE — match its color grading, lighting mood and art treatment only. Do NOT copy its layout, composition or subjects; the hand-drawn sketch above always decides where everything goes. ';
         }
@@ -1116,7 +1147,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       for (let i = 0; i < wantCount; i++) {
         const concept = usableConcepts[i % usableConcepts.length] || topic;
         const extra = concept ? `Extra direction: ${concept}. ` : '';
-        const p = `Use the FIRST image — a rough hand-drawn sketch — as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. Redraw it as a polished, photorealistic, professional YouTube thumbnail — do NOT keep the crude sketch lines or the plain white paper; render real, richly detailed art in their place. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${styleDir}${extra}${topicDirective(promptText)}${textDirective(promptText)}${creativeMode ? 'Within the sketch\'s fixed layout, push the lighting, colour grade and mood toward the boldest, most dramatic and high-contrast take possible. ' : ''} ${BASE_THUMB}`;
+        const p = `Use the FIRST image — a rough hand-drawn sketch — ONLY as the exact layout and composition blueprint for the thumbnail: honour where each subject, object, arrow and text block is placed and its relative size and position. The sketch dictates LAYOUT ONLY, never the visual medium — do NOT keep the crude sketch lines, the plain white paper, or anything resembling a drawing, cartoon, illustration, digital painting, anime or clipart/vector-art style. Redraw it as an authentic, ultra-realistic photograph: real-camera depth of field, natural skin texture, realistic lighting and real, richly detailed photographic content in place of every sketched element — indistinguishable from a genuine photo taken by a professional camera for THIS exact topic. ${hasFace ? 'Use the additional uploaded photo for the main person and preserve their likeness, placing them where the sketch indicates. ' : ''}${styleDir}${extra}${topicDirective(promptText)}${textDirective(promptText)}${creativeMode ? 'Within the sketch\'s fixed layout, push the lighting, colour grade and mood toward the boldest, most dramatic and high-contrast take possible. ' : ''} ${BASE_THUMB}`;
         // Same source order as before: sketch (layout blueprint) first, then
         // any uploaded face photo, then the style reference last.
         const variantSources = styleB64 ? [sketchData, ...uploads, styleB64] : [sketchData, ...uploads];
@@ -1184,7 +1215,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, onlyMyStyles, creativeMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, selectedYtStyle, onlyMyStyles, creativeMode, accurateMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
@@ -1583,6 +1614,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         {creativeMode && (
                           <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
+                        )}
+
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-bold text-thumb-ink">Stick to video's topics</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={accurateMode}
+                            aria-label="Stick to video's topics"
+                            onClick={() => setAccurateMode(v => !v)}
+                            className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${accurateMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                          >
+                            <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${accurateMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                          </button>
+                        </div>
+                        {accurateMode && (
+                          <p className="text-[11px] text-thumb-sub -mt-1">Shorter, more literal concepts grounded in the transcript's real main topics, rather than one loosely-inspired scene — the two concepts cover genuinely different topics (cycled across your variations) instead of two takes on the same idea.</p>
                         )}
 
                         {/* Format lives here (not always visible) — YouTube
