@@ -1707,7 +1707,28 @@ const ThumbnailStudio: React.FC<Props> = ({
                     </button>
 
                     {promptAdvanced && (
-                      <div className="mt-3 animate-fade-in-up">
+                      <div className="mt-3 space-y-4 animate-fade-in-up">
+                        <div className="space-y-1.5">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Persona &amp; upload</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                            >
+                              <I.FaceSwap className="w-4 h-4" /> Persona
+                            </button>
+                            <button
+                              type="button"
+                              onClick={triggerUpload}
+                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                            >
+                              <I.Upload className="w-4 h-4" /> Upload
+                            </button>
+                            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+                          </div>
+                        </div>
+
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
                           <button
@@ -1887,9 +1908,11 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Saved faces (shared for templates + reference + prompt) — sketch
-                  has its own toggled Persona panel above instead. */}
-              {(mode === 'reference' || mode === 'templates' || mode === 'prompt') && (
+              {/* Saved faces (shared for templates + reference) — sketch and
+                  prompt each have their own toggled Persona panel above
+                  instead (opens the full add-or-pick modal via the "Persona"
+                  tile, rather than this reduced pick-only inline strip). */}
+              {(mode === 'reference' || mode === 'templates') && (
                 <PersonaPicker enabled onPick={pickPersona} refreshKey={personaRefreshKey} loggedIn={!configured || !!user} onRequireLogin={() => requireLogin('Log in to save faces.')} showAddTile={false} />
               )}
 
