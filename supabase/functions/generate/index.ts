@@ -29,7 +29,12 @@
 //   MAX_THUMBNAILS_PER_USER  = 200                            (optional override)
 //   (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
 // ═══════════════════════════════════════════════════════════════════════════
-import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
+// Pinned well past 1.22.0 — that's the version imageConfig (aspectRatio /
+// imageSize) was added to GenerateContentConfig. On the old 1.9.0 pin this
+// function used to run on, the SDK had no idea imageConfig existed and
+// silently dropped it before building the Vertex request — so 2K/4K
+// requests for gemini-3-pro-image always came back at the default 1K.
+import { GoogleGenAI } from 'npm:@google/genai@1.48.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CORS = {
