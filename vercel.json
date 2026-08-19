@@ -1,6 +1,11 @@
 {
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm run build",
+  "functions": {
+    "api/generate.ts": {
+      "maxDuration": 300
+    }
+  },
   "headers": [
     {
       "source": "/sitemap.xml",

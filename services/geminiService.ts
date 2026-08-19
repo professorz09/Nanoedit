@@ -244,10 +244,19 @@ export const editImageWithGemini = async (
     }
   }
 
-  // ── PRODUCTION: secure Supabase Edge Function ──────────────────────────────
-  // The function verifies the user, reserves a credit (spend_credit), calls the
-  // model with the API key held server-side, saves the image to Storage, and
-  // returns public URLs. The image-gen key is NEVER shipped to the browser.
+  // ── PRODUCTION ───────────────────────────────────────────────────────────
+  // Two server-side options, tried in order. Both verify the user, reserve a
+  // credit (spend_credit), call the model with the API key held server-side,
+  // save the image to Storage, and return public URLs — the image-gen key is
+  // NEVER shipped to the browser either way.
+  //
+  //   1. /api/generate (Vercel, same origin) — tried first because Vercel
+  //      Functions get up to 300s (Hobby) / 800s (Pro), well past the
+  //      Supabase Free plan's hard 150s wall-clock limit that was cutting
+  //      off slower 2K/4K generations.
+  //   2. Supabase Edge Function — used until the Vercel secrets are added
+  //      (api/generate.ts self-reports 501 "not_configured" until then), or
+  //      if the Vercel route isn't deployed yet.
   const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   if (!supaUrl || !supabase) throw new Error("Sign-in is required to generate. Please log in.");
@@ -266,38 +275,69 @@ export const editImageWithGemini = async (
   }
   if (!token) throw new Error("Please log in to generate.");
 
-  try {
-    const resp = await fetch(`${supaUrl}/functions/v1/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: supaAnon ?? '',
-      },
-      body: JSON.stringify({
-        prompt: finalPrompt,
-        sources,
-        aspectRatio: settings.aspectRatio,
-        resolution: settings.resolution,
-        sourceMode: settings.sourceMode,
-      }),
-    });
-    const data = await resp.json().catch(() => ({}));
+  const requestBody = JSON.stringify({
+    prompt: finalPrompt,
+    sources,
+    aspectRatio: settings.aspectRatio,
+    resolution: settings.resolution,
+    sourceMode: settings.sourceMode,
+  });
 
+  const friendlyError = (error: any): Error => {
+    const errMsg = error?.message || String(error);
+    if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('Load failed')) {
+      return new Error('Could not reach the server. Please try again.');
+    }
+    if (errMsg.includes('source image')) {
+      return new Error('Could not load one of your images. Remove it and try again.');
+    }
+    // Pass through clean, human messages (credits / model) but never raw JSON.
+    return new Error(errMsg.length > 140 || errMsg.includes('{') ? 'Something went wrong. Please try again.' : errMsg);
+  };
+
+  // Returns the result, 'skip' (route missing / not configured — try the
+  // Supabase fallback next), or throws (a real outcome from this endpoint —
+  // stop here, don't also hit the other endpoint and risk a double credit spend).
+  const tryEndpoint = async (
+    url: string,
+    headers: Record<string, string>,
+    treatAsSkip: (status: number) => boolean
+  ): Promise<{ images: string[]; text: string } | 'skip'> => {
+    let resp: Response;
+    try {
+      resp = await fetch(url, { method: 'POST', headers, body: requestBody });
+    } catch {
+      return 'skip';
+    }
+    if (treatAsSkip(resp.status)) return 'skip';
+    const data = await resp.json().catch(() => ({}));
     if (resp.status === 402) throw new Error(data?.error || 'No credits left. Please upgrade your plan.');
     if (!resp.ok) throw new Error(data?.error || `Server error ${resp.status}`);
     if ((!data.images || !data.images.length) && !data.text) throw new Error('No image generated.');
     return { images: data.images || [], text: data.text || '' };
+  };
+
+  try {
+    const viaVercel = await tryEndpoint(
+      '/api/generate',
+      { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      (status) => status === 404 || status === 501
+    );
+    if (viaVercel !== 'skip') return viaVercel;
   } catch (error: any) {
-    const errMsg = error?.message || String(error);
-    if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('Load failed')) {
-      throw new Error('Could not reach the server. Please try again.');
-    }
-    if (errMsg.includes('source image')) {
-      throw new Error('Could not load one of your images. Remove it and try again.');
-    }
-    // Pass through clean, human messages (credits / model) but never raw JSON.
-    throw new Error(errMsg.length > 140 || errMsg.includes('{') ? 'Something went wrong. Please try again.' : errMsg);
+    throw friendlyError(error);
+  }
+
+  try {
+    const viaSupabase = await tryEndpoint(
+      `${supaUrl}/functions/v1/generate`,
+      { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
+      () => false
+    );
+    if (viaSupabase !== 'skip') return viaSupabase;
+    throw new Error('No image generated.');
+  } catch (error: any) {
+    throw friendlyError(error);
   }
 };
 
