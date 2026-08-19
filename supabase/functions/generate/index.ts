@@ -29,7 +29,12 @@
 //   MAX_THUMBNAILS_PER_USER  = 200                            (optional override)
 //   (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
 // ═══════════════════════════════════════════════════════════════════════════
-import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
+// Pinned well past 1.22.0 — that's the version imageConfig (aspectRatio /
+// imageSize) was added to GenerateContentConfig. On the old 1.9.0 pin this
+// function used to run on, the SDK had no idea imageConfig existed and
+// silently dropped it before building the Vertex request — so 2K/4K
+// requests for gemini-3-pro-image always came back at the default 1K.
+import { GoogleGenAI } from 'npm:@google/genai@1.48.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CORS = {
@@ -118,6 +123,20 @@ function makeVertex(): any {
   return null;
 }
 
+// The 4 harm categories Gemini image models let a caller adjust (child-safety
+// and a few other core-harm protections are never adjustable — Google blocks
+// those regardless of this setting). Left unset, Vertex applies its default
+// (stricter) thresholds, which is what was causing otherwise-benign prompts
+// to get filtered. BLOCK_ONLY_HIGH is the most permissive threshold every
+// Vertex project can use out of the box — BLOCK_NONE requires a separate
+// Google Cloud allowlist request and 400s on unapproved projects.
+const SAFETY_SETTINGS = [
+  'HARM_CATEGORY_HARASSMENT',
+  'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+  'HARM_CATEGORY_DANGEROUS_CONTENT',
+].map((category) => ({ category, threshold: 'BLOCK_ONLY_HIGH' }));
+
 // ── Provider 1: Vertex / Gemini (primary) ────────────────────────────────────
 // `model` is passed in so the caller can build a resilient chain: try the
 // hi-res Pro model first, then degrade to the Flash model. BOTH Gemini-3 image
@@ -140,7 +159,11 @@ async function viaVertex(model: string, prompt: string, sources: string[], aspec
   parts.push({ text: prompt });
 
   // aspectRatio is honoured on EVERY tier so the output never defaults to square.
-  const config: any = { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio } };
+  const config: any = {
+    responseModalities: ['TEXT', 'IMAGE'],
+    imageConfig: { aspectRatio },
+    safetySettings: SAFETY_SETTINGS,
+  };
   if (supportsImageSize && resolution) config.imageConfig.imageSize = resolution;
 
   const result: any = await ai.models.generateContent({ model, contents: [{ role: 'user', parts }], config });
@@ -151,7 +174,15 @@ async function viaVertex(model: string, prompt: string, sources: string[], aspec
     if (p.inlineData?.data) images.push({ mime: p.inlineData.mimeType || 'image/png', data: p.inlineData.data });
     else if (p.text) text += p.text;
   }
-  if (!images.length) throw new Error('vertex_no_image');
+  if (!images.length) {
+    // Surface the reason instead of a bare "no image" so callers/logs can
+    // tell a safety block apart from an unrelated model hiccup.
+    const blockReason = result?.promptFeedback?.blockReason;
+    const finishReason = result?.candidates?.[0]?.finishReason;
+    if (blockReason) throw new Error(`vertex_blocked:${blockReason}`);
+    if (finishReason && finishReason !== 'STOP') throw new Error(`vertex_no_image:${finishReason}`);
+    throw new Error('vertex_no_image');
+  }
   return { images, text };
 }
 
@@ -333,7 +364,15 @@ Deno.serve(async (req) => {
     // Total failure across all providers → refund. A failed generation is free.
     for (let j = 0; j < cost; j++) await refundOnce(admin, user.id);
     console.error('all_providers_failed', errors.join(' | '));
-    return json(502, { error: 'Could not generate an image right now. Please try again.' });
+    // Every attempt was a safety block (not a network/config error) → tell the
+    // user to rephrase instead of the generic "try again", which just wastes
+    // a retry on a prompt that will be blocked again unchanged.
+    const allBlocked = errors.length > 0 && errors.every((e) => e.includes('vertex_blocked') || e.includes('vertex_no_image:'));
+    return json(502, {
+      error: allBlocked
+        ? 'Your prompt was blocked by the safety filter. Try rephrasing it (avoid sensitive/explicit language) and generate again.'
+        : 'Could not generate an image right now. Please try again.',
+    });
   }
 
   // 5) Upload results to Storage + log them

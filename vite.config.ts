@@ -120,7 +120,18 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
               // Flash Image ("Nano Banana 2"). Current image model IDs (mirrors the
               // production edge function). Pro honors imageSize 2K/4K below.
               const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-3.1-flash-image-preview';
-              const config: any = { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio } };
+              // Loosen the 4 adjustable harm categories — left unset, Vertex applies
+              // its stricter default thresholds, which is what was blocking otherwise
+              // benign prompts. BLOCK_ONLY_HIGH works on every project out of the box;
+              // BLOCK_NONE needs a separate Google Cloud allowlist request and 400s
+              // without it. Core protections (e.g. child safety) stay non-adjustable.
+              const safetySettings = [
+                'HARM_CATEGORY_HARASSMENT',
+                'HARM_CATEGORY_HATE_SPEECH',
+                'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                'HARM_CATEGORY_DANGEROUS_CONTENT',
+              ].map((category) => ({ category, threshold: 'BLOCK_ONLY_HIGH' }));
+              const config: any = { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio }, safetySettings };
               if (isPro) config.imageConfig.imageSize = resolution;
 
               const result: any = await ai.models.generateContent({
@@ -135,7 +146,9 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
                 else if (p.text) text += p.text;
               }
               if (images.length) return send(200, { images, text });
-              errs.push('vertex: no_image');
+              const blockReason = result?.promptFeedback?.blockReason;
+              const finishReason = result?.candidates?.[0]?.finishReason;
+              errs.push(blockReason ? `vertex: blocked:${blockReason}` : finishReason && finishReason !== 'STOP' ? `vertex: no_image:${finishReason}` : 'vertex: no_image');
             } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
           }
 
@@ -170,7 +183,12 @@ function vertexProxyPlugin(env: Record<string, string>): Plugin {
           }
 
           console.error('dev_generate_failed', errs.join(' | '));
-          return send(502, { error: 'Could not generate an image right now. Please try again.' });
+          const allBlocked = errs.length > 0 && errs.every((e) => e.includes('vertex: blocked') || e.includes('vertex: no_image:'));
+          return send(502, {
+            error: allBlocked
+              ? 'Your prompt was blocked by the safety filter. Try rephrasing it (avoid sensitive/explicit language) and generate again.'
+              : 'Could not generate an image right now. Please try again.',
+          });
         } catch (e: any) {
           return send(500, { error: e?.message || String(e) });
         }
