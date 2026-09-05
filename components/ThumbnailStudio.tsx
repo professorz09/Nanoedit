@@ -1730,9 +1730,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                             <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${accurateMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
                           </button>
                         </div>
-                        {accurateMode && (
-                          <p className="text-[11px] text-thumb-sub -mt-1">Shorter, more literal concepts grounded in the transcript's real main topics, rather than one loosely-inspired scene — the two concepts cover genuinely different topics (cycled across your variations) instead of two takes on the same idea.</p>
-                        )}
 
                         {/* Format lives here (not always visible) — YouTube
                             is overwhelmingly 16:9, so it doesn't need to be
