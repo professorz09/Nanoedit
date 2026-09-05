@@ -42,7 +42,10 @@ const MAX_TEXT = 8000;
 // determined caller can still pace themselves under the limit) but it
 // bounds the abuse to a rate a genuine multi-video session would never hit.
 // Same rolling-window pattern "transcript" already uses.
-const FREE_LIMIT = 20;
+// Raised from 20: a YouTube Generate now runs one search PER concept (two)
+// instead of one blended search across both, so the old ceiling capped a
+// genuine user at ten generations an hour.
+const FREE_LIMIT = 40;
 const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 async function checkFreeRateLimit(admin: any, uid: string): Promise<boolean> {

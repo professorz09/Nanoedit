@@ -733,6 +733,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         // being off, rather than sending a self-contradicting "ground this in
         // the transcript" instruction alongside "(no transcript available)").
         const accurateApplies = accurateMode && !!transcriptText;
+        const userDirection = promptText.trim().slice(0, 400);
         if (accurateMode && !transcriptText) {
           setNoteText("No transcript available for this video — designing from the title instead.", 'info');
         } else {
@@ -745,8 +746,18 @@ const ThumbnailStudio: React.FC<Props> = ({
             `- Both concepts must be REAL, photorealistic, real-footage style scenes that literally depict what THIS video is about (its actual topic, people, place or event) — no abstract art, no invented unrelated imagery.\n` +
             `- Make the two concepts genuinely distinct: different composition, subject framing, angle, setting or emotion — not two versions of the same shot.\n` +
             `- Each concept: ONE vivid sentence covering the main subject + their expression/emotion, the key real-world scene/elements, and the mood, lighting and colour palette. Concrete and purely visual.\n` +
-            (accurateApplies ? `- Accuracy over invention: first identify the video's distinct main topics/segments from the transcript, then base CONCEPT_A and CONCEPT_B on two DIFFERENT real topics it actually covers — not two takes on the same one, and not a topic that's only briefly mentioned in passing. Keep each concept short and literal: a faithful, accurate depiction of that specific topic, grounded strictly in what the transcript actually says, never a generic or imagined scene.\n` : '') +
-            (creativeMode ? `- You have full creative freedom for these concepts — imagine the video in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction. Still grounded in what the video is actually about.\n` : '') +
+            (accurateApplies ? `- Accuracy over invention: first identify the video's distinct main topics/segments from the transcript, then base CONCEPT_A and CONCEPT_B on two DIFFERENT real topics it actually covers — not two takes on the same one, and not a topic that's only briefly mentioned in passing. Name the real people, places, objects or events the transcript actually names rather than generic stand-ins. Keep each concept short and literal: a faithful depiction of that specific topic, grounded strictly in what the transcript says, never a generic or imagined scene.\n` : '') +
+            // Accurate mode wins when both toggles are on: "ground this strictly
+            // in the transcript, never imagine" and "you have full creative
+            // freedom, don't be literal" are direct opposites, and sending both
+            // left the model to pick one at random — the reason accurate mode
+            // seemed to do nothing for anyone who also had creative mode on.
+            (creativeMode && !accurateApplies ? `- You have full creative freedom for these concepts — imagine the video in whatever bold, unexpected, visually striking way feels right, not a plain literal depiction. Still grounded in what the video is actually about.\n` : '') +
+            // The user's own direction has to shape the CONCEPT, not get bolted
+            // onto the image prompt afterwards — a concept designed without it
+            // and an instruction demanding it pull the image model in two
+            // directions, which is exactly when results came out mangled.
+            (userDirection ? `- The user gave direction for this thumbnail. Treat it as a REQUIREMENT both concepts must satisfy, not a suggestion: "${userDirection}". If it names specific words to put on the thumbnail, use exactly those words as that concept's HEADLINE (verbatim, not reworded or expanded) and do not restate the instruction inside the concept sentence. If it describes the subject, scene, colours or mood instead, build both concepts around it and let the headline follow the video's hook as usual.\n` : '') +
             `- Decide for each concept whether on-image text actually helps: most great thumbnails work purely through the visual — only give a concept a headline if it genuinely adds punch beyond what the image already communicates. If a headline helps, it must be a punchy 2-4 word hook, NEVER the title restated or any full sentence. If a concept doesn't need one, reply its HEADLINE as NONE — do not force one just to fill the field.\n\n` +
             `Reply in EXACTLY this format, nothing else:\n` +
             `CONCEPT_A: <sentence>\nHEADLINE_A: <2-4 words, or NONE>\nCONCEPT_B: <sentence>\nHEADLINE_B: <2-4 words, or NONE>\n\n` +
@@ -793,7 +804,14 @@ const ThumbnailStudio: React.FC<Props> = ({
           ? "An additional reference photo (the video's own current thumbnail) is provided — if a real person/face appears in it, feature THAT exact person as the main subject and preserve their true likeness accurately and photorealistically; take ONLY their identity from it, ignoring its layout, background, text and quality. If no clear person appears in it, invent the subject from the concept instead. "
           : '';
       const titleLine = title ? `The video is titled "${title}". ` : '';
-      const topicSeed = [title, promptText].filter(v => v && v.trim()).join('. ');
+      // The video's own topic only. Advanced's direction used to be mixed in
+      // here too, so an instruction like "make it dramatic" was matched against
+      // the topic-hint patterns as if it were the video's subject and pulled in
+      // an unrelated hint — one of three places the same sentence was being
+      // injected in three different roles (topic, headline text, extra
+      // direction), which is a large part of why custom input produced mangled
+      // thumbnails. It now shapes the concept instead (see the concept prompt).
+      const topicSeed = title || '';
       // Premium + instantly-legible direction so the result matches the reference-style thumbnails.
       const ytPremium = "The thumbnail should communicate the video's topic at a glance — a viewer should quickly grasp what it's about — using a clear, expressive focal subject and topic-relevant visual cues. Make it look genuinely premium and high-end, on par with the best top-creator thumbnails: bold, polished, richly detailed and click-worthy. ";
       const realFootage = "Render it as authentic real-footage-style photography — like a genuine photo/still captured on a professional camera for THIS exact topic, with real depth of field and natural lighting; not an illustration, cartoon or generic stock art. ";
@@ -806,7 +824,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       // across every variant.
       const buildConceptOnly = (concept: string, conceptHeadline: string) => {
         const conceptLine = concept ? `Base the thumbnail on this concept drawn from the video's actual content: ${concept} ` : '';
-        const textSeed = promptText.trim() || conceptHeadline;
+        const textSeed = conceptHeadline; // headline comes from the concept step, not the raw direction
         return `Create a viral, click-worthy YouTube thumbnail for this video. ${titleLine}${conceptLine}${ytPremium}${realFootage}${creativeDirective}${faceDir}${dir}${topicDirective(topicSeed)}${textDirective(textSeed)} ${BASE_THUMB}`;
       };
 
@@ -828,14 +846,38 @@ const ThumbnailStudio: React.FC<Props> = ({
       // it (it's a plain pool URL, not a vector-search hit), which the prompt
       // builder below already handles via its `metaKnown` fallback.
       let pool: { url: string; meta?: any }[];
+      // Index 0 = styles matched for concept A, 1 = for concept B. Null for
+      // every path that has no per-concept notion (manual pick, unfiltered
+      // fallbacks), in which case slots just cycle the flat pool as before.
+      let poolByConcept: { url: string; meta?: any }[][] | null = null;
       if (selectedYtStyle) {
         pool = [{ url: selectedYtStyle }];
       } else {
         setNoteText('Analyzing your video…', 'info');
-        const matchQuery = [title, conceptA, conceptB, promptText].filter(v => v && v.trim()).join('. ').slice(0, 4000);
-        const matched = await matchStyles(matchQuery, 8, onlyMyStyles);
+        // Match each concept SEPARATELY. Blending both into one query (as this
+        // used to) embeds the average of two deliberately different scenes —
+        // a vector sitting between "lone hiker on a cliff at dawn" and "crowded
+        // trading floor" matches neither, so both variations got styles picked
+        // for a scene that doesn't exist. Two searches (free, run in parallel)
+        // give each concept the styles that actually fit it; results are
+        // interleaved so the shuffled candidate list stays fair to both.
+        const queries = [conceptA, conceptB].filter(c => c && c.trim());
+        const perConcept = await Promise.all(
+          (queries.length ? queries : [title].filter(Boolean)).map(q =>
+            matchStyles([title, q].filter(v => v && v.trim()).join('. ').slice(0, 4000), 6, onlyMyStyles)
+          )
+        );
+        const seen = new Set<string>();
+        const matched: { url: string; meta?: any }[] = [];
+        for (let rank = 0; rank < 6; rank++) {
+          for (const list of perConcept) {
+            const hit = list[rank];
+            if (hit && !seen.has(hit.url)) { seen.add(hit.url); matched.push({ url: hit.url, meta: hit.meta }); }
+          }
+        }
         if (matched.length) {
-          pool = matched.map(m => ({ url: m.url, meta: m.meta }));
+          pool = matched;
+          poolByConcept = perConcept.map(list => list.map(m => ({ url: m.url, meta: m.meta })));
         } else if (onlyMyStyles) {
           // No good semantic match among the user's own styles — still stay
           // within their own pool (never fall back to the global one, that
@@ -854,11 +896,25 @@ const ThumbnailStudio: React.FC<Props> = ({
       }
 
       if (pool.length) {
-        const candidates = pool.slice(0, Math.min(pool.length, Math.max(5, wantCount + 2)));
-        for (let i = candidates.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
-        // Cycle through the shuffled candidates so every slot gets a real
-        // (not necessarily unique, once the pool is smaller than wantCount) style.
-        const chosen = Array.from({ length: wantCount }, (_, i) => candidates[i % candidates.length]);
+        const shuffled = <T,>(arr: T[]): T[] => {
+          const a = [...arr];
+          for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+          return a;
+        };
+        const candidates = shuffled(pool.slice(0, Math.min(pool.length, Math.max(5, wantCount + 2))));
+        // Slots alternate concept A / B (see conceptPair below), so a slot draws
+        // from the styles matched for ITS concept — otherwise concept A's shot
+        // could be built on a style picked for concept B, which is how a
+        // perfectly good match still produced an off-looking thumbnail. Falls
+        // back to the flat candidate list whenever there's no per-concept split.
+        const perSlotPools = poolByConcept?.some(l => l.length)
+          ? poolByConcept.map(l => shuffled(l.slice(0, Math.max(3, Math.ceil(wantCount / 2) + 2))))
+          : null;
+        const chosen = Array.from({ length: wantCount }, (_, i) => {
+          const own = perSlotPools?.[i % 2];
+          if (own && own.length) return own[Math.floor(i / 2) % own.length];
+          return candidates[i % candidates.length];
+        });
         const conceptPair = [conceptA || conceptB, conceptB || conceptA];
         const concepts = Array.from({ length: wantCount }, (_, i) => conceptPair[i % 2]);
         // Each concept keeps ITS OWN paired headline (not one shared across
@@ -919,7 +975,12 @@ const ThumbnailStudio: React.FC<Props> = ({
           const style = chosen[i];
           const meta = style.meta || {};
           const concept = concepts[i] || '';
-          const textSeed = promptText.trim() || headlines[i] || '';
+          // The concept step now owns the headline (it was given the user's
+          // direction and told to put any explicitly-requested words straight
+          // into HEADLINE). Seeding it with the raw Advanced text instead — as
+          // this used to — meant "put an office in the background" came back
+          // distilled into an on-image headline reading "OFFICE BACKGROUND".
+          const textSeed = headlines[i] || '';
           const styleB64 = await urlToBase64(style.url);
           if (!styleB64) continue; // skip an unreadable style rather than recreating the video's thumbnail
 
