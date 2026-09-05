@@ -338,12 +338,38 @@ Deno.serve(async (req) => {
     { name: `openrouter:${orGptModel}`, run: () => viaOpenRouter(orGptModel, prompt, sources, aspectRatio) },
   ];
 
+  // Supabase's Free-plan Edge Runtime kills the whole invocation at a hard
+  // 150s wall-clock limit — an unresponsive Vertex Pro call with no timeout
+  // of its own could silently burn the ENTIRE budget alone, leaving zero
+  // time for the Flash/OpenRouter fallbacks that follow it. Race each
+  // attempt against a timeout capped to the REMAINING budget (not a fixed
+  // per-attempt value) — three attempts each allowed their own full 55s
+  // could still sum past the platform's 150s wall (55+55+55=165s) and get
+  // killed anyway. Bounding every attempt's timeout to what's actually left
+  // guarantees the whole loop finishes inside the deadline, so a slow run
+  // degrades to a clean "please try again" instead of a mid-upload platform
+  // kill (which surfaces to the client as a bare, confusing "Server error 546").
+  const GENERATION_DEADLINE_MS = 130_000;
+  const MAX_ATTEMPT_TIMEOUT_MS = 55_000;
+  const MIN_ATTEMPT_TIMEOUT_MS = 20_000; // not worth starting an attempt with less runway than this
+  const startedAt = Date.now();
+
   let gen: GenResult | null = null;
   let usedProvider = '';
   const errors: string[] = [];
   for (const a of attempts) {
+    const remaining = GENERATION_DEADLINE_MS - (Date.now() - startedAt);
+    if (remaining < MIN_ATTEMPT_TIMEOUT_MS) {
+      errors.push(`${a.name}: skipped_out_of_time`);
+      break;
+    }
+    const attemptTimeout = Math.min(MAX_ATTEMPT_TIMEOUT_MS, remaining);
     try {
-      const res = await a.run();
+      const res = await Promise.race([
+        a.run(),
+        new Promise<GenResult>((_, reject) =>
+          setTimeout(() => reject(new Error(`${a.name}_timeout`)), attemptTimeout)),
+      ]);
       if (res.images.length) {
         // `cost` was reserved for exactly ONE image (the client makes a
         // separate call — and pays separately — per variation; see wantCount
