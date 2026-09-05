@@ -44,6 +44,10 @@ const MAX_SOURCE_B64_CHARS = 12_000_000;
 const ALLOWED_ASPECTS = new Set(['16:9', '1:1', '9:16', '4:3', '3:4', '21:9', '4:5', '5:4']);
 const ALLOWED_RES = new Set(['1K', '2K', '4K']);
 const IMAGE_COST: Record<string, number> = { default: 1, youtube: 3 };
+// 4K runs the Pro model at ~4x the pixel/token cost of 2K (same model) — surcharge
+// it on top of the base per-mode price rather than raising 2K, which stays free
+// to keep using as the default "hi-res" tier.
+const RES_SURCHARGE: Record<string, number> = { '4K': 2 };
 
 type GenImage = { mime: string; data: string };
 type GenResult = { images: GenImage[]; text: string };
@@ -229,7 +233,7 @@ export default async function handler(req: any, res: any) {
   const aspectRatio = ALLOWED_ASPECTS.has(body.aspectRatio) ? body.aspectRatio : '16:9';
   const resolution = ALLOWED_RES.has(body.resolution) ? body.resolution : undefined;
   const sourceMode = body.sourceMode === 'youtube' ? 'youtube' : 'default';
-  const cost = IMAGE_COST[sourceMode];
+  const cost = IMAGE_COST[sourceMode] + (resolution ? (RES_SURCHARGE[resolution] ?? 0) : 0);
 
   let reserved = 0;
   for (let i = 0; i < cost; i++) {

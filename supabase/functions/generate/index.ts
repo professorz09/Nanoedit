@@ -68,6 +68,10 @@ const ALLOWED_RES = new Set(['1K', '2K', '4K']);
 // does real extra work per image (transcript fetch, concept LLM call,
 // style-match embedding call) on top of the generation itself.
 const IMAGE_COST: Record<string, number> = { default: 1, youtube: 3 };
+// 4K runs the Pro model at ~4x the pixel/token cost of 2K (same model) — surcharge
+// it on top of the base per-mode price rather than raising 2K, which stays free
+// to keep using as the default "hi-res" tier.
+const RES_SURCHARGE: Record<string, number> = { '4K': 2 };
 
 type GenImage = { mime: string; data: string }; // data = raw base64 (no data: prefix)
 type GenResult = { images: GenImage[]; text: string };
@@ -294,7 +298,7 @@ Deno.serve(async (req) => {
   const aspectRatio = ALLOWED_ASPECTS.has(body?.aspectRatio) ? body.aspectRatio : '16:9';
   const resolution = ALLOWED_RES.has(body?.resolution) ? body.resolution : undefined;
   const sourceMode = body?.sourceMode === 'youtube' ? 'youtube' : 'default';
-  const cost = IMAGE_COST[sourceMode];
+  const cost = IMAGE_COST[sourceMode] + (resolution ? (RES_SURCHARGE[resolution] ?? 0) : 0);
 
   // 3) Reserve `cost` credits, one at a time (atomic per call; monthly first,
   //    then add-on). 402 at zero, refunding whatever was already reserved if

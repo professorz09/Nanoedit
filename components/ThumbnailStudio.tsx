@@ -90,6 +90,11 @@ const SHOWCASE_TEMPLATE_PREVIEWS: Record<string, string> = {
 // SAME link never re-runs it, but every image, cached-analysis or not,
 // costs 3 credits; the server enforces this (sourceMode: 'youtube').
 const YOUTUBE_IMAGE_COST = 3;
+// Mirrors RES_SURCHARGE in supabase/functions/generate + api/generate — 4K
+// costs extra credits server-side, so the pre-flight credit check here has to
+// account for it too, or a user on 4K could pass this check and still hit a
+// mid-batch 402 the server enforces anyway.
+const RES_SURCHARGE_4K = 2;
 
 const BASE_THUMB = 'Design a top-tier, agency-grade, scroll-stopping YouTube thumbnail in 16:9 landscape — match the production quality, polish and click-worthiness of the best viral thumbnails from the biggest creators. Unless a specific art style is explicitly requested, lean photorealistic and lifelike — real-camera depth of field, natural skin texture, and a sharp, detailed, expressive face with realistic lighting. Compose it in whatever way best suits the topic — a bold real scene, a dramatic environment, or a clean backdrop — with a strong, clear focal point and real depth; just avoid random, meaningless clutter. Depict the subject and topic accurately. Use dramatic lighting, punchy vibrant colors and strong contrast so it pops even at small sizes. Render at high fidelity — crisp, detailed and clean, with no blur, noise, artifacts, warping or distorted anatomy. Do not add extra text, letters, captions, subtitles, watermarks or gibberish beyond any text that is explicitly requested.';
 
@@ -699,9 +704,10 @@ const ThumbnailStudio: React.FC<Props> = ({
         // under-checking here would let a user with (say) 4 credits queue
         // 4 variations, watch the first one succeed, and then get 3
         // "Generation failed" cards instead of a clear message up front.
-        if (configured && !creditsLoading && totalCredits < YOUTUBE_IMAGE_COST * wantCount) {
+        const perThumbCost = YOUTUBE_IMAGE_COST + (genModel === '4k' ? RES_SURCHARGE_4K : 0);
+        if (configured && !creditsLoading && totalCredits < perThumbCost * wantCount) {
           setBusy(false);
-          setNoteText(`This costs ${YOUTUBE_IMAGE_COST} credits per thumbnail — ${YOUTUBE_IMAGE_COST * wantCount} credits for ${wantCount}. Please top up your plan.`);
+          setNoteText(`This costs ${perThumbCost} credits per thumbnail — ${perThumbCost * wantCount} credits for ${wantCount}. Please top up your plan.`);
           goPricing();
           return;
         }
@@ -1706,9 +1712,9 @@ const ThumbnailStudio: React.FC<Props> = ({
                           <SegmentedControl
                             value={genModel}
                             onChange={setGenModel}
-                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: '4K' }]}
+                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
                           />
-                          <p className="text-[11px] text-thumb-sub">Fast (1K) is quickest; 2K and 4K use our higher-end model for sharper, more detailed thumbnails — 4K is the highest resolution we offer.</p>
+                          <p className="text-[11px] text-thumb-sub">Fast (1K) is quickest; 2K (default) uses our higher-end model for sharper thumbnails. 4K is our highest resolution and costs {RES_SURCHARGE_4K} extra credits per thumbnail.</p>
                         </div>
 
                         <div className="flex items-center justify-between gap-3">
@@ -2076,7 +2082,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       <SegmentedControl
                         value={genModel}
                         onChange={setGenModel}
-                        options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: '4K' }]}
+                        options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
                       />
                     </div>
                   )}
@@ -2128,7 +2134,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           <SegmentedControl
                             value={genModel}
                             onChange={setGenModel}
-                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: '4K' }]}
+                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
                           />
                         </div>
                       </div>
