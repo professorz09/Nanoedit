@@ -34,7 +34,7 @@
 // function used to run on, the SDK had no idea imageConfig existed and
 // silently dropped it before building the Vertex request — so 2K/4K
 // requests for gemini-3-pro-image always came back at the default 1K.
-import { GoogleGenAI } from 'npm:@google/genai@1.48.0';
+import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CORS = {

@@ -18,7 +18,7 @@
 //   EMBED_MODEL = gemini-embedding-2     (optional override; falls back to
 //                 the same model via OPENROUTER_API_KEY if Vertex is down)
 // ═══════════════════════════════════════════════════════════════════════════
-import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
+import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { embedWithFallback } from '../_shared/embedding.ts';
 
