@@ -37,6 +37,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { embedWithFallback } from '../_shared/embedding.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -46,8 +47,7 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-2.5-flash';
-const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
+const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-3.5-flash-lite';
 const EMBED_DIMS = 768; // must match style_images.embedding vector(768)
 const BUCKET = 'styles';
 const MAX_IMAGE_B64_CHARS = 12_000_000; // ~9 MB decoded, matches the "generate" function's cap
@@ -249,17 +249,7 @@ Deno.serve(async (req) => {
     // style matching (or failing to match) exactly as it did before.
     const ai = makeVertex();
     if (!ai) return json(500, { error: 'Indexing service is not configured.' });
-    let embedding: number[] | null = null;
-    try {
-      const r: any = await ai.models.embedContent({
-        model: EMBED_MODEL,
-        contents: embedText(meta, null),
-        config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_DOCUMENT' },
-      });
-      embedding = r?.embeddings?.[0]?.values ?? null;
-    } catch (e: any) {
-      console.error('embed_failed', e?.message || String(e));
-    }
+    const embedding = await embedWithFallback(ai, embedText(meta, null), EMBED_DIMS, 'RETRIEVAL_DOCUMENT');
     if (!embedding?.length) return json(502, { error: 'Could not re-index this style. Please try again.' });
 
     const { error: updErr } = await admin
@@ -301,17 +291,7 @@ Deno.serve(async (req) => {
     if (title) meta.title = title;
 
     // 2) Embed.
-    let embedding: number[] | null = null;
-    try {
-      const r: any = await ai.models.embedContent({
-        model: EMBED_MODEL,
-        contents: embedText(meta, title),
-        config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_DOCUMENT' },
-      });
-      embedding = r?.embeddings?.[0]?.values ?? null;
-    } catch (e: any) {
-      console.error('embed_failed', e?.message || String(e));
-    }
+    const embedding = await embedWithFallback(ai, embedText(meta, title), EMBED_DIMS, 'RETRIEVAL_DOCUMENT');
     if (!embedding?.length) return json(502, { error: 'Indexing is busy right now. Please try again in a moment.' });
 
     // 3) Upload + insert as a GLOBAL style (user_id null).

@@ -15,8 +15,16 @@
 //
 // Providers, in order:  Vertex (Gemini)  →  OpenRouter (fallback)
 //
+// Model: gemini-3.5-flash-lite for normal-sized prompts (title/concept and
+// most chapter runs); a real long transcript (chapters can run up to
+// MAX_PROMPT_CHARS) steps up to gemini-3.8-flash instead — Flash-Lite is
+// tuned for short, cheap, high-volume calls, not sustained reasoning over
+// tens of thousands of characters of transcript.
+//
 // Deploy:  supabase functions deploy text --project-ref vowgdlbvundorxwjdntu --use-api
-// Secrets: reuses VERTEX_API_KEY / OPENROUTER_API_KEY (+ optional OPENROUTER_TEXT_MODEL).
+// Secrets: reuses VERTEX_API_KEY / OPENROUTER_API_KEY (+ optional
+//   VERTEX_TEXT_MODEL / VERTEX_TEXT_MODEL_LARGE / OPENROUTER_TEXT_MODEL /
+//   OPENROUTER_TEXT_MODEL_LARGE overrides).
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -38,6 +46,15 @@ const refundOnce = async (admin: any, uid: string) => {
 };
 
 const MAX_PROMPT_CHARS = 32000; // chapters can include a long transcript
+
+// Above this, the prompt is a real transcript (Chapter Maker), not a short
+// title/concept prompt — step up to the bigger model rather than run a long
+// transcript through the lite tier it isn't tuned for.
+const LARGE_PROMPT_THRESHOLD = 6000;
+const MODEL_DEFAULT = Deno.env.get('VERTEX_TEXT_MODEL') || 'gemini-3.5-flash-lite';
+const MODEL_LARGE = Deno.env.get('VERTEX_TEXT_MODEL_LARGE') || 'gemini-3.8-flash';
+const OR_MODEL_DEFAULT = Deno.env.get('OPENROUTER_TEXT_MODEL') || 'google/gemini-3.5-flash-lite';
+const OR_MODEL_LARGE = Deno.env.get('OPENROUTER_TEXT_MODEL_LARGE') || 'google/gemini-3.8-flash';
 
 // `concept` costs 0 credits (see COSTS below) — without SOME bound, a caller
 // could skip the YouTube UI flow entirely and hammer this + match-style
@@ -141,13 +158,14 @@ Deno.serve(async (req) => {
   }
 
   const errs: string[] = [];
+  const isLargePrompt = prompt.length > LARGE_PROMPT_THRESHOLD;
 
   // 1) Vertex (Gemini) — service-account JSON or Vertex Express key
   const ai = makeVertex();
   if (ai) {
     try {
       const result: any = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: isLargePrompt ? MODEL_LARGE : MODEL_DEFAULT,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
       });
       let text = '';
@@ -161,7 +179,7 @@ Deno.serve(async (req) => {
   const orKey = Deno.env.get('OPENROUTER_API_KEY');
   if (orKey) {
     try {
-      const model = Deno.env.get('OPENROUTER_TEXT_MODEL') || 'google/gemini-2.5-flash';
+      const model = isLargePrompt ? OR_MODEL_LARGE : OR_MODEL_DEFAULT;
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json', 'X-Title': 'PodcastFlux' },

@@ -16,11 +16,13 @@
 //
 // Deploy:  supabase functions deploy index-style --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
-//   TAG_MODEL   = gemini-2.5-flash        (optional override)
-//   EMBED_MODEL = gemini-embedding-001    (optional override)
+//   TAG_MODEL   = gemini-3.5-flash-lite   (optional override)
+//   EMBED_MODEL = gemini-embedding-2      (optional override; falls back to
+//                 the same model via OPENROUTER_API_KEY if Vertex is down)
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { embedWithFallback } from '../_shared/embedding.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -30,8 +32,7 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-2.5-flash';
-const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
+const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-3.5-flash-lite';
 const EMBED_DIMS = 768; // must match style_images.embedding vector(768)
 const BUCKET = 'styles';
 const MAX_PER_USER = 20; // per-user cap on custom styles (quota / abuse guard)
@@ -206,17 +207,7 @@ Deno.serve(async (req) => {
   if (title) meta.title = title;
 
   // 3) Embed the topic fingerprint (same model + dims + taskType as the index).
-  let embedding: number[] | null = null;
-  try {
-    const r: any = await ai.models.embedContent({
-      model: EMBED_MODEL,
-      contents: embedText(meta, title),
-      config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_DOCUMENT' },
-    });
-    embedding = r?.embeddings?.[0]?.values ?? null;
-  } catch (e: any) {
-    console.error('embed_failed', e?.message || String(e));
-  }
+  const embedding = await embedWithFallback(ai, embedText(meta, title), EMBED_DIMS, 'RETRIEVAL_DOCUMENT');
   if (!embedding?.length) return json(502, { error: 'Indexing is busy right now. Please try again in a moment.' });
 
   // 4) Insert the owned style row.
