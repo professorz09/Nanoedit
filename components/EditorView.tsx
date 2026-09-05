@@ -396,8 +396,14 @@ export default function EditorView(props: EditorViewProps) {
     setBrushCursor({ x: e.clientX, y: e.clientY, d });
   };
 
+  // animate-fade-IN (opacity only), never fade-in-UP: that one's transform
+  // persists (fill-mode: both) and would make this full-page root the
+  // containing block for every position:fixed child — the mobile prompt bar
+  // would sit at the bottom of the whole document instead of the screen, and
+  // the picker/viewer modals would center far below the fold, leaving just
+  // their backdrop visible. See index.css.
   return (
-    <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans animate-fade-in-up ${theme === 'light' ? 'thumb-light' : ''}`}>
+    <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans animate-fade-in ${theme === 'light' ? 'thumb-light' : ''}`}>
 
       {/* Mobile header — back + brand. */}
       <header className={`lg:hidden sticky top-0 z-30 px-4 h-14 flex items-center gap-2.5 thumb-glass border-b border-thumb-line transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>

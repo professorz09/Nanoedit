@@ -23,6 +23,22 @@ body {
   animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Opacity-only fade, for containers that have position:fixed descendants.
+   .animate-fade-in-up must NEVER go on one of those: its `both` fill-mode
+   leaves transform: translateY(0) applied for good, and ANY transform makes
+   an element the containing block for the fixed elements inside it. Put it on
+   a full-page wrapper and every fixed child (modal backdrops, the mobile
+   bottom bar) starts positioning against the whole scrollable page instead of
+   the viewport — a centered modal ends up thousands of pixels below the fold,
+   showing only its backdrop. Opacity animates fine without that side effect. */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* ── Shimmer / skeleton ──
    A single fixed-width highlight band sweeps left→right across the element
    (no-repeat), so the loop is seamless: linear timing + a band that starts
