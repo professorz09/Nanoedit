@@ -47,7 +47,7 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-2.5-flash';
+const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-3.5-flash-lite';
 const EMBED_DIMS = 768; // must match style_images.embedding vector(768)
 const BUCKET = 'styles';
 const MAX_IMAGE_B64_CHARS = 12_000_000; // ~9 MB decoded, matches the "generate" function's cap

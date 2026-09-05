@@ -263,9 +263,10 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [onlyMyStyles, setOnlyMyStyles] = useState(false);
   // Pushes both the AI concepts and the final render toward a bolder,
   // more visually unique/dramatic take on the topic (shock-value staging,
-  // unexpected composition) — off by default since it's less predictable
-  // than the standard photorealistic path.
-  const [creativeMode, setCreativeMode] = useState(false);
+  // unexpected composition) — on by default so concepts read as bold and
+  // distinctive rather than a plain literal depiction; still toggleable off
+  // for a more predictable, straightforwardly photorealistic take.
+  const [creativeMode, setCreativeMode] = useState(true);
   // YouTube-only: ground concepts strictly in the transcript's actual main
   // topics instead of one loosely-inspired vivid scene — off by default
   // since the freer, more vivid-scene concept style is still the default.

@@ -16,7 +16,7 @@
 //
 // Deploy:  supabase functions deploy index-style --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
-//   TAG_MODEL   = gemini-2.5-flash        (optional override)
+//   TAG_MODEL   = gemini-3.5-flash-lite   (optional override)
 //   EMBED_MODEL = gemini-embedding-2      (optional override; falls back to
 //                 the same model via OPENROUTER_API_KEY if Vertex is down)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -32,7 +32,7 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-2.5-flash';
+const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-3.5-flash-lite';
 const EMBED_DIMS = 768; // must match style_images.embedding vector(768)
 const BUCKET = 'styles';
 const MAX_PER_USER = 20; // per-user cap on custom styles (quota / abuse guard)
