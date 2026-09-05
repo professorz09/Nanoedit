@@ -90,6 +90,11 @@ const SHOWCASE_TEMPLATE_PREVIEWS: Record<string, string> = {
 // SAME link never re-runs it, but every image, cached-analysis or not,
 // costs 3 credits; the server enforces this (sourceMode: 'youtube').
 const YOUTUBE_IMAGE_COST = 3;
+// Mirrors RES_SURCHARGE in supabase/functions/generate + api/generate — 4K
+// costs extra credits server-side, so the pre-flight credit check here has to
+// account for it too, or a user on 4K could pass this check and still hit a
+// mid-batch 402 the server enforces anyway.
+const RES_SURCHARGE_4K = 2;
 
 const BASE_THUMB = 'Design a top-tier, agency-grade, scroll-stopping YouTube thumbnail in 16:9 landscape — match the production quality, polish and click-worthiness of the best viral thumbnails from the biggest creators. Unless a specific art style is explicitly requested, lean photorealistic and lifelike — real-camera depth of field, natural skin texture, and a sharp, detailed, expressive face with realistic lighting. Compose it in whatever way best suits the topic — a bold real scene, a dramatic environment, or a clean backdrop — with a strong, clear focal point and real depth; just avoid random, meaningless clutter. Depict the subject and topic accurately. Use dramatic lighting, punchy vibrant colors and strong contrast so it pops even at small sizes. Render at high fidelity — crisp, detailed and clean, with no blur, noise, artifacts, warping or distorted anatomy. Do not add extra text, letters, captions, subtitles, watermarks or gibberish beyond any text that is explicitly requested.';
 
@@ -158,8 +163,18 @@ const textDirective = (t: string) => {
   return `Overlay ONE bold, chunky, EXTRA-LARGE uppercase title text — ${hook}. The text color MUST be pure white with a thick solid black outline and a strong drop shadow for maximum contrast. Place it clear of the subject's face and keep it to at most one third of the frame. Render ONLY this single piece of text — absolutely no other words, duplicate captions, subtitles, stray letters or gibberish anywhere else on the image.`;
 };
 
+// Quality tiers exposed in the UI, mapped to what the backend actually needs:
+// the image model tier (flash = fast/1K-only; pro = the model that honours
+// 2K/4K) AND the exact resolution to request from it. Explicit resolution
+// labels (2K/4K) instead of a vague "Fast/Pro" toggle — 4K was already the
+// resolution the homepage advertises, but the old toggle never actually
+// requested it.
+type QualityTier = 'fast' | '2k' | '4k';
+const QUALITY_RESOLUTION: Record<QualityTier, '1K' | '2K' | '4K'> = { fast: '1K', '2k': '2K', '4k': '4K' };
+const QUALITY_MODEL: Record<QualityTier, 'flash' | 'pro'> = { fast: 'flash', '2k': 'pro', '4k': 'pro' };
+
 interface Props {
-  onGenerate: (prompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; aspect?: string; sourceMode?: 'youtube' }) => void;
+  onGenerate: (prompt: string, sources: string[], opts?: { count?: number; modelType?: 'flash' | 'pro'; resolution?: '1K' | '2K' | '4K'; aspect?: string; sourceMode?: 'youtube' }) => void;
   generatedImages: GeneratedImage[];
   queue: QueueItem[];
   isProcessing: boolean;
@@ -281,7 +296,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
-  const [genModel, setGenModel] = useState<'fast' | 'pro'>('pro');
+  const [genModel, setGenModel] = useState<QualityTier>('2k');
   const [format, setFormat] = useState<'thumb' | 'short'>('thumb'); // 16:9 thumbnail vs 9:16 Shorts
   const [busy, setBusy] = useState(false);
   type Note = { text: string; kind: 'error' | 'success' | 'info' };
@@ -531,7 +546,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     if (configured && !user) { requireLogin('Log in to generate your thumbnail.'); return; }
     if (configured && user && !creditsLoading && totalCredits <= 0) { goPricing(); return; }
     const prompt = `${trimmed}. ${textDirective(titleText)} ${BASE_THUMB}`;
-    onGenerate(prompt, [...uploads], { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash' });
+    onGenerate(prompt, [...uploads], { count: genCount, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel] });
     scrollToResults();
   };
 
@@ -613,7 +628,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     // button entirely, so it needs its own login/credit check before queuing.
     if (configured && !user) { requireLogin('Log in to change faces.'); return; }
     if (configured && user && !creditsLoading && totalCredits <= 0) { goPricing(); return; }
-    onGenerate(prompt, sources, { count: 1, modelType: genModel === 'pro' ? 'pro' : 'flash' });
+    onGenerate(prompt, sources, { count: 1, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel] });
     setChangeFaceTarget(null);
     scrollToResults();
   };
@@ -689,9 +704,10 @@ const ThumbnailStudio: React.FC<Props> = ({
         // under-checking here would let a user with (say) 4 credits queue
         // 4 variations, watch the first one succeed, and then get 3
         // "Generation failed" cards instead of a clear message up front.
-        if (configured && !creditsLoading && totalCredits < YOUTUBE_IMAGE_COST * wantCount) {
+        const perThumbCost = YOUTUBE_IMAGE_COST + (genModel === '4k' ? RES_SURCHARGE_4K : 0);
+        if (configured && !creditsLoading && totalCredits < perThumbCost * wantCount) {
           setBusy(false);
-          setNoteText(`This costs ${YOUTUBE_IMAGE_COST} credits per thumbnail — ${YOUTUBE_IMAGE_COST * wantCount} credits for ${wantCount}. Please top up your plan.`);
+          setNoteText(`This costs ${perThumbCost} credits per thumbnail — ${perThumbCost * wantCount} credits for ${wantCount}. Please top up your plan.`);
           goPricing();
           return;
         }
@@ -780,7 +796,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       };
 
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
-      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9', sourceMode: 'youtube' as const };
+      const genOpts = { count: 1, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel], aspect: format === 'short' ? '9:16' : '16:9', sourceMode: 'youtube' as const };
       // wantCount (Variations picker, 1-4) computed above — each slot still
       // gets its own onGenerate() call (one real image per call), just like
       // every other mode's variation handling in handleStudioGenerate.
@@ -835,6 +851,52 @@ const ThumbnailStudio: React.FC<Props> = ({
         // side came back blank, same as conceptPair above.
         const headlinePair = [headlineA || headlineB, headlineB || headlineA];
         const headlines = Array.from({ length: wantCount }, (_, i) => headlinePair[i % 2]);
+
+        // Second concept pass: NOW that we know which curated style each slot
+        // actually landed on, ask the AI to elevate that slot's concept using
+        // the style's own proven composition/mood as inspiration — WITHOUT
+        // copying its specific subject/scene (that belongs to a different,
+        // unrelated thumbnail; the image prompt below already forbids that
+        // separately). This is a refinement of what's already grounded in the
+        // video's content, not a replacement — "inspired by, better", not "same as".
+        // Free (0-credit) op, same as the first concept call. Deduped by
+        // (concept, style) pair and run in parallel so it doesn't multiply
+        // latency by wantCount when several slots share the same combo.
+        setNoteText('Refining concepts to match your best-fit styles…', 'info');
+        const pairKey = (c: string, url: string) => `${c} ${url}`;
+        const uniquePairs = new Map<string, { concept: string; style: typeof chosen[number] }>();
+        for (let i = 0; i < wantCount; i++) {
+          const c = concepts[i];
+          const s = chosen[i];
+          if (c && s) uniquePairs.set(pairKey(c, s.url), { concept: c, style: s });
+        }
+        const refinedByKey = new Map<string, string>();
+        await Promise.all(Array.from(uniquePairs.entries()).map(async ([key, { concept, style }]) => {
+          const meta = style.meta || {};
+          const styleHint = meta.summary ? `REFERENCE STYLE (from our curated library, for energy/composition only): ${meta.summary}\n` : '';
+          try {
+            const raw = await generateText(
+              `You are a world-class YouTube thumbnail art director. Elevate the DRAFT concept below by drawing inspiration from a proven, high-performing reference style — its composition, framing, mood, lighting and energy — WITHOUT copying its specific subject, people, props or exact scene (that reference belongs to a completely different, unrelated thumbnail).\n\n` +
+              `Rules:\n` +
+              `- Stay grounded in the DRAFT concept's actual subject/topic — never change what the thumbnail is about.\n` +
+              `- Improve it: sharper focal point, stronger composition, better use of light/colour/mood — inspired BY the reference's energy, not a copy of its content. It must end up BETTER than the draft, never identical to the reference.\n` +
+              `- Reply with ONLY one improved vivid sentence, concrete and purely visual — no preamble, no mention of "style", "reference" or "draft".\n\n` +
+              `DRAFT CONCEPT: ${concept}\n${styleHint}`,
+              'concept'
+            );
+            const improved = raw?.trim().replace(/^["']|["']$/g, '').slice(0, 400);
+            if (improved) refinedByKey.set(key, improved);
+          } catch (_e) {
+            /* refine is best-effort — falls back to the draft concept below */
+          }
+        }));
+        for (let i = 0; i < wantCount; i++) {
+          const c = concepts[i];
+          const s = chosen[i];
+          if (!c || !s) continue;
+          const refined = refinedByKey.get(pairKey(c, s.url));
+          if (refined) concepts[i] = refined;
+        }
 
         setNoteText('Designing your thumbnails…', 'info');
         let launched = 0;
@@ -914,7 +976,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         // as those modes.
         const wantCount = Math.max(1, Math.min(4, genCount));
         const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
-        const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+        const genOpts = { count: 1, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel], aspect: format === 'short' ? '9:16' : '16:9' };
 
         setBusy(true);
         const refB64 = await urlToBase64(selectedRef);
@@ -1008,7 +1070,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       const hasFace = uploads.length > 0;
       const wantCount = Math.max(1, Math.min(4, genCount));
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
-      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+      const genOpts = { count: 1, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel], aspect: format === 'short' ? '9:16' : '16:9' };
 
       setBusy(true);
       setNoteText('Designing two fresh thumbnail concepts…', 'info');
@@ -1118,7 +1180,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       const topic = promptText.trim();
       const wantCount = Math.max(1, Math.min(4, genCount));
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
-      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+      const genOpts = { count: 1, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel], aspect: format === 'short' ? '9:16' : '16:9' };
 
       // Optional style reference — converted once, reused for every slot.
       // Kept clearly separate from the sketch/face sources so the "match
@@ -1185,7 +1247,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       const hasFace = uploads.length > 0;
       const wantCount = Math.max(1, Math.min(4, genCount));
       const finalize = (p: string) => (format === 'short' ? p.replace(BASE_THUMB, BASE_SHORT) : p);
-      const genOpts = { count: 1, modelType: (genModel === 'pro' ? 'pro' : 'flash') as 'pro' | 'flash', aspect: format === 'short' ? '9:16' : '16:9' };
+      const genOpts = { count: 1, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel], aspect: format === 'short' ? '9:16' : '16:9' };
 
       setNoteText(`Designing ${wantCount} fresh thumbnail concept${wantCount > 1 ? 's' : ''}…`, 'info');
       let concepts: string[] = [];
@@ -1233,7 +1295,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     // mode appends BASE_THUMB verbatim, so one replace covers them all).
     if (format === 'short') prompt = prompt.replace(BASE_THUMB, BASE_SHORT);
 
-    onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
+    onGenerate(prompt, sources, { count: genCount, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel], aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
   }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, selectedYtStyle, onlyMyStyles, creativeMode, accurateMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
@@ -1645,6 +1707,16 @@ const ThumbnailStudio: React.FC<Props> = ({
                           <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
                         )}
 
+                        <div className="space-y-1.5">
+                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                          <SegmentedControl
+                            value={genModel}
+                            onChange={setGenModel}
+                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
+                          />
+                          <p className="text-[11px] text-thumb-sub">Fast (1K) is quickest; 2K (default) uses our higher-end model for sharper thumbnails. 4K is our highest resolution and costs {RES_SURCHARGE_4K} extra credits per thumbnail.</p>
+                        </div>
+
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Stick to video's topics</span>
                           <button
@@ -1990,9 +2062,12 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Output options */}
+              {/* Output options. YouTube mode shows only Variations here —
+                  its Quality control lives inside Advanced instead (below
+                  Creative concepts), since it's a resolution choice worth a
+                  second's thought, not a glance-and-tap like Variations. */}
               {mode !== 'templates' && (
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className={mode === 'youtube' ? '' : 'grid grid-cols-2 gap-2.5'}>
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
                     <SegmentedControl
@@ -2001,14 +2076,16 @@ const ThumbnailStudio: React.FC<Props> = ({
                       options={[1, 2, 3, 4].map(n => ({ value: String(n), label: n }))}
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
-                    <SegmentedControl
-                      value={genModel}
-                      onChange={setGenModel}
-                      options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
-                    />
-                  </div>
+                  {mode !== 'youtube' && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                      <SegmentedControl
+                        value={genModel}
+                        onChange={setGenModel}
+                        options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2057,7 +2134,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           <SegmentedControl
                             value={genModel}
                             onChange={setGenModel}
-                            options={[{ value: 'fast', label: 'Fast' }, { value: 'pro', label: 'Pro' }]}
+                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
                           />
                         </div>
                       </div>

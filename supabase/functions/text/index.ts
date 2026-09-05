@@ -64,7 +64,11 @@ const OR_MODEL_LARGE = Deno.env.get('OPENROUTER_TEXT_MODEL_LARGE') || 'google/ge
 // gap outright (a determined caller can still pace themselves under the
 // limit) but it bounds the abuse to a rate a genuine multi-video session
 // would never hit. Same rolling-window pattern "transcript" already uses.
-const FREE_LIMIT = 20;
+// Raised from 20: a single YouTube Generate click now costs up to 1 (initial
+// concept) + wantCount (per-style refine pass, deduped by concept+style
+// pair) free calls instead of just 1, so the old ceiling capped a genuine
+// user doing several 4-variation generations in an hour.
+const FREE_LIMIT = 40;
 const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 async function checkFreeRateLimit(admin: any, uid: string, tool: string): Promise<boolean> {
