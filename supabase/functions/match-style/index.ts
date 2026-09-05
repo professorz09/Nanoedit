@@ -4,7 +4,7 @@
 //
 // The browser can't embed text (the Vertex key is server-side only), so it POSTs
 // the video's topic here. We embed it with the SAME model used to index the
-// styles (gemini-embedding-001 → 768 dims) and run the match_styles() RPC to find
+// styles (gemini-embedding-2 → 768 dims) and run the match_styles() RPC to find
 // the closest styles by cosine similarity. Returns their public URLs + tags so
 // the client can recreate the best-fitting styles.
 //
@@ -15,10 +15,12 @@
 //
 // Deploy:  supabase functions deploy match-style --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
-//   EMBED_MODEL = gemini-embedding-001   (optional override)
+//   EMBED_MODEL = gemini-embedding-2     (optional override; falls back to
+//                 the same model via OPENROUTER_API_KEY if Vertex is down)
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { embedWithFallback } from '../_shared/embedding.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,7 +30,6 @@ const CORS = {
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const EMBED_MODEL = Deno.env.get('EMBED_MODEL') || 'gemini-embedding-001';
 const EMBED_DIMS = 768; // must match the style_images.embedding vector(768) column
 const BUCKET = 'styles';
 const MAX_TEXT = 8000;
@@ -103,24 +104,16 @@ Deno.serve(async (req) => {
   const ownOnly = body?.ownOnly === true;
 
   const ai = makeVertex();
-  if (!ai) return json(500, { error: 'Match service is not configured.' });
+  if (!ai && !Deno.env.get('OPENROUTER_API_KEY')) {
+    return json(500, { error: 'Match service is not configured.' });
+  }
 
   // 1) Embed the query topic (same model + dims as the offline index).
-  let embedding: number[] | null = null;
-  try {
-    const r: any = await Promise.race([
-      ai.models.embedContent({
-        model: EMBED_MODEL,
-        contents: text,
-        // Styles were indexed as RETRIEVAL_DOCUMENT; the query is RETRIEVAL_QUERY.
-        config: { outputDimensionality: EMBED_DIMS, taskType: 'RETRIEVAL_QUERY' },
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('embed_timeout')), 15000)),
-    ]);
-    embedding = r?.embeddings?.[0]?.values ?? null;
-  } catch (e: any) {
-    console.error('embed_failed', e?.message || String(e));
-  }
+  // Styles were indexed as RETRIEVAL_DOCUMENT; the query is RETRIEVAL_QUERY.
+  // Falls back to the same google/gemini-embedding-2 model served through
+  // OpenRouter if Vertex is unavailable — see _shared/embedding.ts for why
+  // that stays safe to mix with Vertex-produced vectors (same model, same dims).
+  const embedding = await embedWithFallback(ai, text, EMBED_DIMS, 'RETRIEVAL_QUERY');
   if (!embedding?.length) {
     return json(502, { error: 'Could not analyse the topic. Please try again.' });
   }
