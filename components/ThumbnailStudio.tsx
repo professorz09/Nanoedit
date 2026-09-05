@@ -1712,7 +1712,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           <SegmentedControl
                             value={genModel}
                             onChange={setGenModel}
-                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
+                            options={[{ value: 'fast', label: 'Fast' }, { value: '2k', label: '2K' }, { value: '4k', label: '4K' }]}
                           />
                           <p className="text-[11px] text-thumb-sub">Fast (1K) is quickest; 2K (default) uses our higher-end model for sharper thumbnails. 4K is our highest resolution and costs {RES_SURCHARGE_4K} extra credits per thumbnail.</p>
                         </div>
@@ -2079,7 +2079,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       <SegmentedControl
                         value={genModel}
                         onChange={setGenModel}
-                        options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
+                        options={[{ value: 'fast', label: 'Fast' }, { value: '2k', label: '2K' }, { value: '4k', label: '4K' }]}
                       />
                     </div>
                   )}
@@ -2131,7 +2131,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           <SegmentedControl
                             value={genModel}
                             onChange={setGenModel}
-                            options={[{ value: 'fast', label: 'Fast · 1K' }, { value: '2k', label: '2K' }, { value: '4k', label: `4K +${RES_SURCHARGE_4K}` }]}
+                            options={[{ value: 'fast', label: 'Fast' }, { value: '2k', label: '2K' }, { value: '4k', label: '4K' }]}
                           />
                         </div>
                       </div>
