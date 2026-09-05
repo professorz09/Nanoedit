@@ -248,6 +248,21 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [autoGenerateOnEntry, setAutoGenerateOnEntry] = useState(false);
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
+  // Advanced's "Describe what you want" is direction for ONE specific video
+  // ("put THIS text on the thumbnail", "show his face on the left"…). Pasting
+  // a different link and silently carrying that over produces thumbnails for
+  // the new video still built around the old one's instructions. Clear it when
+  // the link actually switches to a different video — only between two real
+  // videos, so typing direction first and pasting the link after still works,
+  // and so the other modes (which share this field) are never touched.
+  const lastYtIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode !== 'youtube') return;
+    const id = extractYouTubeId(youtubeUrl);
+    const prev = lastYtIdRef.current;
+    if (id && prev && id !== prev) setPromptText('');
+    if (id) lastYtIdRef.current = id;
+  }, [youtubeUrl, mode]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>(THUMBNAIL_TEMPLATES[0].id);
   // The Styles tab has a single picker: pick a REAL thumbnail and the AI recreates
   // its exact look for your topic. Default to the first one so a style is always set.

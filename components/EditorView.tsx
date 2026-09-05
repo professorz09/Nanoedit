@@ -396,8 +396,14 @@ export default function EditorView(props: EditorViewProps) {
     setBrushCursor({ x: e.clientX, y: e.clientY, d });
   };
 
+  // animate-fade-IN (opacity only), never fade-in-UP: that one's transform
+  // persists (fill-mode: both) and would make this full-page root the
+  // containing block for every position:fixed child — the mobile prompt bar
+  // would sit at the bottom of the whole document instead of the screen, and
+  // the picker/viewer modals would center far below the fold, leaving just
+  // their backdrop visible. See index.css.
   return (
-    <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans animate-fade-in-up ${theme === 'light' ? 'thumb-light' : ''}`}>
+    <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans animate-fade-in ${theme === 'light' ? 'thumb-light' : ''}`}>
 
       {/* Mobile header — back + brand. */}
       <header className={`lg:hidden sticky top-0 z-30 px-4 h-14 flex items-center gap-2.5 thumb-glass border-b border-thumb-line transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
@@ -1182,12 +1188,16 @@ export default function EditorView(props: EditorViewProps) {
                     </div>
                  ) : (
                   <div className="relative inline-block">
-                      {/* Without this, a slow load (or the few retries RetryImage
-                          runs on a transient 404) shows nothing but the black
-                          backdrop for several seconds — easy to mistake for the
-                          viewer having failed to open at all. */}
+                      {/* Spinner sits BEHIND the image (rendered first, never
+                          gating its visibility): a slow load otherwise shows
+                          nothing but the black backdrop for several seconds,
+                          easy to mistake for the viewer failing to open. It is
+                          deliberately not an opacity gate on the image — a
+                          cached image can fire `load` before React attaches the
+                          handler, so any "hide until loaded" flag can get stuck
+                          and hide a perfectly good image forever. */}
                       {!viewerImgReady && (
-                          <div className="absolute inset-0 flex items-center justify-center min-w-[200px] min-h-[150px]">
+                          <div className="absolute inset-0 flex items-center justify-center min-w-[200px] min-h-[150px] pointer-events-none">
                               <div className="w-8 h-8 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
                           </div>
                       )}
@@ -1196,7 +1206,7 @@ export default function EditorView(props: EditorViewProps) {
                           url={viewedImage}
                           onFail={() => setImageLoadError(true)}
                           alt="Full View"
-                          className={`origin-center select-none block transition-opacity duration-200 ${viewerImgReady ? 'opacity-100' : 'opacity-0'}`}
+                          className="origin-center select-none block relative"
                           style={{
                               transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                               maxWidth: '90vw',
