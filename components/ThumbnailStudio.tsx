@@ -223,6 +223,14 @@ const ThumbnailStudio: React.FC<Props> = ({
 }) => {
   const [mode, setMode] = useState<ThumbInputMode>('templates');
   const [youtubeUrl, setYoutubeUrl] = useState('');
+  // Set by startFromHome() when a YouTube link was pasted straight into the
+  // home-page box, so Generate fires automatically once the YouTube flow's
+  // state (mode/youtubeUrl) has actually committed — calling handleGenerate()
+  // synchronously right after setYoutubeUrl/setMode would still see the OLD
+  // pre-update values (React state updates aren't applied until the next
+  // render), so a plain prompt string generates immediately inline but this
+  // path needs one render cycle before it's safe to call handleGenerate.
+  const [autoGenerateOnEntry, setAutoGenerateOnEntry] = useState(false);
   const [titleText, setTitleText] = useState('');
   const [promptText, setPromptText] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>(THUMBNAIL_TEMPLATES[0].id);
@@ -495,6 +503,14 @@ const ThumbnailStudio: React.FC<Props> = ({
       setNote(null);
       setSection('generate');
       setSidebarOpen(false);
+      // Same login/credits gate as the plain-prompt path below — only queue
+      // the auto-generate if it could actually proceed, so a logged-out or
+      // zero-credit visitor lands on the YouTube tab ready to go instead of
+      // silently no-oping (or getting shunted to a login/pricing prompt they
+      // didn't ask for by clicking what looked like a "generate" button).
+      if (!(configured && !user) && !(configured && user && !creditsLoading && totalCredits <= 0)) {
+        setAutoGenerateOnEntry(true);
+      }
       setTimeout(() => document.getElementById('thumb-tool')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
       return;
     }
@@ -1220,6 +1236,14 @@ const ThumbnailStudio: React.FC<Props> = ({
     onGenerate(prompt, sources, { count: genCount, modelType: genModel === 'pro' ? 'pro' : 'flash', aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
   }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, selectedYtStyle, onlyMyStyles, creativeMode, accurateMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
+
+  // Fires the queued auto-generate (see startFromHome) once mode/youtubeUrl
+  // have actually committed and handleGenerate's closure reflects them.
+  useEffect(() => {
+    if (!autoGenerateOnEntry) return;
+    setAutoGenerateOnEntry(false);
+    handleGenerate();
+  }, [autoGenerateOnEntry, handleGenerate]);
 
   const sortedQueue = [...queue].sort((a, b) =>
     a.status === 'failed' ? 1 : b.status === 'failed' ? -1 : 0);
