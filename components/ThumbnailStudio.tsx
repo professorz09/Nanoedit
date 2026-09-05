@@ -308,6 +308,11 @@ const ThumbnailStudio: React.FC<Props> = ({
   // topics instead of one loosely-inspired vivid scene — off by default
   // since the freer, more vivid-scene concept style is still the default.
   const [accurateMode, setAccurateMode] = useState(false);
+  // YouTube-only: follow the auto-matched style's actual layout instead of
+  // just borrowing its energy. Off by default — the looser reading keeps more
+  // room for the video's own scene, this one deliberately trades that for
+  // "make it look like the reference".
+  const [styleLockMode, setStyleLockMode] = useState(false);
   const [genCount, setGenCount] = useState(2);
   // Default to Pro (Nano Banana Pro / gemini-3-pro-image) — same 1-credit cost as Fast
   // but far higher fidelity, which is what makes results match the reference thumbnails.
@@ -947,12 +952,22 @@ const ThumbnailStudio: React.FC<Props> = ({
           const styleHint = meta.summary ? `REFERENCE STYLE (from our curated library, for energy/composition only): ${meta.summary}\n` : '';
           try {
             const raw = await generateText(
-              `You are a world-class YouTube thumbnail art director. Elevate the DRAFT concept below by drawing inspiration from a proven, high-performing reference style — its composition, framing, mood, lighting and energy — WITHOUT copying its specific subject, people, props or exact scene (that reference belongs to a completely different, unrelated thumbnail).\n\n` +
-              `Rules:\n` +
-              `- Stay grounded in the DRAFT concept's actual subject/topic — never change what the thumbnail is about.\n` +
-              `- Improve it: sharper focal point, stronger composition, better use of light/colour/mood — inspired BY the reference's energy, not a copy of its content. It must end up BETTER than the draft, never identical to the reference.\n` +
-              `- Reply with ONLY one improved vivid sentence, concrete and purely visual — no preamble, no mention of "style", "reference" or "draft".\n\n` +
-              `DRAFT CONCEPT: ${concept}\n${styleHint}`,
+              (styleLockMode
+                // "Match the style's look" ON: the reference's LAYOUT is the
+                // brief. Rewrite the concept into that exact staging, with the
+                // video's own subject and topic dropped into it.
+                ? `You are a world-class YouTube thumbnail art director. Rewrite the DRAFT concept so it is staged EXACTLY like the proven reference thumbnail described below — same composition and layout, same subject placement and framing, same camera angle and distance, same lighting and colour grade, same energy — but about the DRAFT's own topic, with its own subject in that position.\n\n` +
+                  `Rules:\n` +
+                  `- Keep the DRAFT's topic and subject. Only the staging comes from the reference — never its specific people, props, brands or wording.\n` +
+                  `- Describe the layout concretely: where the subject sits in frame, what fills the rest of it, the angle, the light, the palette. A reader should be able to see that it mirrors the reference's arrangement.\n` +
+                  `- Reply with ONLY one vivid sentence, concrete and purely visual — no preamble, no mention of "style", "reference" or "draft".\n\n` +
+                  `DRAFT CONCEPT: ${concept}\n${styleHint}`
+                : `You are a world-class YouTube thumbnail art director. Elevate the DRAFT concept below by drawing inspiration from a proven, high-performing reference style — its composition, framing, mood, lighting and energy — WITHOUT copying its specific subject, people, props or exact scene (that reference belongs to a completely different, unrelated thumbnail).\n\n` +
+                  `Rules:\n` +
+                  `- Stay grounded in the DRAFT concept's actual subject/topic — never change what the thumbnail is about.\n` +
+                  `- Improve it: sharper focal point, stronger composition, better use of light/colour/mood — inspired BY the reference's energy, not a copy of its content. It must end up BETTER than the draft, never identical to the reference.\n` +
+                  `- Reply with ONLY one improved vivid sentence, concrete and purely visual — no preamble, no mention of "style", "reference" or "draft".\n\n` +
+                  `DRAFT CONCEPT: ${concept}\n${styleHint}`),
               'concept'
             );
             const improved = raw?.trim().replace(/^["']|["']$/g, '').slice(0, 400);
@@ -1018,7 +1033,22 @@ const ThumbnailStudio: React.FC<Props> = ({
                 : `This style shows headline text — add ONE short punchy 2-4 word uppercase headline capturing THIS video's hook, in the same position/treatment as the style; correctly spelled, no other words or gibberish. ${noOldWords}`)
             : `This style uses NO on-image text — represent the topic through VISUALS ONLY (subject, scene, props, symbols). Do NOT add any text, letters, words or numbers anywhere. `;
 
-          const p = `Use the FIRST image ONLY as a visual STYLE template — borrow just the elements that serve THIS video: its overall composition, framing, lighting, colour grade, mood and (only if text is used) its text placement. CRITICAL: the FIRST image is from a completely different, unrelated video — its specific person/face, its props, and its exact on-image wording all belong to THAT video, not this one. Do NOT copy any of them — take ONLY the visual style and create an ORIGINAL thumbnail for THIS video in that same look. ${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${realFootage}${creativeDirective}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
+          // Lead with what TO take from the reference, then state the swap once.
+          // The old wording opened with "ONLY as a template… CRITICAL… do NOT
+          // copy any of them" — three negations before the model was ever told
+          // what the style was FOR, which is a large part of why results drifted
+          // away from the pool's look instead of matching it.
+          const styleLead = styleLockMode
+            ? `The FIRST image is the LAYOUT TEMPLATE for this thumbnail. Reproduce its arrangement closely for THIS video: the same composition and subject placement in frame, the same framing, camera angle and distance, the same depth and background treatment, the same lighting direction and colour grade, and the same text position and treatment if it uses text — the result should read as the same design. Swap only the content: the person in it, their props and its exact printed words belong to a different video, and are replaced by THIS video's own subject and wording. `
+            : `The FIRST image is a STYLE REFERENCE. Rebuild its look for THIS video: match its overall composition, framing, camera angle, lighting, colour grade and mood, and keep its text placement if it uses text. Everything specific to it — the person in it, their face and props, and the exact words printed on it — belongs to a different video, so replace all of that with THIS video's own subject and content. `;
+          // "Authentic real-footage photography, not an illustration" fights the
+          // reference whenever the matched style is a graphic composite (text
+          // panels, corkboards, split screens, 3D renders — plenty of the pool
+          // is). Under style-lock the reference decides the medium instead.
+          const mediumDirective = styleLockMode
+            ? "Match the reference's medium: keep photographic parts photoreal, and if it composites graphic panels, cut-outs or rendered elements, keep that same treatment. "
+            : realFootage;
+          const p = `${styleLead}${titleLine}${concept ? `Concept drawn from the video's actual content: ${concept} ` : ''}${styleHint}${faceStyle}${textStyle}${ytPremium}${mediumDirective}${creativeDirective}${dir}${topicDirective(topicSeed)} ${BASE_THUMB}`;
           onGenerate(finalize(p), [styleB64, ...faceRefImages], genOpts);
           launched++;
         }
@@ -1373,7 +1403,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
     onGenerate(prompt, sources, { count: genCount, modelType: QUALITY_MODEL[genModel], resolution: QUALITY_RESOLUTION[genModel], aspect: format === 'short' ? '9:16' : '16:9' });
     scrollToResults();
-  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, selectedYtStyle, onlyMyStyles, creativeMode, accurateMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
+  }, [canGenerate, mode, uploads, youtubeUrl, titleText, promptText, selectedTemplate, selectedRef, sketchData, selectedSketchStyle, selectedYtStyle, onlyMyStyles, creativeMode, accurateMode, styleLockMode, format, genCount, genModel, onGenerate, configured, user, totalCredits, creditsLoading, refreshProfile]);
 
   // Fires the queued auto-generate (see startFromHome) once mode/youtubeUrl
   // have actually committed and handleGenerate's closure reflects them.
@@ -1806,6 +1836,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                             <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${accurateMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
                           </button>
                         </div>
+
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-bold text-thumb-ink">Match the style's look</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={styleLockMode}
+                            aria-label="Match the style's look"
+                            onClick={() => setStyleLockMode(v => !v)}
+                            className={`shrink-0 w-11 h-6 rounded-full border transition-colors ${styleLockMode ? 'bg-thumb-red border-thumb-red' : 'bg-thumb-soft border-thumb-line'}`}
+                          >
+                            <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${styleLockMode ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
+                          </button>
+                        </div>
+                        {styleLockMode && (
+                          <p className="text-[11px] text-thumb-sub -mt-1">Copies the matched style's actual layout — same composition, framing, lighting and text placement — with your video's subject in it, instead of just borrowing its vibe.</p>
+                        )}
 
                         {/* Format lives here (not always visible) — YouTube
                             is overwhelmingly 16:9, so it doesn't need to be
