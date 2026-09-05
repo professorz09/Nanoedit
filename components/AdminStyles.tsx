@@ -285,7 +285,19 @@ const AdminStyles: React.FC = () => {
           <button onClick={refresh} className="text-xs font-bold text-thumb-red hover:underline">Refresh</button>
         </div>
         {loading ? (
-          <p className="text-sm text-thumb-sub">Loading…</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card animate-pulse">
+                <div className="aspect-video bg-thumb-soft" />
+                <div className="p-2.5 space-y-1.5">
+                  <div className="h-3.5 rounded bg-thumb-soft w-3/4" />
+                  <div className="h-7 rounded-lg bg-thumb-soft" />
+                  <div className="h-7 rounded-lg bg-thumb-soft" />
+                  <div className="h-7 rounded-lg bg-thumb-soft" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : error ? (
           <p className="text-sm text-thumb-red">{error}</p>
         ) : styles.length === 0 ? (
