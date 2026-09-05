@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GeneratedImage } from '../types';
 import { I } from './ThumbIcons';
 import { useImageLoad } from '../hooks/useImageLoad';
+import { shareImage } from '../services/shareService';
 
 // A single result card with its own skeleton-while-loading state (shared,
 // cross-canvas cache + retry logic lives in hooks/useImageLoad).
@@ -18,6 +19,14 @@ const ResultThumb: React.FC<{
 }> = ({ img, onView, onDownload, onOpenEditor, onChangeFace, onDelete }) => {
   const { loaded, errored, src, onLoad, onError, imgRef } = useImageLoad(img.url);
   const portrait = img.aspect === '9:16' || img.aspect === '4:5' || img.aspect === '3:4';
+  const [shareState, setShareState] = useState<'idle' | 'copied'>('idle');
+  const handleShare = async () => {
+    const result = await shareImage(img.url);
+    if (result === 'copied') {
+      setShareState('copied');
+      setTimeout(() => setShareState('idle'), 1800);
+    }
+  };
 
   return (
     <div className="group relative rounded-2xl overflow-hidden border border-thumb-line bg-thumb-card shadow-sm animate-fade-in-up flex flex-col">
@@ -53,6 +62,9 @@ const ResultThumb: React.FC<{
         <button onClick={() => onDownload(img.url)} title="Download" className="flex-1 py-2 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-ink text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-thumb-line/60 transition-colors"><I.Download className="w-4 h-4" /> Save</button>
         <button onClick={() => onOpenEditor(img.url)} title="Edit in Canvas" className="flex-1 py-2 rounded-lg thumb-btn text-white text-xs font-bold flex items-center justify-center gap-1.5"><I.Edit className="w-4 h-4" /> Edit</button>
         <button onClick={() => onChangeFace(img.url)} title="Change face" aria-label="Change face" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center transition-colors"><I.FaceSwap className="w-4 h-4" /></button>
+        <button onClick={handleShare} title={shareState === 'copied' ? 'Link copied!' : 'Share'} aria-label="Share" className={`w-9 shrink-0 rounded-lg border flex items-center justify-center transition-colors ${shareState === 'copied' ? 'bg-thumb-green/15 border-thumb-green/40 text-thumb-green' : 'bg-thumb-soft border-thumb-line text-thumb-sub hover:text-thumb-ink'}`}>
+          {shareState === 'copied' ? <I.Check className="w-4 h-4" /> : <I.Share className="w-4 h-4" />}
+        </button>
         <button onClick={() => onDelete(img.id)} title="Delete" aria-label="Delete" className="w-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-red hover:border-thumb-red/40 flex items-center justify-center transition-colors"><I.Trash className="w-4 h-4" /></button>
       </div>
     </div>

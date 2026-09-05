@@ -3,11 +3,12 @@ import { ASPECT_RATIOS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from '../types';
 import {
   IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette,
   IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip,
-  IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera, IconUser,
+  IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera, IconUser, IconShare,
 } from './Icons';
 import LoadedThumb from './LoadedThumb';
 import RetryImage from './RetryImage';
 import AuthModal from './AuthModal';
+import { shareImage } from '../services/shareService';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchPersonas, deletePersona, Persona } from '../services/personasService';
 
@@ -247,6 +248,17 @@ export default function EditorView(props: EditorViewProps) {
   // happening instead of looking broken.
   const [viewerImgReady, setViewerImgReady] = React.useState(false);
   React.useEffect(() => { setViewerImgReady(false); }, [viewedImage]);
+  // Share falls back to copying the link when native file-sharing isn't
+  // available (most desktop browsers) — this tracks which card just did that
+  // so its button can say so briefly instead of looking like a no-op.
+  const [shareCopiedId, setShareCopiedId] = React.useState<string | null>(null);
+  const handleShare = async (url: string, id: string) => {
+    const result = await shareImage(url);
+    if (result === 'copied') {
+      setShareCopiedId(id);
+      setTimeout(() => setShareCopiedId(prev => (prev === id ? null : prev)), 1800);
+    }
+  };
   const [showPersonaPicker, setShowPersonaPicker] = React.useState(false);
   const [personas, setPersonas] = React.useState<Persona[] | null>(null);
   const [personaError, setPersonaError] = React.useState<string | null>(null);
@@ -612,11 +624,12 @@ export default function EditorView(props: EditorViewProps) {
                                     >
                                         {copiedPromptId === img.id ? '✓ Copied!' : img.prompt}
                                     </p>
-                                    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                                    <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
                                          <button onClick={() => setViewedImage(img.url)} className="px-2 py-2.5 bg-white/10 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors" title="View Fullscreen"><IconEye /></button>
                                         <button onClick={() => handleBrushSelect(img.url)} className="px-2 py-2.5 bg-white/10 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors" title="Brush Edit">🖌️</button>
                                         <button onClick={() => addToLayers(img.url)} className="px-2 py-2.5 bg-nano-accent text-white text-xs font-bold rounded-lg hover:bg-nano-accentHover flex items-center justify-center transition-colors" title="Add Layer"><IconLayerPlus /></button>
                                         <button onClick={() => downloadImage(img.url)} className="px-2 py-2.5 bg-white/10 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors" title="Download"><IconDownload /></button>
+                                        <button onClick={() => handleShare(img.url, img.id)} className={`px-2 py-2.5 backdrop-blur-md text-xs font-bold rounded-lg flex items-center justify-center transition-colors ${shareCopiedId === img.id ? 'bg-nano-accent/30 text-nano-accent' : 'bg-white/10 text-white hover:bg-white/20'}`} title={shareCopiedId === img.id ? 'Link copied!' : 'Share'}><IconShare /></button>
                                         <button onClick={() => deleteGeneratedImage(img.id)} className="px-2 py-2.5 bg-red-500/80 backdrop-blur-md text-white text-xs font-bold rounded-lg hover:bg-red-500 flex items-center justify-center transition-colors" title="Delete"><IconTrash /></button>
                                     </div>
                                 </div>
