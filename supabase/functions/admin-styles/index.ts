@@ -35,7 +35,7 @@
 // Deploy:  supabase functions deploy admin-styles --project-ref vowgdlbvundorxwjdntu --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text" / "index-style").
 // ═══════════════════════════════════════════════════════════════════════════
-import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
+import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { embedWithFallback } from '../_shared/embedding.ts';
 

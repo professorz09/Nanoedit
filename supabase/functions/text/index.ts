@@ -26,7 +26,7 @@
 //   VERTEX_TEXT_MODEL / VERTEX_TEXT_MODEL_LARGE / OPENROUTER_TEXT_MODEL /
 //   OPENROUTER_TEXT_MODEL_LARGE overrides).
 // ═══════════════════════════════════════════════════════════════════════════
-import { GoogleGenAI } from 'npm:@google/genai@1.9.0';
+import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CORS = {
