@@ -1407,7 +1407,10 @@ const ThumbnailStudio: React.FC<Props> = ({
             <span className="text-thumb-ink">Thumbnails</span>
           </h1>
 
-          <p className="mt-4 max-w-2xl mx-auto text-sm sm:text-base text-thumb-sub leading-relaxed">
+          {/* Kept for SEO/crawlers (matches index.html's meta description) —
+              visually hidden since it read as redundant filler directly under
+              the hero heading. */}
+          <p className="sr-only">
             The best free AI thumbnail maker for YouTube — make high-quality thumbnails with AI from a prompt, photo, or YouTube video link. No Photoshop or Adobe Express needed. Also turns any YouTube link into AI titles &amp; timestamps.
           </p>
 
@@ -1419,7 +1422,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 onChange={e => setPromptText(e.target.value)}
                 onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') startFromHome(); }}
                 rows={3}
-                placeholder="Describe your video…"
+                placeholder="Describe your video, or paste a YouTube link…"
                 className="w-full bg-transparent px-3 pt-3 pb-3 outline-none text-[16px] sm:text-[17px] placeholder-thumb-sub/40 resize-none"
               />
               <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
@@ -1428,12 +1431,6 @@ const ThumbnailStudio: React.FC<Props> = ({
                   className="thumb-btn flex-1 py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3"
                 >
                   <I.Wand className="w-5 h-5" /> Generate My First Thumbnail
-                </button>
-                <button
-                  onClick={goGenerate}
-                  className="shrink-0 py-4 px-5 rounded-2xl font-bold text-sm text-thumb-ink bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-colors flex items-center justify-center gap-2"
-                >
-                  <I.Youtube className="w-4 h-4 text-thumb-red" /> YouTube link &amp; more
                 </button>
               </div>
             </div>
