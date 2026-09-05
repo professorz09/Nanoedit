@@ -20,3 +20,11 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// PWA installability — see public/sw.js for why it's a deliberate pass-through
+// (no app-shell caching) rather than an offline-first worker.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* installability is best-effort */ });
+  });
+}
