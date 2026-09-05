@@ -1189,7 +1189,11 @@ function App() {
 
   return (
     <>
-    <React.Suspense fallback={<div className="thumb-scope min-h-screen bg-thumb-bg" />}>
+    <React.Suspense fallback={
+      <div className="thumb-scope min-h-screen bg-thumb-bg flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
       <EditorView
         theme={theme}
         uiVisible={uiVisible}
