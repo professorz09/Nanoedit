@@ -46,19 +46,55 @@ export const generateText = async (prompt: string, op: TextOp): Promise<string> 
   const token = session?.access_token;
   if (!token) throw new Error('Please sign in to use this tool.');
 
-  const resp = await fetch(`${supaUrl}/functions/v1/text`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      apikey: supaAnon ?? '',
-    },
-    body: JSON.stringify({ prompt, op }),
-  });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(data?.error || `Text service error ${resp.status}`);
-  if (!data.text) throw new Error('No text generated.');
-  return data.text as string;
+  const requestBody = JSON.stringify({ prompt, op });
+
+  // Two server-side options, tried in order — same arrangement (and the same
+  // reason) as image generation in geminiService.ts:
+  //
+  //   1. /api/text (Vercel, same origin) — Vercel Functions get up to 300s,
+  //      well past the Supabase Free plan's hard 150s wall-clock kill. The
+  //      Chapter Maker can hand over 32k characters of transcript to the
+  //      bigger model, which is exactly the kind of run that hits that wall.
+  //   2. Supabase Edge Function — used until the Vercel secrets are added
+  //      (api/text.ts self-reports 501 "not_configured" until then), or if the
+  //      Vercel route isn't deployed.
+  //
+  // 'skip' means the route isn't there / isn't configured, so it's safe to try
+  // the other one. Anything else is a real outcome from THIS endpoint and is
+  // thrown — a paid op must never be retried against the second endpoint, or a
+  // failed-looking run bills the user twice.
+  const tryEndpoint = async (
+    url: string,
+    headers: Record<string, string>,
+    treatAsSkip: (status: number) => boolean,
+  ): Promise<string | 'skip'> => {
+    let resp: Response;
+    try {
+      resp = await fetch(url, { method: 'POST', headers, body: requestBody });
+    } catch {
+      return 'skip';
+    }
+    if (treatAsSkip(resp.status)) return 'skip';
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error || `Text service error ${resp.status}`);
+    if (!data.text) throw new Error('No text generated.');
+    return data.text as string;
+  };
+
+  const viaVercel = await tryEndpoint(
+    '/api/text',
+    { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    (status) => status === 404 || status === 501,
+  );
+  if (viaVercel !== 'skip') return viaVercel;
+
+  const viaSupabase = await tryEndpoint(
+    `${supaUrl}/functions/v1/text`,
+    { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
+    () => false,
+  );
+  if (viaSupabase !== 'skip') return viaSupabase;
+  throw new Error('No text generated.');
 };
 
 /**

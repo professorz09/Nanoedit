@@ -4,6 +4,9 @@
   "functions": {
     "api/generate.ts": {
       "maxDuration": 300
+    },
+    "api/text.ts": {
+      "maxDuration": 300
     }
   },
   "headers": [
