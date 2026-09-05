@@ -14,9 +14,12 @@ const StylePickerModal: React.FC<{
   hint?: string;
 }> = ({ open, onClose, styleImages, selected, onSelect, hint }) => {
   if (!open) return null;
+  // Solid (not glass/translucent) panel over a near-opaque backdrop — a busy
+  // real photo bleeding through a translucent glass panel behind this made
+  // the popup unreadable (looked like it "didn't open" on some devices).
   return (
-    <div className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[140] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-thumb-card border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <div>
             <h3 className="text-base font-black text-thumb-ink">Pick a style</h3>

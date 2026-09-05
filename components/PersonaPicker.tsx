@@ -114,13 +114,17 @@ const PersonaPicker: React.FC<{
   if (modalControlled) {
     if (!externalOpen) return null;
     return (
-      <div className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onExternalClose}>
-        <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[140] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={onExternalClose}>
+        <div className="bg-thumb-card border border-thumb-line rounded-2xl p-5 w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-black text-thumb-ink">Pick a saved face</h3>
             <button onClick={onExternalClose} aria-label="Close" className="w-8 h-8 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><I.X className="w-4 h-4" /></button>
           </div>
-          {personas?.length ? (
+          {personas === null ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : personas.length ? (
             <div className="grid grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-0.5">
               {personas.map(p => (
                 <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
@@ -209,13 +213,17 @@ const PersonaPicker: React.FC<{
       </div>
 
       {pickerOpen && (
-        <div className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setPickerOpen(false)}>
-          <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[140] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setPickerOpen(false)}>
+          <div className="bg-thumb-card border border-thumb-line rounded-2xl p-5 w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-black text-thumb-ink">Pick a saved face</h3>
               <button onClick={() => setPickerOpen(false)} aria-label="Close" className="w-8 h-8 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><I.X className="w-4 h-4" /></button>
             </div>
-            {personas?.length ? (
+            {personas === null ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : personas.length ? (
               <div className="grid grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-0.5">
                 {personas.map(p => (
                   <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">

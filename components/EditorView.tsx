@@ -241,6 +241,12 @@ export default function EditorView(props: EditorViewProps) {
     handleGenerate();
   };
   const [authOpen, setAuthOpen] = React.useState(false);
+  // Fullscreen viewer: without this, a slow or failing load just shows the
+  // black backdrop with nothing on it until RetryImage's retries exhaust
+  // (several seconds) — a spinner in between makes it clear something is
+  // happening instead of looking broken.
+  const [viewerImgReady, setViewerImgReady] = React.useState(false);
+  React.useEffect(() => { setViewerImgReady(false); }, [viewedImage]);
   const [showPersonaPicker, setShowPersonaPicker] = React.useState(false);
   const [personas, setPersonas] = React.useState<Persona[] | null>(null);
   const [personaError, setPersonaError] = React.useState<string | null>(null);
@@ -880,10 +886,13 @@ export default function EditorView(props: EditorViewProps) {
           </div>
       )}
 
-      {/* From-styles picker — choose a ready-made style thumbnail to add as a source layer */}
+      {/* From-styles picker — choose a ready-made style thumbnail to add as a source layer.
+          Solid (not glass/translucent) panel over a near-opaque backdrop — this sits on top
+          of whatever photo is currently on the canvas, and a busy real photo bleeding through
+          a translucent glass panel made the popup unreadable (looked like it "didn't open"). */}
       {showStylePicker && (
-          <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowStylePicker(false)}>
-              <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[130] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowStylePicker(false)}>
+              <div className="bg-thumb-card border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between mb-4">
                       <div>
                           <h3 className="text-base font-black text-thumb-ink">Add from Styles</h3>
@@ -908,8 +917,8 @@ export default function EditorView(props: EditorViewProps) {
       )}
 
       {showPersonaPicker && (
-          <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPersonaPicker(false)}>
-              <div className="thumb-glass border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[130] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPersonaPicker(false)}>
+              <div className="bg-thumb-card border border-thumb-line rounded-2xl p-5 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between mb-4">
                       <div>
                           <h3 className="text-base font-black text-thumb-ink">Add a saved face</h3>
@@ -918,6 +927,11 @@ export default function EditorView(props: EditorViewProps) {
                       <button onClick={() => setShowPersonaPicker(false)} className="w-8 h-8 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><IconX /></button>
                   </div>
                   {personaError && <p className="text-xs text-red-400 mb-3">{personaError}</p>}
+                  {personas === null && (
+                      <div className="flex items-center justify-center py-10">
+                          <div className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
+                      </div>
+                  )}
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-1">
                       {personas?.map(p => (
                           <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
@@ -1168,12 +1182,21 @@ export default function EditorView(props: EditorViewProps) {
                     </div>
                  ) : (
                   <div className="relative inline-block">
+                      {/* Without this, a slow load (or the few retries RetryImage
+                          runs on a transient 404) shows nothing but the black
+                          backdrop for several seconds — easy to mistake for the
+                          viewer having failed to open at all. */}
+                      {!viewerImgReady && (
+                          <div className="absolute inset-0 flex items-center justify-center min-w-[200px] min-h-[150px]">
+                              <div className="w-8 h-8 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                      )}
                       <RetryImage
                           key={viewedImage}
                           url={viewedImage}
                           onFail={() => setImageLoadError(true)}
                           alt="Full View"
-                          className="origin-center select-none block"
+                          className={`origin-center select-none block transition-opacity duration-200 ${viewerImgReady ? 'opacity-100' : 'opacity-0'}`}
                           style={{
                               transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                               maxWidth: '90vw',
@@ -1183,6 +1206,7 @@ export default function EditorView(props: EditorViewProps) {
                           }}
                           draggable={false}
                           onLoad={(e) => {
+                              setViewerImgReady(true);
                               if (brushMode && canvasRef.current) {
                                   const img = e.target as HTMLImageElement;
                                   const canvas = canvasRef.current;
