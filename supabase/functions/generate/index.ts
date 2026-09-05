@@ -338,12 +338,34 @@ Deno.serve(async (req) => {
     { name: `openrouter:${orGptModel}`, run: () => viaOpenRouter(orGptModel, prompt, sources, aspectRatio) },
   ];
 
+  // Supabase's Free-plan Edge Runtime kills the whole invocation at a hard
+  // 150s wall-clock limit — an unresponsive Vertex Pro call with no timeout
+  // of its own could silently burn the ENTIRE budget alone, leaving zero
+  // time for the Flash/OpenRouter fallbacks that follow it. Race each
+  // attempt against a per-provider timeout so a hung provider gets aborted
+  // and the next one still gets a turn, and stop trying once there isn't
+  // enough of the deadline left for another attempt to plausibly finish —
+  // a clean "please try again" a few seconds early beats getting killed
+  // mid-upload by the platform (which surfaces to the client as a bare,
+  // confusing "Server error 546").
+  const GENERATION_DEADLINE_MS = 130_000;
+  const PER_ATTEMPT_TIMEOUT_MS = 55_000;
+  const startedAt = Date.now();
+
   let gen: GenResult | null = null;
   let usedProvider = '';
   const errors: string[] = [];
   for (const a of attempts) {
+    if (Date.now() - startedAt > GENERATION_DEADLINE_MS - 10_000) {
+      errors.push(`${a.name}: skipped_out_of_time`);
+      break;
+    }
     try {
-      const res = await a.run();
+      const res = await Promise.race([
+        a.run(),
+        new Promise<GenResult>((_, reject) =>
+          setTimeout(() => reject(new Error(`${a.name}_timeout`)), PER_ATTEMPT_TIMEOUT_MS)),
+      ]);
       if (res.images.length) {
         // `cost` was reserved for exactly ONE image (the client makes a
         // separate call — and pays separately — per variation; see wantCount
