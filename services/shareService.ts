@@ -15,7 +15,17 @@ export async function shareImage(url: string, filename = 'podcastflux-thumbnail.
         const blob = await resp.blob();
         const file = new File([blob], filename, { type: blob.type || 'image/png' });
         if (nav.canShare({ files: [file] })) {
-          await nav.share({ files: [file], title: 'PodcastFlux Thumbnail', text: 'Made with PodcastFlux — free AI thumbnail maker' });
+          // Most share targets (WhatsApp, Instagram, etc.) drop the separate
+          // `url` field entirely once `files` is present — text is the only
+          // part reliably shown alongside the image, so the link has to live
+          // there rather than in `url` alone. Setting both costs nothing for
+          // the targets that do honour `url`.
+          await nav.share({
+            files: [file],
+            title: 'PodcastFlux Thumbnail',
+            text: 'Made with PodcastFlux — free AI thumbnail maker: https://podcastflux.com',
+            url: 'https://podcastflux.com',
+          });
           return 'shared';
         }
       }
