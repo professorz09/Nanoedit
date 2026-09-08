@@ -456,7 +456,30 @@ export default function EditorView(props: EditorViewProps) {
                     </div>
                     
                     <div className="flex items-center gap-3 overflow-x-auto w-full pb-2 no-scrollbar">
-                         <div 
+                        {/* Uploaded layers come FIRST, before the Add/Styles/Persona
+                            tiles — on a narrow phone screen only ~3 of these
+                            w-24 tiles fit before this row scrolls off-screen, and
+                            with the tiles leading, an upload that just succeeded
+                            was scrolled past them and invisible without a manual
+                            swipe right. Leading with it means "did my upload
+                            work?" is answered the instant it lands, with no
+                            scroll (and no scrollbar, since it's hidden) needed. */}
+                        {sourceImages.map((img, idx) => (
+                            <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-thumb-line animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
+                                <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
+                                <div className="absolute top-1 left-1 bg-nano-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                    {idx + 1}
+                                </div>
+                                <button
+                                    onClick={() => removeSourceImage(idx)}
+                                    aria-label={`Remove source image ${idx + 1}`}
+                                    className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                                >
+                                    <IconX />
+                                </button>
+                            </div>
+                        ))}
+                        <div
                             className="shrink-0 w-24 h-24 border-2 border-dashed border-thumb-line rounded-xl flex flex-col items-center justify-center gap-1 text-thumb-sub hover:border-nano-accent hover:text-nano-accent transition-all cursor-pointer bg-thumb-soft"
                             onClick={triggerFileUpload}
                             onDragOver={handleDragOver}
@@ -487,21 +510,6 @@ export default function EditorView(props: EditorViewProps) {
                             <IconUser />
                             <span className="text-[10px] font-medium">Persona</span>
                         </button>
-                        {sourceImages.map((img, idx) => (
-                            <div key={idx} className="relative group shrink-0 w-24 h-24 rounded-xl overflow-hidden shadow-lg border border-thumb-line animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
-                                <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200" onClick={() => setViewedImage(img)} />
-                                <div className="absolute top-1 left-1 bg-nano-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                    {idx + 1}
-                                </div>
-                                <button
-                                    onClick={() => removeSourceImage(idx)}
-                                    aria-label={`Remove source image ${idx + 1}`}
-                                    className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                                >
-                                    <IconX />
-                                </button>
-                            </div>
-                        ))}
                     </div>
                 </div>
             )}
