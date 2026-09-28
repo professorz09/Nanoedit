@@ -53,6 +53,7 @@ Payments for billing.
    | `SUPADATA_API_KEY` | Powers YouTube transcript fetching |
    | `VITE_SUPABASE_URL` | Supabase project URL (client-side) |
    | `VITE_SUPABASE_ANON_KEY` | Supabase anon/publishable key (client-side) |
+   | `VITE_SHORTS_API_URL` | Shorts Maker render server (Movievideomaker's `shortsbot/web.py`), e.g. `https://shorts.yourdomain.com` — without it the Shorts page shows "coming soon" |
 
    Only the vars for the features you're testing are required — the app
    degrades gracefully (e.g. no Supabase env vars means auth/credits/payments

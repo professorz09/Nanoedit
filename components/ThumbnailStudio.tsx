@@ -20,6 +20,7 @@ const Pricing = React.lazy(() => import('./Pricing'));
 const Account = React.lazy(() => import('./Account'));
 const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
 const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
+const ShortsMaker = React.lazy(() => import('./ShortsMaker'));
 const AdminStyles = React.lazy(() => import('./AdminStyles'));
 
 // Lightweight loader shown while a lazy tab chunk arrives (usually a few ms).
@@ -351,6 +352,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       import('./Account');
       import('./TitleGenerator');
       import('./ChapterMaker');
+      import('./ShortsMaker');
     };
     const ric = (window as any).requestIdleCallback as
       | ((cb: () => void, opts?: { timeout: number }) => number)
@@ -360,7 +362,7 @@ const ThumbnailStudio: React.FC<Props> = ({
     return () => { if (ric && cancel) cancel(id); else clearTimeout(id); };
   }, []);
   // Landing ('home') vs generator ('generate') vs feed preview ('preview') vs pricing
-  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'pricing' | 'account' | 'admin'>('home');
+  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'shorts' | 'pricing' | 'account' | 'admin'>('home');
 
   // Auth + billing
   const { user, profile, totalCredits, creditsLoading, signOut, configured, refreshProfile } = useAuth();
@@ -500,6 +502,12 @@ const ThumbnailStudio: React.FC<Props> = ({
 
   const goChapters = () => {
     setSection('chapters');
+    setSidebarOpen(false);
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
+  };
+
+  const goShorts = () => {
+    setSection('shorts');
     setSidebarOpen(false);
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
@@ -1447,6 +1455,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 { label: 'Editor', on: () => onOpenEditor(), active: false },
                 { label: 'Titles', on: goTitle, active: section === 'title' },
                 { label: 'Chapters', on: goChapters, active: section === 'chapters' },
+                { label: 'Shorts', on: goShorts, active: section === 'shorts' },
                 { label: 'Feed test', on: goPreview, active: section === 'preview' },
                 { label: 'Pricing', on: goPricing, active: section === 'pricing' },
                 ...(profile?.is_admin ? [{ label: 'Admin', on: goAdmin, active: section === 'admin' }] : []),
@@ -1526,6 +1535,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               { key: 'generate', label: 'Generate', tag: 'Create', icon: I.Bolt, active: section === 'generate', onClick: goGenerate },
               { key: 'title', label: 'Title Generator', tag: 'Titles', icon: I.Text, active: section === 'title', onClick: goTitle },
               { key: 'chapters', label: 'Chapter Maker', tag: 'Timestamps', icon: I.List, active: section === 'chapters', onClick: goChapters },
+              { key: 'shorts', label: 'Shorts Maker', tag: 'Clips', icon: I.Play, active: section === 'shorts', onClick: goShorts },
               { key: 'preview', label: 'Preview', tag: 'Feed test', icon: I.Tv, active: section === 'preview', onClick: goPreview },
               { key: 'editor', label: 'Editor', tag: 'Canvas', icon: I.Edit, active: false, onClick: () => { setSidebarOpen(false); onOpenEditor(); } },
               { key: 'pricing', label: 'Pricing', tag: 'Plans', icon: I.Star, active: section === 'pricing', onClick: goPricing },
@@ -2703,6 +2713,15 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'title' && (
           <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16">
             <Suspense fallback={<PanelFallback />}><TitleGenerator /></Suspense>
+          </div>
+        )}
+
+        {/* ── Shorts Maker tool (renders on the Movievideomaker server — services/shortsService.ts) ── */}
+        {section === 'shorts' && (
+          <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16">
+            <Suspense fallback={<PanelFallback />}>
+              <ShortsMaker onRequireLogin={requireLogin} onBuyCredits={goPricing} />
+            </Suspense>
           </div>
         )}
 
