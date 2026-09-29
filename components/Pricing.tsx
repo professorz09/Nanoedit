@@ -183,7 +183,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
           );
         })}
       </div>
-      <p className="text-center text-[12px] text-thumb-sub mt-6">Credits also work for thumbnails: 1 credit from a prompt or photo, 3 from a YouTube link, +2 for 4K. A Short or thumbnail that fails is refunded.</p>
+      <p className="text-center text-[12px] text-thumb-sub mt-6">A Short that fails to render doesn't cost a credit.</p>
 
       {/* Add-on credit packs — paid plans only */}
       {hasPaidPlan && (

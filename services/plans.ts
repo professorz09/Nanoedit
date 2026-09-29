@@ -46,7 +46,7 @@ export const PLANS: Plan[] = [
     credits: 400,
     monthly: { priceUsd: 79 },
     yearly:  { priceUsd: 790 },
-    features: ['400 credits / month', 'Up to 400 Shorts', '⚡ Priority generation — your Shorts are made first', 'Everything in Starter', 'HD & 4K thumbnails too'],
+    features: ['400 credits / month', 'Up to 400 Shorts', '⚡ Priority generation — your Shorts are made first', 'Everything in Starter'],
   },
 ];
 
