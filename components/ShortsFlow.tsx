@@ -5,7 +5,7 @@ import { DEFAULT_LOOK, PhonePreview, Studio } from './ShortsStylePicker';
 const seg = (i: number, a: number) =>
   `@keyframes sfSeg${i}{0%,${a}%{opacity:.25;transform:scaleY(1)}${a + 2}%{opacity:1;transform:scaleY(1.7)}${a + 6}%,88%{opacity:1;transform:scaleY(1)}96%,100%{opacity:.25}}`;
 const phone = (i: number, p: number) =>
-  `@keyframes sfPhone${i}{0%,${p}%{opacity:0;transform:translateY(24px) scale(.9)}${p + 6}%,88%{opacity:1;transform:translateY(0) scale(1)}96%,100%{opacity:0;transform:scale(.96)}}`
+  `@keyframes sfPhone${i}{0%,${p}%{opacity:.35;transform:translateY(10px) scale(.95)}${p + 6}%,88%{opacity:1;transform:translateY(0) scale(1)}96%,100%{opacity:.35;transform:translateY(10px) scale(.95)}}`
   + `@keyframes sfScore${i}{0%,${p + 5}%{transform:scale(0)}${p + 9}%{transform:scale(1.25)}${p + 12}%,88%{transform:scale(1)}96%,100%{transform:scale(0)}}`;
 const BASE = '@keyframes sfHead{0%{left:0%}28%,100%{left:100%}}'
   + '@keyframes sfLine{0%,30%{stroke-dashoffset:260}46%,88%{stroke-dashoffset:0}96%,100%{stroke-dashoffset:260}}';

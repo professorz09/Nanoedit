@@ -22,6 +22,7 @@ const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
 const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
 const ShortsMaker = React.lazy(() => import('./ShortsMaker'));
 const ShortsFlow = React.lazy(() => import('./ShortsFlow'));
+const ShortsShowcase = React.lazy(() => import('./ShortsShowcase'));
 const AdminStyles = React.lazy(() => import('./AdminStyles'));
 
 // Lightweight loader shown while a lazy tab chunk arrives (usually a few ms).
@@ -1709,6 +1710,13 @@ const ThumbnailStudio: React.FC<Props> = ({
               </div>
             ))}
           </div>
+        </section>
+        )}
+
+        {/* ── Post anywhere: platforms + a moving strip of Shorts (real ones from attached_assets/shorts-showcase/) ── */}
+        {section === 'home' && (
+        <section className="pb-16">
+          <Suspense fallback={null}><ShortsShowcase onCta={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setTimeout(() => (document.querySelector('input[placeholder="Paste a YouTube link…"]') as HTMLInputElement | null)?.focus(), 400); }} /></Suspense>
         </section>
         )}
 
