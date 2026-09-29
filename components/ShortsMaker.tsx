@@ -456,10 +456,6 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   // opens in that right-hand panel on a desktop, full page on a phone ──
   const formPanel = (
     <div className="space-y-4 min-w-0">
-      <div className="hidden lg:block">
-        <h1 className="text-[26px] font-black text-thumb-ink leading-tight">New Shorts</h1>
-        <p className="text-[14px] text-thumb-sub mt-1">Paste a video link, choose the look, and we’ll find the best moments.</p>
-      </div>
       <div className="thumb-glass rounded-[28px] p-4 sm:p-5 space-y-3.5">
         <textarea
           value={url}
