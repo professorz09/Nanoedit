@@ -1,0 +1,16 @@
+// Cloudflare Workers (static assets) — hosts the built site (dist/) on Cloudflare's CDN.
+// Workers Builds (dashboard → Workers & Pages → podcastflux → Settings → Builds) runs
+// `pnpm run build`, then `npx wrangler deploy` with this file on every push to main.
+// The VITE_* variables go in that page's "Build variables" (they are baked into the build).
+// vercel.json stays for as long as the site also runs on Vercel.
+{
+  "name": "podcastflux",
+  "compatibility_date": "2026-09-29",
+  "assets": {
+    "directory": "./dist/",
+    // /shorts, /pricing … are app routes: a page load that matches no file gets index.html
+    // (like vercel.json's rewrite). /api/* calls that match nothing get a 404, and the app
+    // then falls back to the Supabase functions.
+    "not_found_handling": "single-page-application"
+  }
+}

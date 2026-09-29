@@ -84,7 +84,8 @@ export const generateText = async (prompt: string, op: TextOp): Promise<string> 
   const viaVercel = await tryEndpoint(
     '/api/text',
     { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    (status) => status === 404 || status === 501,
+    // 405: a host without these functions (e.g. Cloudflare static assets) turns the POST away
+    (status) => status === 404 || status === 405 || status === 501,
   );
   if (viaVercel !== 'skip') return viaVercel;
 
