@@ -19,7 +19,7 @@
 //
 // Vercel Project → Settings → Environment Variables (same values as the
 // matching Supabase secrets — `supabase secrets set ... --project-ref
-// vowgdlbvundorxwjdntu` lists them):
+// tobqcgvcjjmahjqohakv` lists them):
 //   SUPABASE_URL              = <project URL>                 (required)
 //   SUPABASE_SERVICE_ROLE_KEY = <service role key>             (required)
 //   GOOGLE_SERVICE_ACCOUNT_JSON = <service-account JSON>        (Vertex, OR)

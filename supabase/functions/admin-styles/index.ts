@@ -32,7 +32,7 @@
 //                   style's tags (e.g. a wrong niche) and re-embed with the
 //                   corrected metadata, so matching reflects the fix too
 //
-// Deploy:  supabase functions deploy admin-styles --project-ref vowgdlbvundorxwjdntu --use-api
+// Deploy:  supabase functions deploy admin-styles --project-ref tobqcgvcjjmahjqohakv --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text" / "index-style").
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@2.21.0';

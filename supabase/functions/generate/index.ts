@@ -19,8 +19,8 @@
 //      are deleted), so Storage never grows unbounded.
 //
 // Deploy:
-//   supabase functions deploy generate --project-ref vowgdlbvundorxwjdntu --use-api
-// Secrets (supabase secrets set … --project-ref vowgdlbvundorxwjdntu):
+//   supabase functions deploy generate --project-ref tobqcgvcjjmahjqohakv --use-api
+// Secrets (supabase secrets set … --project-ref tobqcgvcjjmahjqohakv):
 //   VERTEX_API_KEY           = <vertex / gemini key>          (primary)
 //   VERTEX_PRO_MODEL         = gemini-3-pro-image             (optional override; 2K/4K)
 //   VERTEX_FLASH_MODEL       = gemini-3.1-flash-image         (optional override; 1K/Fast + Pro degrade)

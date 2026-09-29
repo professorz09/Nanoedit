@@ -8,7 +8,7 @@
 // server-side and gates it behind a logged-in user (JWT) so the key can't be
 // abused as a free transcript proxy. It does NOT spend credits.
 //
-// Deploy:  supabase functions deploy transcript --project-ref vowgdlbvundorxwjdntu --use-api
+// Deploy:  supabase functions deploy transcript --project-ref tobqcgvcjjmahjqohakv --use-api
 // Secrets: SUPADATA_API_KEY
 //   (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
 // ═══════════════════════════════════════════════════════════════════════════

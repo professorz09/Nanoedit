@@ -15,7 +15,7 @@
 // Add-on packs require an active paid plan (pro/studio) — enforced here, not
 // just in the UI, so a direct API call can't buy add-on credits from 'free'.
 //
-// Deploy:  supabase functions deploy create-checkout --project-ref vowgdlbvundorxwjdntu --use-api
+// Deploy:  supabase functions deploy create-checkout --project-ref tobqcgvcjjmahjqohakv --use-api
 // Secrets: DODO_PAYMENTS_API_KEY (required)
 //          DODO_PAYMENTS_ENVIRONMENT = test_mode | live_mode (optional, defaults to test_mode)
 //          APP_URL = https://podcastflux.com (optional, used for the post-checkout return_url)

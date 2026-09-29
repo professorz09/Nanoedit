@@ -13,7 +13,7 @@
 // price the YouTube pipeline's actual generated images already charge
 // ("generate"'s IMAGE_COST.youtube), so it isn't billed twice.
 //
-// Deploy:  supabase functions deploy match-style --project-ref vowgdlbvundorxwjdntu --use-api
+// Deploy:  supabase functions deploy match-style --project-ref tobqcgvcjjmahjqohakv --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
 //   EMBED_MODEL = gemini-embedding-2     (optional override; falls back to
 //                 the same model via OPENROUTER_API_KEY if Vertex is down)

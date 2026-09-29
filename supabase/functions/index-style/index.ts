@@ -14,7 +14,7 @@
 // caller's own user/<uid>/ folder — no indexing someone else's upload.
 // Abuse guard: a per-user cap (MAX_PER_USER) on custom styles.
 //
-// Deploy:  supabase functions deploy index-style --project-ref vowgdlbvundorxwjdntu --use-api
+// Deploy:  supabase functions deploy index-style --project-ref tobqcgvcjjmahjqohakv --use-api
 // Secrets: reuses GOOGLE_SERVICE_ACCOUNT_JSON / VERTEX_API_KEY (same as "text").
 //   TAG_MODEL   = gemini-3.5-flash-lite   (optional override)
 //   EMBED_MODEL = gemini-embedding-2      (optional override; falls back to

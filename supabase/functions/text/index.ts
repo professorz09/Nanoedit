@@ -21,7 +21,7 @@
 // tuned for short, cheap, high-volume calls, not sustained reasoning over
 // tens of thousands of characters of transcript.
 //
-// Deploy:  supabase functions deploy text --project-ref vowgdlbvundorxwjdntu --use-api
+// Deploy:  supabase functions deploy text --project-ref tobqcgvcjjmahjqohakv --use-api
 // Secrets: reuses VERTEX_API_KEY / OPENROUTER_API_KEY (+ optional
 //   VERTEX_TEXT_MODEL / VERTEX_TEXT_MODEL_LARGE / OPENROUTER_TEXT_MODEL /
 //   OPENROUTER_TEXT_MODEL_LARGE overrides).

@@ -27,10 +27,10 @@
 // Auth: NOT a user-authenticated call — Dodo's servers call this directly, so
 // verify_jwt is disabled and the webhook signature IS the authentication.
 //
-// Deploy:  supabase functions deploy dodo-webhook --project-ref vowgdlbvundorxwjdntu --use-api --no-verify-jwt
+// Deploy:  supabase functions deploy dodo-webhook --project-ref tobqcgvcjjmahjqohakv --use-api --no-verify-jwt
 // Secrets: DODO_WEBHOOK_SECRET (from the webhook endpoint created in the Dodo dashboard)
 // Dodo dashboard: add a webhook endpoint pointing at
-//   https://vowgdlbvundorxwjdntu.supabase.co/functions/v1/dodo-webhook
+//   https://tobqcgvcjjmahjqohakv.supabase.co/functions/v1/dodo-webhook
 // ═══════════════════════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { Webhook } from 'npm:standardwebhooks@1.0.0';

@@ -17,7 +17,7 @@
 // isn't an error from the client's point of view; the local delete should
 // never be blocked by this.
 //
-// Deploy:  supabase functions deploy delete-generation --project-ref vowgdlbvundorxwjdntu --use-api
+// Deploy:  supabase functions deploy delete-generation --project-ref tobqcgvcjjmahjqohakv --use-api
 // ═══════════════════════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
