@@ -225,6 +225,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
 
   const loadProjects = useCallback(() => {
     if (!signedIn) return;
+    if (!isShortsConfigured) { setProjects([]); return; }
     listProjects().then(setProjects).catch(e => { setProjects([]); setNote(e.message); });
   }, [signedIn]);
 
@@ -268,6 +269,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   const generate = async () => {
     setNote(null);
     if (!extractYouTubeId(url.trim())) { setNote('Paste a valid YouTube link.'); return; }
+    if (!isShortsConfigured) { setNote('Shorts Maker opens very soon — making Shorts is not switched on yet.'); return; }
     if (!signedIn) { onRequireLogin('Log in to make Shorts.'); return; }
     setBusy(true);
     try {
@@ -336,15 +338,6 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
       setNote(e.message);
     }
   };
-
-  if (!isShortsConfigured) {
-    return (
-      <div className="thumb-glass rounded-3xl p-10 text-center max-w-xl mx-auto">
-        <h2 className="text-xl font-black text-thumb-ink">Shorts Maker is coming soon</h2>
-        <p className="text-sm text-thumb-sub mt-2">It isn't switched on for this site yet.</p>
-      </div>
-    );
-  }
 
   const noteBox = note && (
     <div className="text-[13px] bg-thumb-redSoft text-thumb-red border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>
@@ -422,6 +415,9 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           TURN VIDEOS INTO <span className="text-thumb-red">VIRAL SHORTS</span>
         </h1>
         <p className="text-sm sm:text-base text-thumb-sub">Paste a YouTube link — we find the best moments. Preview free, pay only for what you download.</p>
+        {!isShortsConfigured && (
+          <span className="inline-block text-[12px] font-bold px-3 py-1 rounded-full bg-thumb-redSoft text-thumb-red">Coming soon</span>
+        )}
       </div>
 
       <div className="thumb-glass rounded-[28px] p-4 sm:p-5 max-w-2xl mx-auto space-y-3.5">
