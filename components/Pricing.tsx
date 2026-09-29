@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { PLANS, ADDONS, perMonth, priceFor, yearlySavingPct, PLAN_RANK, PlanId, BillingCycle, Plan, TRIAL_CREDITS } from '../services/plans';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -21,6 +21,18 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
   // as "nothing happened," so an impatient second click fires a second
   // session and often surfaces as a confusing "Something went wrong."
   const [busy, setBusy] = useState<string | null>(null);
+  // the sliding pill under the Monthly / Yearly toggle: measured from the picked button
+  const tabRefs = useRef<Record<BillingCycle, HTMLButtonElement | null>>({ monthly: null, yearly: null });
+  const [pill, setPill] = useState({ left: 6, width: 0 });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = tabRefs.current[cycle];
+      if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [cycle]);
 
   // Add-on credit packs are only for paying subscribers (Pro / Studio).
   // Free users must pick a plan first — top-ups aren't offered to them.
@@ -51,24 +63,30 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
 
   return (
     <section className="pt-10 pb-16">
-      {/* Billing cycle toggle */}
+      <style>{'@keyframes prIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}'}</style>
+      {/* Billing cycle toggle — one red pill that slides under the picked option */}
       <div className="flex items-center justify-center">
-        <div className="flex items-center gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl flex-wrap justify-center">
-          <button
-            onClick={() => setCycle('monthly')}
-            disabled={busy !== null}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap disabled:opacity-60 ${cycle === 'monthly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setCycle('yearly')}
-            disabled={busy !== null}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap disabled:opacity-60 ${cycle === 'yearly' ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}
-          >
-            Yearly
-            <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-thumb-green bg-thumb-greenSoft border border-thumb-green/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">2 months free</span>
-          </button>
+        <div className="relative flex items-center p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
+          <span
+            aria-hidden="true"
+            className="thumb-liquid absolute top-1.5 bottom-1.5 rounded-xl"
+            style={{ left: pill.left, width: pill.width, transition: 'left .35s cubic-bezier(.3,1.3,.5,1), width .35s cubic-bezier(.3,1.3,.5,1)' }}
+          />
+          {(['monthly', 'yearly'] as const).map(c => (
+            <button
+              key={c}
+              ref={el => { tabRefs.current[c] = el; }}
+              onClick={() => setCycle(c)}
+              disabled={busy !== null}
+              aria-pressed={cycle === c}
+              className={`relative z-10 px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 whitespace-nowrap disabled:opacity-60 transition-colors duration-300 ${cycle === c ? 'text-white' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            >
+              {c === 'monthly' ? 'Monthly' : 'Yearly'}
+              {c === 'yearly' && (
+                <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-thumb-green bg-thumb-greenSoft border border-thumb-green/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">2 months free</span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -124,7 +142,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
               <h3 className="text-xl font-black text-thumb-ink">{plan.name}</h3>
               <p className="text-[13px] text-thumb-sub mt-1 min-h-[20px]">{plan.tagline}</p>
               <div className="mt-4 flex items-end gap-1.5">
-                <span className="text-5xl font-black text-thumb-ink tracking-tight">${perMonth(plan, cycle)}</span>
+                <span key={cycle} className="text-5xl font-black text-thumb-ink tracking-tight inline-block" style={{ animation: 'prIn .35s ease-out both' }}>${perMonth(plan, cycle)}</span>
                 <span className="text-sm text-thumb-sub mb-2">/ month</span>
               </div>
               <p className="text-xs text-thumb-sub mt-1.5 h-4">
