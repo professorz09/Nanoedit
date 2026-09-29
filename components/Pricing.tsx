@@ -92,7 +92,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
             <p className="text-[12px] text-thumb-sub mt-1">free when you sign up</p>
           </div>
           <ul className="mt-5 space-y-2.5 flex-1">
-            {['Preview all the best moments', 'Viral score for each one', 'All styles, captions & effects'].map(f => (
+            {['Preview all the best moments', 'Viral score for each one', 'All styles, captions & effects', 'Standard (slower) generation'].map(f => (
               <li key={f} className="flex items-start gap-2.5 text-sm text-thumb-ink"><Check className="w-4 h-4 text-thumb-green shrink-0 mt-0.5" /> {f}</li>
             ))}
           </ul>
