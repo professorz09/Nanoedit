@@ -13,13 +13,16 @@ export interface ShortsLook {
   fxMode: 'auto' | 'pick';
   fx: string[];
   sfx: boolean;
+  explain: boolean;     // 📊 AI explainer designs: fact cards, number counters, money stacks
+  broll: boolean;       // 🔬 AI B-roll: a real, labelled picture of what is explained
+  stickers: boolean;    // 🎨 AI stickers
   fit: string;          // full | zoom | track (Classic & Boxed)
   length: string;
   count: string;        // how many Shorts: auto | 3 | 5 | 10 | 15 | 20
 }
 
 export const DEFAULT_LOOK: ShortsLook = {
-  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], sfx: true, fit: 'full', length: 'auto', count: 'auto',
+  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
 };
 
 // what the server gets for this look
@@ -31,12 +34,23 @@ export const lookToRequest = (l: ShortsLook) => {
     subtitles: studio ? (l.caption === 'off' ? 'off' : 'auto') : l.caption,
     bg: l.bg,
     caption_look: studio && l.caption !== 'off' ? l.caption : 'auto',
-    fx: (l.fxMode === 'auto' ? 'auto' : l.fx) as string[] | 'auto',
+    // the motion effects are always the AI's pick; the four switches add their own groups
+    fx: [...MOTION_FX, ...(l.explain ? EXPLAIN_FX : []), ...(l.stickers ? ['stickers'] : []), ...(l.broll ? ['real_images'] : [])],
     sfx: l.sfx,
     fit: studio ? 'full' : l.fit,
     count: l.count === 'auto' ? undefined : Number(l.count),
   };
 };
+
+// the Effects popup is one Auto (these, picked per clip) plus four switches
+const MOTION_FX = ['hook_freeze', 'card_drop', 'card_move', 'push_in', 'zoom_punch', 'cascade', 'marker', 'scribble', 'burst', 'audio_react', 'progress'];
+const EXPLAIN_FX = ['facts', 'counter', 'scramble', 'money_stack'];
+const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; icon: string; label: string; note: string }[] = [
+  { key: 'explain', icon: '📊', label: 'AI explainer designs', note: 'Fact cards, numbers that count up, money stacks' },
+  { key: 'broll', icon: '🔬', label: 'AI B-roll', note: 'A real, labelled picture of what is being explained' },
+  { key: 'stickers', icon: '🎨', label: 'AI stickers', note: 'A drawn sticker of what is said' },
+  { key: 'sfx', icon: '🔊', label: 'Sound effects', note: 'Whooshes and pops on the moments' },
+];
 
 const STYLES = [
   { id: 'split', label: 'Studio', note: 'Video in a card, animated words, effects' },
@@ -444,7 +458,6 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
   const cap = caps.find(c => c.id === look.caption) || caps[0];
   const style = STYLES.find(s => s.id === look.style) || STYLES[0];
   const small = typeof window !== 'undefined' && window.innerWidth < 640;
-  const toggleFx = (id: string) => set({ fx: look.fx.includes(id) ? look.fx.filter(f => f !== id) : [...look.fx, id] });
 
   const svg = (d: React.ReactNode) => (
     <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">{d}</svg>
@@ -478,7 +491,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           icon={<span className="block w-4 h-4 rounded-full ring-1 ring-black/15" style={bg.css} />} />
       : <Chip key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} icon={ICONS.fit} />,
     <Chip key="caption" panel="caption" label="Subtitles" value={cap.label} icon={ICONS.caption} />,
-    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={look.fxMode === 'auto' ? 'Auto' : `${look.fx.length} picked`} icon={ICONS.fx} />] : []),
+    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = FX_SWITCHES.filter(f => look[f.key]).length; return n ? `Auto + ${n}` : 'Auto'; })()} icon={ICONS.fx} />] : []),
     <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
     <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
   ];
@@ -545,49 +558,29 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
       )}
 
       {open === 'fx' && (
-        <Popup title={TITLES.fx} wide onClose={() => setOpen(null)}
-          hint={look.fxMode === 'auto' ? 'Every Short gets its own mix, picked to fit the clip' : `${look.fx.length} picked — each Short uses some of them`}
-          footer={
-            <div className="flex items-center justify-between gap-3">
-              <label className="flex items-center gap-2.5 text-[13px] font-bold text-thumb-ink cursor-pointer">
-                <button type="button" role="switch" aria-checked={look.sfx} onClick={() => set({ sfx: !look.sfx })}
-                  className={`relative shrink-0 w-10 h-6 rounded-full transition-colors ${look.sfx ? 'bg-thumb-red' : 'bg-thumb-soft border border-thumb-line'}`}>
-                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${look.sfx ? 'left-[18px]' : 'left-0.5'}`} />
-                </button>
-                🔊 Sound effects
-              </label>
-              <button type="button" onClick={() => setOpen(null)} className="thumb-btn px-5 h-10 rounded-xl text-white font-black text-[14px]">Done</button>
-            </div>
-          }>
-          <div className="space-y-3">
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 p-1 rounded-xl bg-thumb-soft border border-thumb-line">
-                {(['auto', 'pick'] as const).map(m => (
-                  <button key={m} type="button"
-                    onClick={() => set({ fxMode: m, fx: m === 'pick' && !look.fx.length ? FX.map(f => f.id).filter(id => id !== 'stickers' && id !== 'facts' && id !== 'real_images') : look.fx })}
-                    className={`py-2 rounded-lg text-[13px] font-black transition-colors ${look.fxMode === m ? 'bg-thumb-card text-thumb-ink shadow-sm' : 'text-thumb-sub'}`}>
-                    {m === 'auto' ? '✨ Auto (AI picks)' : '☑️ Choose myself'}
-                  </button>
-                ))}
+        <Popup title={TITLES.fx} onClose={() => setOpen(null)}
+          footer={<button type="button" onClick={() => setOpen(null)} className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px]">Done</button>}>
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-thumb-redSoft border-2 border-thumb-red">
+              <span className="text-[22px] leading-none">✨</span>
+              <div className="min-w-0">
+                <p className="text-[14px] font-black text-thumb-ink">Auto effects</p>
+                <p className="text-[12px] text-thumb-sub leading-snug">Zooms, card moves, word highlights and more — AI picks what fits each clip</p>
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {FX.map(f => {
-                  const sel = look.fxMode === 'auto' ? f.id !== 'real_images' : look.fx.includes(f.id);
-                  return (
-                    <button key={f.id} type="button" onClick={() => { if (look.fxMode === 'auto') set({ fxMode: 'pick', fx: FX.map(x => x.id).filter(id => id !== 'real_images' && id !== f.id) }); else toggleFx(f.id); }}
-                      className={`relative flex flex-col items-center p-1.5 pb-2 rounded-xl border-2 transition-colors ${sel ? 'border-thumb-red bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/40'}`}>
-                      <span className={`absolute top-1 right-1 z-40 w-4 h-4 rounded-md border-2 flex items-center justify-center ${sel ? 'bg-thumb-red border-thumb-red text-white' : 'bg-white/80 border-thumb-line'}`}>
-                        {sel && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={4}><path d="M20 6 9 17l-5-5" /></svg>}
-                      </span>
-                      <PhonePreview look={{ ...look, style: 'split', caption: 'auto', fxMode: 'pick', fx: [f.id] }} fxOnly={f.id} width={small ? 78 : 104} frame={false} />
-                      <span className="mt-1.5 text-[11px] font-black text-thumb-ink leading-tight text-center">{f.label}</span>
-                      <span className="text-[9.5px] text-thumb-sub leading-tight text-center mt-0.5 hidden sm:block">{f.note}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[11.5px] text-thumb-sub">🎯 The crop follows whoever is talking — always on in Studio.</p>
             </div>
+            {FX_SWITCHES.map(f => (
+              <button key={f.key} type="button" role="switch" aria-checked={look[f.key]} onClick={() => set({ [f.key]: !look[f.key] } as Partial<ShortsLook>)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-thumb-soft border border-thumb-line text-left hover:border-thumb-red/40 transition-colors">
+                <span className="text-[22px] leading-none">{f.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-black text-thumb-ink">{f.label}</span>
+                  <span className="block text-[12px] text-thumb-sub leading-snug">{f.note}</span>
+                </span>
+                <span className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${look[f.key] ? 'bg-thumb-red' : 'bg-thumb-line'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${look[f.key] ? 'left-[22px]' : 'left-0.5'}`} />
+                </span>
+              </button>
+            ))}
           </div>
         </Popup>
       )}
