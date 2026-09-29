@@ -400,10 +400,32 @@ const TITLES: Record<Panel, string> = {
 };
 
 const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?: boolean; footer?: React.ReactNode; children: React.ReactNode }> =
-  ({ title, hint, onClose, wide, footer, children }) => createPortal(
+  ({ title, hint, onClose, wide, footer, children }) => {
+  // the page behind stays put while the popup is open (no scrolling it on phones either); Esc closes it
+  const closeRef = React.useRef(onClose);
+  closeRef.current = onClose;
+  React.useEffect(() => {
+    const html = document.documentElement, body = document.body;
+    const before = { html: html.style.overflow, body: body.style.overflow, pad: body.style.paddingRight, touch: body.style.touchAction };
+    const bar = window.innerWidth - html.clientWidth; // keep the layout from jumping where a scrollbar disappears
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.touchAction = 'none';
+    if (bar > 0) body.style.paddingRight = `${bar}px`;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      html.style.overflow = before.html;
+      body.style.overflow = before.body;
+      body.style.paddingRight = before.pad;
+      body.style.touchAction = before.touch;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  return createPortal(
     // on the page root (.thumb-scope keeps the light/dark theme): inside the glass box a "fixed" popup would be
     // trapped by its backdrop-filter
-    <div className="fixed inset-0 z-[140] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[140] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 overscroll-contain" onClick={onClose}>
       <style>{KEYFRAMES}</style>
       <div className={`bg-thumb-card border border-thumb-line rounded-2xl p-5 w-full ${wide ? 'max-w-2xl' : 'max-w-xl'} max-h-[80vh] flex flex-col shadow-2xl`} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
@@ -415,12 +437,13 @@ const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
-        <div className="overflow-y-auto no-scrollbar pt-1 pr-1 -mr-1">{children}</div>
+        <div className="overflow-y-auto overscroll-contain no-scrollbar pt-1 pr-1 -mr-1" style={{ touchAction: 'pan-y' }}>{children}</div>
         {footer && <div className="pt-3 mt-3 border-t border-thumb-line">{footer}</div>}
       </div>
     </div>,
     document.querySelector('.thumb-scope') || document.body,
   );
+};
 
 export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void; thumb?: string | null }> = ({ look, onChange, thumb = null }) => {
   const [open, setOpen] = React.useState<Panel | null>(null);
