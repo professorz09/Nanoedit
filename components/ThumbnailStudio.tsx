@@ -1589,7 +1589,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                     Log in
                   </button>
                 )}
-                <button onClick={goGenerate} className="h-11 inline-flex items-center whitespace-nowrap thumb-btn text-white font-bold text-sm px-3.5 sm:px-5 rounded-full">
+                {/* the header's Start now opens the Shorts Maker (user-requested) */}
+                <button onClick={goShorts} className="h-11 inline-flex items-center whitespace-nowrap thumb-btn text-white font-bold text-sm px-3.5 sm:px-5 rounded-full">
                   Start now
                 </button>
               </>
