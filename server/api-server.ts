@@ -19,8 +19,12 @@
 // SUPADATA_API_KEY for transcript; GOOGLE_SERVICE_ACCOUNT_JSON or VERTEX_API_KEY for the styles
 // (match-style also runs on OPENROUTER_API_KEY alone). One without its key answers 501 and the site
 // uses the Supabase function.
+// Keys the host server already has (Movievideomaker's .env, secrets/, bot's Telegram keys) are picked
+// up by server/host-keys.ts when this service's own env doesn't set them.
 // ═══════════════════════════════════════════════════════════════════════════
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+// first: fills in keys shared from the host server (server/host-keys.ts) before any handler reads them
+import './host-keys.ts';
 import generate from '../api/generate.ts';
 import text from '../api/text.ts';
 import { FUNCTIONS, loadFunction } from './deno-functions.ts';
