@@ -7,7 +7,7 @@ import {
 } from '../services/shortsService';
 import { DEFAULT_LOOK, LookBar, ShortsLook, lookToRequest } from './ShortsStylePicker';
 
-const LOOK_KEY = 'shorts_look_v1';
+const LOOK_KEY = 'shorts_look_v2'; // v2: everyone starts again on the defaults (White background)
 const savedLook = (): ShortsLook => {
   try { return { ...DEFAULT_LOOK, ...JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') }; } catch { return DEFAULT_LOOK; }
 };

@@ -54,9 +54,9 @@ const wall = (c: string): React.CSSProperties => ({
   backgroundImage: `radial-gradient(circle at 30% 20%, rgba(255,255,255,.16), transparent 55%), repeating-linear-gradient(45deg, rgba(0,0,0,.10) 0 2px, transparent 2px 5px)`,
 });
 const BGS: Bg[] = [
+  { id: 'white', label: 'White', css: { background: '#FFFFFF' } },
   { id: 'ai', label: 'Auto', tag: 'AI', css: { background: 'conic-gradient(from 200deg, #FDE047, #F9A8D4, #93C5FD, #86EFAC, #FDE047)' } },
   { id: 'random', label: 'Mix', tag: '🎲', css: { background: 'linear-gradient(135deg,#fff 0 25%,#FDE047 25% 50%,#0B0B0F 50% 75%,#A3111B 75%)' } },
-  { id: 'white', label: 'White', css: { background: '#FFFFFF' } },
   { id: 'white_grid', label: 'White grid', css: grid('rgba(0,0,0,.08)', '#FFFFFF') },
   { id: 'yellow', label: 'Yellow', css: { background: '#FDE047' } },
   { id: 'blue', label: 'Blue', css: { background: '#93C5FD' } },
@@ -244,7 +244,7 @@ const Footage: React.FC<{ className?: string; style?: React.CSSProperties; anim?
 export const PhonePreview: React.FC<{ look: ShortsLook; width?: number; fxOnly?: string; still?: boolean; frame?: boolean }> =
   ({ look, width = 150, fxOnly, still, frame = true }) => {
     const studio = look.style === 'split';
-    const bg = BGS.find(b => b.id === look.bg) || BGS[2];
+    const bg = BGS.find(b => b.id === look.bg) || BGS[0];
     const dark = studio ? !!bg.dark : look.style === 'boxed';
     const caps = studio ? CAPS : SIMPLE_CAPS;
     const cap = caps.find(c => c.id === look.caption) || caps[0];
@@ -401,7 +401,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
   const set = (patch: Partial<ShortsLook>) => onChange({ ...look, ...patch });
   const pickOne = (patch: Partial<ShortsLook>) => { set(patch); setOpen(null); };
   const studio = look.style === 'split';
-  const bg = BGS.find(b => b.id === look.bg) || BGS[2];
+  const bg = BGS.find(b => b.id === look.bg) || BGS[0];
   const caps = studio ? CAPS : SIMPLE_CAPS;
   const cap = caps.find(c => c.id === look.caption) || caps[0];
   const style = STYLES.find(s => s.id === look.style) || STYLES[0];
