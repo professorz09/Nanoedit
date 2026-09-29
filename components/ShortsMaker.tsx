@@ -389,14 +389,14 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     <div className="text-[13px] bg-thumb-redSoft text-thumb-red border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>
   );
 
-  // ── one project ──
-  if (openId != null) {
+  // ── one project (on a desktop: the right-hand panel, next to the link box) ──
+  const renderProject = () => {
     const shorts = project?.shorts || [];
     const made = shorts.filter(s => s.status === 'ready').length;
     const working = shorts.filter(s => s.status === 'queued' || s.status === 'rendering').length;
     const unpaid = shorts.filter(s => !s.paid).length * cost;
     return (
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="space-y-6">
         <button type="button" onClick={() => { setOpenId(null); loadProjects(); }} className="inline-flex items-center gap-1.5 text-sm font-bold text-thumb-sub hover:text-thumb-ink">
           <Ic.Back className="w-4 h-4" /> All projects
         </button>
@@ -442,7 +442,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           </div>
         )}
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-5">
           {!project || project.status === 'finding'
             ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
             : shorts.map(s => (
@@ -451,15 +451,14 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         </div>
       </div>
     );
-  }
+  };
 
-  // ── start page: the link box + the projects ──
-  return (
-    <div className="max-w-6xl mx-auto space-y-10">
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_210px] gap-8 items-start">
-      <div className="space-y-4 min-w-0">
+  // ── start page: the link box on the left, the projects on the right (like the thumbnail maker); a project
+  // opens in that right-hand panel on a desktop, full page on a phone ──
+  const formPanel = (
+    <div className="space-y-4 min-w-0">
       <div className="hidden lg:block">
-        <h1 className="text-[28px] font-black text-thumb-ink leading-tight">New Shorts</h1>
+        <h1 className="text-[26px] font-black text-thumb-ink leading-tight">New Shorts</h1>
         <p className="text-[14px] text-thumb-sub mt-1">Paste a video link, choose the look, and we’ll find the best moments.</p>
       </div>
       <div className="thumb-glass rounded-[28px] p-4 sm:p-5 space-y-3.5">
@@ -472,54 +471,64 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
         />
         <LookBar look={look} onChange={setLook} brollOk={brollOk} onUpgrade={onBuyCredits} thumb={extractYouTubeId(url.trim()) ? `https://i.ytimg.com/vi/${extractYouTubeId(url.trim())}/hqdefault.jpg` : null} />
-        {noteBox}
+        {openId == null && noteBox}
         <button type="button" onClick={() => generate()} disabled={busy}
           className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
           {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
             : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
         </button>
       </div>
-      </div>
-      <aside className="hidden lg:block self-center"><ExamplePhone /></aside>
-      </div>
+    </div>
+  );
 
-      {!signedIn && <GettingStarted />}
+  // nothing yet: the thumbnail maker's empty panel, with a real Short playing in it
+  const emptyPanel = (
+    <div className="hidden lg:flex rounded-[28px] border-2 border-dashed border-thumb-line bg-thumb-soft p-6 items-center justify-center gap-8 min-h-[520px]">
+      <ExamplePhone />
+      <div className="max-w-xs">
+        <p className="text-xl font-black text-thumb-ink">Your Shorts will appear here</p>
+        <p className="text-[14px] text-thumb-sub mt-2 leading-relaxed">Paste a link on the left and hit <b className="text-thumb-ink">Generate</b> — each video becomes a project here. Open it to preview, trim and download its Shorts.</p>
+      </div>
+    </div>
+  );
 
-      {signedIn && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-black text-thumb-ink">{projects && projects.length === 0 ? 'How it works' : 'Your projects'}</h2>
-          {projects == null ? (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {Array.from({ length: 3 }, (_, i) => (
-                <div key={i} className="thumb-glass rounded-3xl overflow-hidden">
-                  <div className="aspect-video thumb-skeleton" />
-                  <div className="p-4 space-y-2"><div className="h-4 w-4/5 rounded thumb-skeleton" /><div className="h-3 w-1/3 rounded thumb-skeleton" /></div>
-                </div>
-              ))}
+  const projectsPanel = !signedIn || (projects && projects.length === 0) ? emptyPanel : (
+    <div className="space-y-4">
+      <h2 className="text-lg font-black text-thumb-ink">Your projects</h2>
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
+        {projects == null
+          ? Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="thumb-glass rounded-3xl overflow-hidden">
+              <div className="aspect-video thumb-skeleton" />
+              <div className="p-4 space-y-2"><div className="h-4 w-4/5 rounded thumb-skeleton" /><div className="h-3 w-1/3 rounded thumb-skeleton" /></div>
             </div>
-          ) : projects.length === 0 ? (
-            <GettingStarted />
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {projects.map(p => (
-                <button key={p.id} type="button" onClick={() => setOpenId(p.id)}
-                  className="thumb-glass rounded-3xl overflow-hidden text-left hover:ring-2 hover:ring-thumb-red/40 transition-all">
-                  <div className="relative aspect-video bg-thumb-soft">
-                    {p.thumb && <img src={p.thumb} alt="" className="w-full h-full object-cover" loading="lazy" />}
-                    <span className={`absolute bottom-2.5 left-2.5 text-[12px] font-black px-2.5 py-1 rounded-lg ${p.status === 'failed' ? 'bg-black/75 text-white' : 'bg-thumb-red text-white'}`}>
-                      {p.status === 'finding' ? 'Finding moments…' : p.status === 'failed' ? 'Failed' : `${p.count ?? 0} Shorts`}
-                    </span>
-                  </div>
-                  <div className="p-4">
-                    <p className="text-[15px] font-black text-thumb-ink line-clamp-2 leading-snug">{p.title}</p>
-                    {p.created_at && <p className="text-[12px] text-thumb-sub mt-1">{new Date(p.created_at * 1000).toLocaleDateString()}</p>}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+          ))
+          : projects.map(p => (
+            <button key={p.id} type="button" onClick={() => setOpenId(p.id)}
+              className="thumb-glass rounded-3xl overflow-hidden text-left hover:ring-2 hover:ring-thumb-red/40 transition-all">
+              <div className="relative aspect-video bg-thumb-soft">
+                {p.thumb && <img src={p.thumb} alt="" className="w-full h-full object-cover" loading="lazy" />}
+                <span className={`absolute bottom-2.5 left-2.5 text-[12px] font-black px-2.5 py-1 rounded-lg ${p.status === 'failed' ? 'bg-black/75 text-white' : 'bg-thumb-red text-white'}`}>
+                  {p.status === 'finding' ? 'Finding moments…' : p.status === 'failed' ? 'Failed' : `${p.count ?? 0} Shorts`}
+                </span>
+              </div>
+              <div className="p-4">
+                <p className="text-[15px] font-black text-thumb-ink line-clamp-2 leading-snug">{p.title}</p>
+                {p.created_at && <p className="text-[12px] text-thumb-sub mt-1">{new Date(p.created_at * 1000).toLocaleDateString()}</p>}
+              </div>
+            </button>
+          ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-10">
+      <div className="lg:grid lg:grid-cols-[400px_minmax(0,1fr)] gap-8 items-start space-y-8 lg:space-y-0">
+        <div className={`lg:sticky lg:top-24 ${openId != null ? 'hidden lg:block' : ''}`}>{formPanel}</div>
+        <div className="min-w-0">{openId != null ? renderProject() : projectsPanel}</div>
+      </div>
+      {openId == null && (!signedIn || (projects && projects.length === 0)) && <GettingStarted />}
     </div>
   );
 };
