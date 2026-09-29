@@ -6,6 +6,8 @@ import {
   renderAll, renderShort, startDownload, trimShort,
 } from '../services/shortsService';
 import { DEFAULT_LOOK, LookBar, ShortsLook, lookToRequest } from './ShortsStylePicker';
+import { HOME_SHORTS } from './homeShorts';
+import VideoPhone from './VideoPhone';
 
 const LOOK_KEY = 'shorts_look_v2'; // v2: everyone starts again on the defaults (White background)
 const savedLook = (): ShortsLook => {
@@ -171,6 +173,64 @@ const ShortSkeleton = () => (
       <div className="h-24 w-full rounded-2xl thumb-skeleton" />
       <div className="h-[52px] w-full rounded-2xl thumb-skeleton" />
     </div>
+  </div>
+);
+
+// ── the start page's side: a real finished Short playing, a new one every 10 s ─────────────────────
+const ExamplePhone: React.FC = () => {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (HOME_SHORTS.length < 2) return;
+    const t = setInterval(() => setI(n => (n + 1) % HOME_SHORTS.length), 10000);
+    return () => clearInterval(t);
+  }, []);
+  const s = HOME_SHORTS[i];
+  if (!s) return null;
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative">
+        <VideoPhone key={s.url} short={s} width={250} />
+        <span className="absolute -top-2 -right-3 px-2.5 py-1 rounded-lg bg-thumb-red text-white text-[12px] font-black shadow-lg">Made here</span>
+      </div>
+      <p className="mt-3 text-[13px] font-bold text-thumb-ink text-center max-w-[250px] leading-snug">{s.title}</p>
+      <div className="mt-2 flex gap-1.5">
+        {HOME_SHORTS.map((x, n) => (
+          <button key={x.url} type="button" aria-label={`Example ${n + 1}`} onClick={() => setI(n)}
+            className={`h-1.5 rounded-full transition-all ${n === i ? 'w-5 bg-thumb-red' : 'w-1.5 bg-thumb-line'}`} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// no projects yet: how it works, and real Shorts made with it
+const GettingStarted: React.FC = () => (
+  <div className="space-y-6">
+    <div className="grid sm:grid-cols-3 gap-3">
+      {[
+        { n: '1', t: 'Paste a link', d: 'Any YouTube video or podcast — long ones are fine.' },
+        { n: '2', t: 'Pick the best moments', d: 'AI finds them and scores each one. Preview, trim, and choose — free.' },
+        { n: '3', t: 'Download & post', d: 'Captions, effects and a title are done. One by one or all as a ZIP.' },
+      ].map(x => (
+        <div key={x.n} className="thumb-glass rounded-2xl p-4 flex gap-3">
+          <span className="w-8 h-8 shrink-0 rounded-xl bg-thumb-red text-white font-black flex items-center justify-center">{x.n}</span>
+          <span><span className="block text-[14px] font-black text-thumb-ink">{x.t}</span><span className="block text-[12.5px] text-thumb-sub mt-0.5 leading-snug">{x.d}</span></span>
+        </div>
+      ))}
+    </div>
+    {HOME_SHORTS.length > 0 && (
+      <div>
+        <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-thumb-sub mb-3">Shorts made with PodcastFlux</p>
+        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 -mx-1 px-1">
+          {HOME_SHORTS.map(s => (
+            <figure key={s.url} className="shrink-0 w-[140px] sm:w-[170px]">
+              <VideoPhone short={s} width={typeof window !== 'undefined' && window.innerWidth < 640 ? 140 : 170} frame={false} />
+              <figcaption className="mt-2 text-[12px] font-bold text-thumb-ink leading-snug line-clamp-2">{s.title}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    )}
   </div>
 );
 
@@ -391,14 +451,13 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   // ── start page: the link box + the projects ──
   return (
     <div className="max-w-6xl mx-auto space-y-10">
-      <div className="text-center space-y-3 pt-2">
-        <h1 className="text-[34px] sm:text-5xl font-black tracking-tight text-thumb-ink leading-[1.05]">
-          TURN VIDEOS INTO <span className="text-thumb-red">VIRAL SHORTS</span>
-        </h1>
-        <p className="text-sm sm:text-base text-thumb-sub">Paste a YouTube link — we find the best moments. Preview free, pay only for what you download.</p>
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-8 items-center">
+      <div className="space-y-4 min-w-0">
+      <div className="hidden lg:block">
+        <h1 className="text-[28px] font-black text-thumb-ink leading-tight">New Shorts</h1>
+        <p className="text-[14px] text-thumb-sub mt-1">Paste a video link, choose the look, and we’ll find the best moments.</p>
       </div>
-
-      <div className="thumb-glass rounded-[28px] p-4 sm:p-5 max-w-2xl mx-auto space-y-3.5">
+      <div className="thumb-glass rounded-[28px] p-4 sm:p-5 space-y-3.5">
         <textarea
           value={url}
           onChange={e => setUrl(e.target.value)}
@@ -415,10 +474,15 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
             : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
         </button>
       </div>
+      </div>
+      <aside className="hidden lg:block"><ExamplePhone /></aside>
+      </div>
+
+      {!signedIn && <GettingStarted />}
 
       {signedIn && (
         <div className="space-y-4">
-          <h2 className="text-lg font-black text-thumb-ink">Your projects</h2>
+          <h2 className="text-lg font-black text-thumb-ink">{projects && projects.length === 0 ? 'How it works' : 'Your projects'}</h2>
           {projects == null ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {Array.from({ length: 3 }, (_, i) => (
@@ -429,11 +493,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
               ))}
             </div>
           ) : projects.length === 0 ? (
-            <div className="thumb-glass rounded-3xl p-10 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center mx-auto mb-4"><Ic.Scissors className="w-7 h-7" /></div>
-              <p className="text-base font-black text-thumb-ink">Your Shorts projects show up here</p>
-              <p className="text-sm text-thumb-sub mt-1.5">Paste a link above and hit Generate Shorts.</p>
-            </div>
+            <GettingStarted />
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {projects.map(p => (

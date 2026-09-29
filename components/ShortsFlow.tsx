@@ -1,5 +1,7 @@
 import React from 'react';
-import { DEFAULT_LOOK, PhonePreview, Studio } from './ShortsStylePicker';
+import { DEFAULT_LOOK, PhonePreview } from './ShortsStylePicker';
+import { HOME_SHORTS } from './homeShorts';
+import VideoPhone from './VideoPhone';
 
 // Home page: one long video → its best moments → three ready Shorts, animated on a loop (7 s).
 const seg = (i: number, a: number) =>
@@ -20,14 +22,21 @@ const PHONES = [
 const ShortsFlow: React.FC = () => {
   const css = BASE + SEGMENTS.map((sg, i) => seg(i, sg.at)).join('') + PHONES.map((_p, i) => phone(i, 42 + i * 6)).join('');
   const T = '7s';
+  // real finished Shorts when there are some (components/homeShorts.ts)
+  const real = [HOME_SHORTS[0], HOME_SHORTS[4] || HOME_SHORTS[1], HOME_SHORTS[1] || HOME_SHORTS[2]].filter(Boolean);
+  const phoneW = typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 160;
   return (
     <div className="relative mx-auto max-w-3xl select-none" aria-hidden="true">
       <style>{css}</style>
       {/* the long video */}
       <div className="relative mx-auto w-[62%]">
-        <div className="relative rounded-2xl overflow-hidden shadow-[0_20px_50px_-20px_rgba(0,0,0,.6)] ring-1 ring-black/10" style={{ aspectRatio: '16 / 9' }}>
-          <Studio />
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-white text-[10px] sm:text-[11px] font-bold">▶ 1:12:40 podcast</span>
+        <div className="relative rounded-2xl overflow-hidden bg-black shadow-[0_20px_50px_-20px_rgba(0,0,0,.6)] ring-1 ring-black/10" style={{ aspectRatio: '16 / 9' }}>
+          {/* a real podcast (public/home/podcast-long.mp4) */}
+          <video poster="/home/podcast-long.jpg" autoPlay muted loop playsInline preload="auto" className="absolute inset-0 w-full h-full object-cover">
+            <source src="/home/podcast-long.webm" type="video/webm" />
+            <source src="/home/podcast-long.mp4" type="video/mp4" />
+          </video>
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-white text-[10px] sm:text-[11px] font-bold">▶ 2:41:12 · full podcast</span>
         </div>
         {/* its timeline: the playhead runs, the best moments light up */}
         <div className="relative mt-2.5 h-2 rounded-full bg-thumb-line/80 overflow-visible">
@@ -50,7 +59,9 @@ const ShortsFlow: React.FC = () => {
       <div className="flex justify-center gap-3 sm:gap-6">
         {PHONES.map((p, i) => (
           <div key={i} className="relative" style={{ animation: `sfPhone${i} ${T} ease-out infinite` }}>
-            <PhonePreview look={{ ...DEFAULT_LOOK, bg: p.bg, caption: p.caption }} width={typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 150} head={p.head} words={p.words} />
+            {real[i]
+              ? <VideoPhone short={real[i]} width={phoneW} />
+              : <PhonePreview look={{ ...DEFAULT_LOOK, bg: p.bg, caption: p.caption }} width={phoneW} head={p.head} words={p.words} />}
             <span className="absolute -top-2 -right-2 z-40 inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-thumb-red text-white text-[11px] sm:text-[13px] font-black shadow-lg"
               style={{ animation: `sfScore${i} ${T} ease-out infinite` }}>🔥 {p.score}</span>
           </div>

@@ -1,13 +1,11 @@
 import React from 'react';
 import { DEFAULT_LOOK, PhonePreview } from './ShortsStylePicker';
+import { HOME_SHORTS } from './homeShorts';
+import VideoPhone from './VideoPhone';
 
-// Home page: "post anywhere" — the platforms, then a moving strip of Shorts. Real finished Shorts dropped into
-// attached_assets/shorts-showcase/ play here on their own; until there are any, example looks are shown.
-const REAL = Object.entries(
-  import.meta.glob('../attached_assets/shorts-showcase/*.{mp4,webm,MP4,WEBM}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>,
-)
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([path, url]) => ({ url, name: path.split('/').pop()!.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ') }));
+// Home page: "post anywhere" — the platforms, then a moving strip of real Shorts (components/homeShorts.ts);
+// example looks only while there are none.
+const REAL = HOME_SHORTS;
 
 type Ex = { bg: string; caption: string; fx: string; head: [string, string, string]; words: [string, string]; label: string };
 const EXAMPLES: Ex[] = [
@@ -43,8 +41,8 @@ const ShortsShowcase: React.FC<{ onCta: () => void }> = ({ onCta }) => {
   const cards = REAL.length
     ? REAL.map(r => (
       <figure key={r.url} className="shrink-0" style={{ width: w }}>
-        <video src={r.url} autoPlay muted loop playsInline preload="metadata" className="w-full rounded-[22px] object-cover bg-black shadow-[0_18px_40px_-16px_rgba(0,0,0,.5)]" style={{ aspectRatio: '9 / 16' }} />
-        <figcaption className="mt-2.5 text-[13px] font-bold text-thumb-ink truncate capitalize">{r.name}</figcaption>
+        <VideoPhone short={r} width={w} frame={false} />
+        <figcaption className="mt-2.5 text-[13px] font-bold text-thumb-ink leading-snug line-clamp-2 text-left">{r.title}</figcaption>
       </figure>
     ))
     : EXAMPLES.map(e => (
@@ -53,7 +51,7 @@ const ShortsShowcase: React.FC<{ onCta: () => void }> = ({ onCta }) => {
         <figcaption className="mt-2.5 text-[13px] font-bold text-thumb-ink">{e.label}</figcaption>
       </figure>
     ));
-  const dur = `${(REAL.length || EXAMPLES.length) * 5}s`;
+  const dur = `${Math.max(REAL.length, 5) * 6}s`;
 
   return (
     <div className="text-center">
