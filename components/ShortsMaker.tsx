@@ -451,7 +451,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   // ── start page: the link box + the projects ──
   return (
     <div className="max-w-6xl mx-auto space-y-10">
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-8 items-center">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-8 items-start">
       <div className="space-y-4 min-w-0">
       <div className="hidden lg:block">
         <h1 className="text-[28px] font-black text-thumb-ink leading-tight">New Shorts</h1>
