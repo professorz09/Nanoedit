@@ -189,10 +189,10 @@ const ExamplePhone: React.FC = () => {
   return (
     <div className="flex flex-col items-center">
       <div className="relative">
-        <VideoPhone key={s.url} short={s} width={250} />
-        <span className="absolute -top-2 -right-3 px-2.5 py-1 rounded-lg bg-thumb-red text-white text-[12px] font-black shadow-lg">Made here</span>
+        <VideoPhone key={s.url} short={s} width={180} />
+        <span className="absolute -top-2.5 -right-2 px-2 py-0.5 rounded-lg bg-thumb-red text-white text-[11px] font-black shadow-lg">Made here</span>
       </div>
-      <p className="mt-3 text-[13px] font-bold text-thumb-ink text-center max-w-[250px] leading-snug">{s.title}</p>
+      <p className="mt-3 text-[13px] font-bold text-thumb-ink text-center max-w-[190px] leading-snug line-clamp-2">{s.title}</p>
       <div className="mt-2 flex gap-1.5">
         {HOME_SHORTS.map((x, n) => (
           <button key={x.url} type="button" aria-label={`Example ${n + 1}`} onClick={() => setI(n)}
@@ -451,7 +451,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   // ── start page: the link box + the projects ──
   return (
     <div className="max-w-6xl mx-auto space-y-10">
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-8 items-start">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_210px] gap-8 items-start">
       <div className="space-y-4 min-w-0">
       <div className="hidden lg:block">
         <h1 className="text-[28px] font-black text-thumb-ink leading-tight">New Shorts</h1>
@@ -475,7 +475,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         </button>
       </div>
       </div>
-      <aside className="hidden lg:block"><ExamplePhone /></aside>
+      <aside className="hidden lg:block self-center"><ExamplePhone /></aside>
       </div>
 
       {!signedIn && <GettingStarted />}
