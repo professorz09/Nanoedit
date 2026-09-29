@@ -393,7 +393,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           value={url}
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}
-          rows={3}
+          rows={2}
           placeholder="Paste a YouTube link…"
           className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
         />

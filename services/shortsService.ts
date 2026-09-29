@@ -55,6 +55,7 @@ export interface NewProject {
   fx?: string[] | 'auto';
   sfx?: boolean;
   fit?: string;
+  count?: number;
 }
 
 const call = async <T>(path: string, body?: unknown): Promise<T> => {

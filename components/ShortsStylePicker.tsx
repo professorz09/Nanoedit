@@ -14,10 +14,11 @@ export interface ShortsLook {
   sfx: boolean;
   fit: string;          // full | zoom | track (Classic & Boxed)
   length: string;
+  count: string;        // how many Shorts: auto | 3 | 5 | 10 | 15 | 20
 }
 
 export const DEFAULT_LOOK: ShortsLook = {
-  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], sfx: true, fit: 'full', length: 'auto',
+  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], sfx: true, fit: 'full', length: 'auto', count: 'auto',
 };
 
 // what the server gets for this look
@@ -32,6 +33,7 @@ export const lookToRequest = (l: ShortsLook) => {
     fx: (l.fxMode === 'auto' ? 'auto' : l.fx) as string[] | 'auto',
     sfx: l.sfx,
     fit: studio ? 'full' : l.fit,
+    count: l.count === 'auto' ? undefined : Number(l.count),
   };
 };
 
@@ -99,7 +101,7 @@ const CAPS: Cap[] = [
   { id: 'sticky_note', label: 'Sticky note', font: HAND, key: { color: '#DC2626' }, wrap: { background: '#FDE68A', padding: '4px 8px', transform: 'rotate(-2deg)', boxShadow: '0 4px 10px rgba(0,0,0,.18)' } },
   { id: 'news_bar', label: 'News bar', font: IMPACT, key: { color: '#EF4444' }, wrap: { background: '#111', padding: '3px 8px' }, soft: { color: '#fff' } },
   { id: 'pop_art', label: 'Pop art', font: IMPACT, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '2px 2px 0 #EC4899' } },
-  { id: 'rgb_split', label: 'RGB glitch', font: IMPACT, key: { color: '#fff', textShadow: '-2px 0 #EF4444, 2px 0 #3B82F6' } },
+  { id: 'rgb_split', label: 'RGB glitch', font: IMPACT, key: { color: '#111', textShadow: '-2px 0 #EF4444, 2px 0 #3B82F6' } },
   { id: 'minimal', label: 'Minimal', font: '"Inter", system-ui, sans-serif', key: { fontWeight: 600, letterSpacing: 0 }, soft: { fontWeight: 400 } },
   { id: 'poster_words', label: 'Poster words', font: IMPACT, key: { fontSize: '1.5em', lineHeight: 1 } },
   { id: 'off', label: 'No subtitles', key: {} },
@@ -128,6 +130,7 @@ export const FX: { id: string; icon: string; label: string; note: string }[] = [
   { id: 'burst', icon: '🎉', label: 'Burst', note: 'Confetti on key moments' },
   { id: 'audio_react', icon: '🎚️', label: 'Audio reactive', note: 'Glow that moves with the voice' },
   { id: 'progress', icon: '⏳', label: 'Progress bar', note: 'A bar that fills as it plays' },
+  { id: 'real_images', icon: '🔬', label: 'Real images', note: 'A real, labelled photo of what is explained' },
 ];
 
 const FITS = [
@@ -135,6 +138,7 @@ const FITS = [
   { id: 'zoom', label: 'Zoomed', note: 'Bigger, sides trimmed' },
   { id: 'track', label: 'Follow speaker', note: 'Crop follows who talks' },
 ];
+const COUNTS = ['auto', '3', '5', '10', '15', '20'];
 const LENGTHS = [
   { id: 'auto', label: 'Auto' }, { id: 'u1', label: '< 1 min' }, { id: '2', label: '~2 min' },
   { id: '5', label: '~5 min' }, { id: '8', label: '~8 min' },
@@ -270,9 +274,9 @@ export const PhonePreview: React.FC<{ look: ShortsLook; compact?: boolean }> = (
 };
 
 // ── the picker: small buttons above Generate, each opening a centred scrollable popup ─────────────────
-type Panel = 'style' | 'bg' | 'caption' | 'fx' | 'fit' | 'length';
+type Panel = 'style' | 'bg' | 'caption' | 'fx' | 'fit' | 'length' | 'count';
 const TITLES: Record<Panel, string> = {
-  style: 'Pick a style', bg: 'Pick a background', caption: 'Pick a subtitle look', fx: 'Effects', fit: 'Video fit', length: 'Length of each Short',
+  style: 'Pick a style', bg: 'Pick a background', caption: 'Pick a subtitle look', fx: 'Effects', fit: 'Video fit', length: 'Length of each Short', count: 'How many Shorts',
 };
 
 const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?: boolean; footer?: React.ReactNode; children: React.ReactNode }> =
@@ -324,34 +328,46 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
   const small = typeof window !== 'undefined' && window.innerWidth < 640;
   const toggleFx = (id: string) => set({ fx: look.fx.includes(id) ? look.fx.filter(f => f !== id) : [...look.fx, id] });
 
-  const Btn: React.FC<{ panel: Panel; label: string; value: string; icon: React.ReactNode; changed?: boolean }> = ({ panel, label, value, icon, changed }) => (
-    <button type="button" onClick={() => setOpen(panel)}
-      className={`h-16 min-w-0 rounded-xl border-2 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors ${changed ? 'border-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 hover:border-thumb-red'}`}>
-      <span className="h-4 flex items-center">{icon}</span>
-      <span className={`text-[10.5px] sm:text-[11px] font-bold leading-tight truncate max-w-full ${changed ? 'text-thumb-red' : 'text-thumb-sub'}`}>{label}</span>
-      <span className="text-[9.5px] text-thumb-sub leading-tight truncate max-w-full">{value}</span>
+  const svg = (d: React.ReactNode) => (
+    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+  );
+  const ICONS = {
+    style: svg(<><rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M9.5 18.5h5" /></>),
+    fit: svg(<><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" /><circle cx="12" cy="12" r="3" /></>),
+    caption: svg(<><rect x="2.5" y="5" width="19" height="14" rx="3" /><path d="M10 10.2a2.2 2.2 0 1 0 0 3.6M16.5 10.2a2.2 2.2 0 1 0 0 3.6" /></>),
+    fx: svg(<><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></>),
+    count: svg(<><rect x="3" y="4" width="7" height="12" rx="1.5" /><rect x="14" y="8" width="7" height="12" rx="1.5" /></>),
+    length: svg(<><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9.5 2.5h5" /></>),
+  };
+
+  const Chip: React.FC<{ panel: Panel; label: string; value: string; icon: React.ReactNode }> = ({ panel, label, value, icon }) => (
+    <button type="button" onClick={() => setOpen(panel)} title={label}
+      className="group w-full sm:w-auto inline-flex items-center gap-2 h-11 sm:h-10 pl-3 pr-2.5 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-ink hover:border-thumb-red/50 transition-colors">
+      <span className="text-thumb-sub group-hover:text-thumb-red transition-colors">{icon}</span>
+      <span className="flex flex-col items-start leading-none min-w-0">
+        <span className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-thumb-sub">{label}</span>
+        <span className="text-[13px] font-bold mt-[3px] whitespace-nowrap truncate max-w-full">{value}</span>
+      </span>
+      <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-thumb-sub ml-auto sm:ml-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.4}><path d="m6 9 6 6 6-6" /></svg>
     </button>
   );
 
+  const bgLabel = look.bg === 'ai' ? 'AI auto' : bg.label;
   const buttons = [
-    <Btn key="style" panel="style" label="Style" value={style.label} changed={look.style !== 'split'}
-      icon={<span className="w-2.5 h-4 rounded-[3px] border-[1.5px] border-current text-thumb-sub" />} />,
+    <Chip key="style" panel="style" label="Style" value={style.label} icon={ICONS.style} />,
     studio
-      ? <Btn key="bg" panel="bg" label="Background" value={bg.label} changed={look.bg !== 'white'}
-          icon={<span className="w-4 h-4 rounded-full border border-black/20" style={bg.css} />} />
-      : <Btn key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} changed={look.fit !== 'full'}
-          icon={<span className="text-[12px]">🎯</span>} />,
-    <Btn key="caption" panel="caption" label="Subtitles" value={cap.label} changed={look.caption !== 'auto'}
-      icon={<span className="text-[12px] font-black text-thumb-sub" style={{ fontFamily: IMPACT }}>Aa</span>} />,
-    ...(studio ? [<Btn key="fx" panel="fx" label="Effects" value={look.fxMode === 'auto' ? 'Auto' : `${look.fx.length} on`} changed={look.fxMode !== 'auto' || !look.sfx}
-      icon={<span className="text-[12px]">✨</span>} />] : []),
-    <Btn key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} changed={look.length !== 'auto'}
-      icon={<span className="text-[12px]">⏱️</span>} />,
+      ? <Chip key="bg" panel="bg" label="Background" value={bgLabel}
+          icon={<span className="block w-4 h-4 rounded-full ring-1 ring-black/15" style={bg.css} />} />
+      : <Chip key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} icon={ICONS.fit} />,
+    <Chip key="caption" panel="caption" label="Subtitles" value={cap.label} icon={ICONS.caption} />,
+    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={look.fxMode === 'auto' ? 'Auto' : `${look.fx.length} picked`} icon={ICONS.fx} />] : []),
+    <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
+    <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
   ];
 
   return (
     <>
-      <div className={`grid gap-2 ${buttons.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}>{buttons}</div>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap [&>*:last-child:nth-child(odd)]:col-span-2">{buttons}</div>
 
       {open === 'style' && (
         <Popup title={TITLES.style} onClose={() => setOpen(null)}>
@@ -393,8 +409,8 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
             {caps.map(c => (
               <button key={c.id} type="button" onClick={() => pickOne({ caption: c.id })} className={`${cardCls(look.caption === c.id)} overflow-hidden`}>
                 <Tick on={look.caption === c.id} />
-                <div className="h-[76px] overflow-hidden flex items-center justify-center px-1" style={studio ? bg.css : { background: 'linear-gradient(160deg,#334155,#0F172A)' }}>
-                  <CaptionSample cap={c} dark={studio ? !!bg.dark : true} size={small ? 12 : 14} animate={look.caption === c.id} />
+                <div className="h-[76px] overflow-hidden flex items-center justify-center px-1" style={{ background: studio ? '#FFFFFF' : 'linear-gradient(160deg,#334155,#0F172A)' }}>
+                  <CaptionSample cap={c} dark={!studio} size={small ? 12 : 14} animate={look.caption === c.id} />
                 </div>
                 <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">{c.label}</p>
               </button>
@@ -424,7 +440,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
               <div className="grid grid-cols-2 p-1 rounded-xl bg-thumb-soft border border-thumb-line">
                 {(['auto', 'pick'] as const).map(m => (
                   <button key={m} type="button"
-                    onClick={() => set({ fxMode: m, fx: m === 'pick' && !look.fx.length ? FX.map(f => f.id).filter(id => id !== 'stickers' && id !== 'facts') : look.fx })}
+                    onClick={() => set({ fxMode: m, fx: m === 'pick' && !look.fx.length ? FX.map(f => f.id).filter(id => id !== 'stickers' && id !== 'facts' && id !== 'real_images') : look.fx })}
                     className={`py-2 rounded-lg text-[13px] font-black transition-colors ${look.fxMode === m ? 'bg-thumb-card text-thumb-ink shadow-sm' : 'text-thumb-sub'}`}>
                     {m === 'auto' ? '✨ Auto (AI picks)' : '☑️ Choose myself'}
                   </button>
@@ -432,7 +448,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
               </div>
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 transition-opacity ${look.fxMode === 'auto' ? 'opacity-45 pointer-events-none' : ''}`}>
                 {FX.map(f => {
-                  const sel = look.fxMode === 'auto' || look.fx.includes(f.id);
+                  const sel = look.fxMode === 'auto' ? f.id !== 'real_images' : look.fx.includes(f.id);
                   return (
                     <button key={f.id} type="button" onClick={() => toggleFx(f.id)}
                       className={`flex items-start gap-2 p-2.5 rounded-xl border-2 text-left transition-colors ${sel ? 'border-thumb-red bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/40'}`}>
@@ -465,6 +481,21 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
                 </div>
                 <p className="mt-1.5 text-[12.5px] font-black text-thumb-ink text-center">{f.label}</p>
                 <p className="text-[10.5px] text-thumb-sub text-center leading-tight">{f.note}</p>
+              </button>
+            ))}
+          </div>
+        </Popup>
+      )}
+
+      {open === 'count' && (
+        <Popup title={TITLES.count} hint="Auto: every moment good enough to post" onClose={() => setOpen(null)}>
+          <div className="grid grid-cols-3 gap-2.5">
+            {COUNTS.map(c => (
+              <button key={c} type="button" onClick={() => pickOne({ count: c })}
+                className={`${cardCls(look.count === c)} h-16 bg-thumb-soft flex flex-col items-center justify-center`}>
+                <Tick on={look.count === c} />
+                <span className="text-[18px] font-black text-thumb-ink leading-none">{c === 'auto' ? 'Auto' : c}</span>
+                <span className="text-[11px] text-thumb-sub mt-1">{c === 'auto' ? 'best ones' : 'Shorts'}</span>
               </button>
             ))}
           </div>
