@@ -106,12 +106,13 @@ const CAPS: Cap[] = [
   { id: 'poster_words', label: 'Poster words', font: IMPACT, key: { fontSize: '1.5em', lineHeight: 1 } },
   { id: 'off', label: 'No subtitles', key: {} },
 ];
+const SH = '0 1px 0 #000, 0 0 3px rgba(0,0,0,.9), 0 2px 6px rgba(0,0,0,.6)';
 const SIMPLE_CAPS: Cap[] = [
-  { id: 'auto', label: 'Auto mix', font: IMPACT, key: { color: '#FACC15', WebkitTextStroke: '1px #111' }, soft: { color: '#fff', WebkitTextStroke: '1px #111' } },
-  { id: 'animated', label: 'Animated', font: IMPACT, key: { color: '#22C55E', WebkitTextStroke: '1px #111' }, soft: { color: '#fff', WebkitTextStroke: '1px #111' } },
-  { id: 'simple', label: 'Simple', font: '"Arial Black", sans-serif', key: { color: '#fff', WebkitTextStroke: '1px #111' }, soft: { color: '#fff', WebkitTextStroke: '1px #111' } },
+  { id: 'auto', label: 'Auto mix', font: IMPACT, key: { color: '#FACC15', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
+  { id: 'animated', label: 'Animated', font: IMPACT, key: { color: '#4ADE80', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
+  { id: 'simple', label: 'Simple', font: '"Arial Black", sans-serif', key: { color: '#fff', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
   { id: 'off', label: 'No subtitles', key: {} },
-];
+]
 
 export const FX: { id: string; icon: string; label: string; note: string }[] = [
   { id: 'hook_freeze', icon: '🖼️', label: 'Thumbnail cover', note: 'A clean cover as the first frame' },
@@ -147,13 +148,23 @@ const LENGTHS = [
 const KEYFRAMES = `
 @keyframes smPop{0%,100%{transform:scale(1)}8%{transform:scale(1.18)}16%{transform:scale(1)}}
 @keyframes smSwipe{0%,12%{background-size:0% 100%}30%,100%{background-size:100% 100%}}
-@keyframes smPush{0%{transform:scale(1)}100%{transform:scale(1.12)}}
+@keyframes smPush{0%{transform:scale(1)}100%{transform:scale(1.14)}}
 @keyframes smFill{0%{width:0}100%{width:100%}}
 @keyframes smFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes smConf{0%{transform:translateY(-10px) rotate(0);opacity:0}15%{opacity:1}100%{transform:translateY(60px) rotate(260deg);opacity:0}}
-@keyframes smGlow{0%,100%{box-shadow:0 0 0 2px rgba(239,68,68,.25)}50%{box-shadow:0 0 0 6px rgba(239,68,68,.45)}}
-@keyframes smCount{0%{content:"0"}25%{content:"250"}50%{content:"600"}75%,100%{content:"1,000"}}
+@keyframes smGlow{0%,100%{box-shadow:0 0 0 2px rgba(239,68,68,.35),0 0 10px rgba(239,68,68,.3)}50%{box-shadow:0 0 0 5px rgba(239,68,68,.6),0 0 22px rgba(239,68,68,.6)}}
 @keyframes smDraw{0%,15%{stroke-dashoffset:120}45%,100%{stroke-dashoffset:0}}
+@keyframes smDrop{0%,8%{transform:translateY(-160%)}22%{transform:translateY(6%)}28%{transform:translateY(-3%)}34%,100%{transform:translateY(0)}}
+@keyframes smSwap{0%,30%{transform:translateX(0)}42%,72%{transform:translateX(18%) scale(.84)}84%,100%{transform:translateX(0)}}
+@keyframes smPunch{0%,30%,100%{transform:scale(1)}34%{transform:scale(1.22) rotate(-1.5deg)}38%{transform:scale(1.16) rotate(1.5deg)}44%{transform:scale(1.18)}60%{transform:scale(1)}}
+@keyframes smUnfold{0%,10%{transform:rotateX(90deg);opacity:0}30%,100%{transform:rotateX(0);opacity:1}}
+@keyframes smRoll{0%{transform:translateY(0)}60%,100%{transform:translateY(-75%)}}
+@keyframes smStack{0%,10%{transform:scaleY(.1)}55%,100%{transform:scaleY(1)}}
+@keyframes smBar{0%,10%{transform:scaleX(0)}50%,100%{transform:scaleX(1)}}
+@keyframes smSticker{0%,15%{transform:scale(0) rotate(-20deg)}28%{transform:scale(1.15) rotate(6deg)}36%,80%{transform:scale(1) rotate(-4deg)}90%,100%{transform:scale(0)}}
+@keyframes smPhoto{0%,15%{transform:translateY(30%) rotate(6deg);opacity:0}32%,85%{transform:translateY(0) rotate(-3deg);opacity:1}100%{opacity:0}}
+@keyframes smCover{0%,45%{opacity:1}52%,100%{opacity:0}}
+@keyframes smVu{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
 `;
 
 // ── small parts ───────────────────────────────────────────────────────────────────────────────────
@@ -190,88 +201,171 @@ const CaptionSample: React.FC<{ cap: Cap; dark: boolean; size?: number; animate?
     );
   };
 
-// the video stand-in: a soft gradient "frame" with two heads
-const Footage: React.FC<{ className?: string; style?: React.CSSProperties; push?: boolean }> = ({ className = '', style, push }) => (
-  <div className={`relative overflow-hidden ${className}`} style={style}>
-    <div className="absolute inset-0" style={{ background: 'linear-gradient(160deg,#334155,#0F172A)', animation: push ? 'smPush 6s ease-in-out infinite alternate' : undefined }}>
-      <div className="absolute bottom-0 left-[18%] w-[26%] h-[62%] rounded-t-full bg-[#F4C7A1]/90" />
-      <div className="absolute bottom-0 right-[16%] w-[26%] h-[56%] rounded-t-full bg-[#D6A07A]/90" />
-      <div className="absolute top-2 left-2 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-    </div>
-  </div>
+// the video stand-in: the pasted video's own thumbnail when there is one, else a podcast-studio scene
+const ThumbCtx = React.createContext<string | null>(null);
+
+const Studio = () => (
+  <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 w-full h-full">
+    <defs>
+      <radialGradient id="smWall" cx="50%" cy="30%" r="80%"><stop offset="0" stopColor="#3b2a4d" /><stop offset="1" stopColor="#120d1a" /></radialGradient>
+      <linearGradient id="smDesk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#5b3a24" /><stop offset="1" stopColor="#2a1a10" /></linearGradient>
+    </defs>
+    <rect width="160" height="120" fill="url(#smWall)" />
+    <circle cx="28" cy="22" r="9" fill="#ffb86b" opacity=".22" /><circle cx="132" cy="18" r="12" fill="#6bd3ff" opacity=".16" />
+    <circle cx="80" cy="12" r="6" fill="#ff6b9a" opacity=".18" />
+    <rect x="68" y="30" width="24" height="34" rx="2" fill="#241a30" /><rect x="71" y="33" width="18" height="12" rx="1" fill="#ff3355" opacity=".55" />
+    {/* left: host */}
+    <path d="M18 120 C18 92 30 82 46 82 C62 82 74 92 74 120Z" fill="#1f3b63" />
+    <ellipse cx="46" cy="64" rx="12" ry="14" fill="#e8b48f" /><path d="M33 60 C33 46 59 44 59 58 C56 52 38 52 33 60Z" fill="#2b1b12" />
+    <rect x="44" y="76" width="4" height="7" fill="#d69f7c" />
+    {/* right: guest */}
+    <path d="M88 120 C88 94 99 84 114 84 C129 84 142 94 142 120Z" fill="#7a2230" />
+    <ellipse cx="114" cy="66" rx="12" ry="14" fill="#c98c66" /><path d="M101 62 C99 46 128 44 127 60 C124 51 106 52 101 62Z" fill="#111" />
+    <rect x="112" y="78" width="4" height="7" fill="#b87d59" />
+    {/* mics */}
+    <path d="M60 50 L66 70" stroke="#222" strokeWidth="2" /><rect x="56" y="70" width="8" height="14" rx="4" fill="#222" transform="rotate(-18 60 77)" />
+    <path d="M100 52 L94 72" stroke="#222" strokeWidth="2" /><rect x="92" y="72" width="8" height="14" rx="4" fill="#222" transform="rotate(18 96 79)" />
+    <rect x="0" y="104" width="160" height="16" fill="url(#smDesk)" />
+  </svg>
 );
 
-// ── the live phone preview ───────────────────────────────────────────────────────────────────────
-export const PhonePreview: React.FC<{ look: ShortsLook; compact?: boolean }> = ({ look, compact }) => {
-  const studio = look.style === 'split';
-  const bg = BGS.find(b => b.id === look.bg) || BGS[2];
-  const dark = studio ? !!bg.dark : look.style === 'boxed';
-  const caps = studio ? CAPS : SIMPLE_CAPS;
-  const cap = caps.find(c => c.id === look.caption) || caps[0];
-  const on = (k: string) => studio && (look.fxMode === 'auto' ? ['marker', 'push_in', 'progress', 'counter', 'burst'].includes(k) : look.fx.includes(k));
-  const w = compact ? 150 : 240;
-  const pageBg: React.CSSProperties = studio ? bg.css : look.style === 'boxed' ? { background: '#0B0B0F' } : { background: '#fff' };
-
+const Footage: React.FC<{ className?: string; style?: React.CSSProperties; anim?: string }> = ({ className = '', style, anim }) => {
+  const thumb = React.useContext(ThumbCtx);
   return (
-    <div className="flex flex-col items-center gap-3">
-      <style>{KEYFRAMES}</style>
-      <div className="relative rounded-[34px] p-[7px] bg-[#111] shadow-[0_30px_60px_-20px_rgba(0,0,0,.45)]" style={{ width: w, animation: 'smFloat 6s ease-in-out infinite' }}>
-        <div className="relative overflow-hidden rounded-[28px]" style={{ aspectRatio: '9 / 16', ...pageBg }}>
-          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-14 h-3.5 rounded-full bg-black z-20" />
-          {on('progress') && <div className="absolute top-0 left-0 h-1 bg-thumb-red z-10" style={{ animation: 'smFill 6s linear infinite' }} />}
-
-          {studio && (
-            <div className="absolute inset-0 flex flex-col items-center px-[9%] pt-[16%]">
-              <p className="text-center font-black leading-tight" style={{ fontSize: w * 0.068, color: dark ? '#fff' : '#111', fontFamily: IMPACT }}>
-                HE LOST <span style={{ color: '#EF4444' }}>EVERYTHING</span> IN ONE DAY
-              </p>
-              <Footage push={on('push_in')} className="mt-[9%] w-full rounded-2xl" style={{ aspectRatio: '4 / 3.4', animation: on('audio_react') ? 'smGlow 1.2s ease-in-out infinite' : undefined, boxShadow: '0 10px 24px -8px rgba(0,0,0,.4)' }} />
-              <div className="mt-[10%] min-h-[18%] flex items-center">
-                <CaptionSample cap={cap} dark={dark} size={w * 0.07} animate marker={on('marker')} circle={on('scribble') && !on('marker')} />
-              </div>
-              {on('counter') && (
-                <span className="mt-1 px-2 py-0.5 rounded-lg bg-thumb-red text-white font-black" style={{ fontSize: w * 0.06, fontFamily: IMPACT }}>
-                  $1,000
-                </span>
-              )}
-            </div>
-          )}
-
-          {look.style === 'classic' && (
-            <div className="absolute inset-0 flex flex-col">
-              <div className="pt-[15%] pb-[6%] px-3 bg-white text-center font-black leading-tight" style={{ fontSize: w * 0.066, fontFamily: IMPACT, color: '#111' }}>
-                HE LOST EVERYTHING IN ONE DAY
-              </div>
-              <Footage className="flex-1" push={look.fit === 'zoom'} />
-              <div className="absolute bottom-[14%] inset-x-0 flex justify-center"><CaptionSample cap={cap} dark size={w * 0.07} animate /></div>
-            </div>
-          )}
-
-          {look.style === 'boxed' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-[7%] gap-[5%]">
-              <p className="text-center font-black leading-tight text-white" style={{ fontSize: w * 0.066, fontFamily: IMPACT }}>HE LOST EVERYTHING IN ONE DAY</p>
-              <Footage className="w-full rounded-3xl" style={{ aspectRatio: look.fit === 'full' ? '16 / 11' : '4 / 5' }} />
-              <CaptionSample cap={cap} dark size={w * 0.07} animate />
-            </div>
-          )}
-
-          {!studio && look.fit === 'track' && (
-            <span className="absolute top-[42%] left-[22%] w-[30%] h-[18%] border-2 border-dashed border-[#4ADE80] rounded-lg z-10" />
-          )}
-
-          {on('burst') && ['#EF4444', '#FACC15', '#3B82F6', '#22C55E', '#EC4899'].map((c, i) => (
-            <span key={c} className="absolute w-1.5 h-2.5 rounded-sm z-10" style={{ background: c, left: `${14 + i * 17}%`, top: '52%', animation: `smConf 2.6s ${i * 0.25}s ease-out infinite` }} />
-          ))}
-        </div>
+    <div className={`relative overflow-hidden ${className}`} style={style}>
+      <div className="absolute inset-0" style={{ animation: anim }}>
+        {thumb ? <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" /> : <Studio />}
       </div>
-      {!compact && (
-        <p className="text-[12px] text-thumb-sub text-center max-w-[240px] leading-snug">
-          A preview of the look — every Short is made from its own clip{studio && look.fxMode === 'auto' ? ', with effects picked for it' : ''}.
-        </p>
-      )}
     </div>
   );
 };
+
+// ── a phone with the look on it (the popups' previews and the live one) ────────────────────────────────
+export const PhonePreview: React.FC<{ look: ShortsLook; width?: number; fxOnly?: string; still?: boolean; frame?: boolean }> =
+  ({ look, width = 150, fxOnly, still, frame = true }) => {
+    const studio = look.style === 'split';
+    const bg = BGS.find(b => b.id === look.bg) || BGS[2];
+    const dark = studio ? !!bg.dark : look.style === 'boxed';
+    const caps = studio ? CAPS : SIMPLE_CAPS;
+    const cap = caps.find(c => c.id === look.caption) || caps[0];
+    const on = (k: string) => studio && (fxOnly ? fxOnly === k : look.fxMode === 'pick' && look.fx.includes(k));
+    const w = width;
+    const ink = dark ? '#fff' : '#111';
+    const pageBg: React.CSSProperties = studio ? bg.css : look.style === 'boxed' ? { background: '#0B0B0F' } : { background: '#fff' };
+    const A = (v: string) => (still ? undefined : v);
+    const headline = (color = ink) => (
+      <p className="text-center font-black leading-[1.05]" style={{ fontSize: w * 0.075, color, fontFamily: IMPACT, letterSpacing: '.01em' }}>
+        HE LOST <span style={{ color: '#EF4444' }}>EVERYTHING</span><br />IN ONE DAY
+      </p>
+    );
+    const cardAnim = on('card_drop') ? A('smDrop 3.2s ease-out infinite') : on('card_move') ? A('smSwap 4s ease-in-out infinite') : undefined;
+    const footAnim = on('push_in') ? A('smPush 4s ease-in-out infinite alternate') : on('zoom_punch') ? A('smPunch 2.6s ease-out infinite') : undefined;
+
+    const screen = (
+      <div className="relative overflow-hidden" style={{ aspectRatio: '9 / 16', borderRadius: frame ? w * 0.13 : 12, ...pageBg }}>
+        {frame && <div className="absolute left-1/2 -translate-x-1/2 rounded-full bg-black z-30" style={{ top: w * 0.025, width: w * 0.28, height: w * 0.065 }} />}
+        {on('progress') && <div className="absolute top-0 left-0 h-[3px] bg-thumb-red z-20" style={{ animation: A('smFill 5s linear infinite'), width: still ? '60%' : undefined }} />}
+
+        {studio && (
+          <div className="absolute inset-0 flex flex-col items-center px-[8%]" style={{ paddingTop: '15%' }}>
+            {headline()}
+            <div className="relative w-full mt-[7%]" style={{ animation: cardAnim }}>
+              <Footage anim={footAnim} className="w-full rounded-[10px]"
+                style={{ aspectRatio: '4 / 3.3', boxShadow: '0 8px 20px -8px rgba(0,0,0,.55)', animation: on('audio_react') ? A('smGlow 1.1s ease-in-out infinite') : undefined }} />
+              {on('audio_react') && (
+                <div className="absolute -right-[7%] bottom-[8%] flex items-end gap-[2px] h-[40%]">
+                  {[0, 1, 2, 3].map(i => <span key={i} className="w-[3px] h-full bg-thumb-red rounded origin-bottom" style={{ animation: A(`smVu .${5 + i}s ease-in-out ${i * 0.1}s infinite`) }} />)}
+                </div>
+              )}
+              {on('stickers') && (
+                <span className="absolute -right-[4%] -top-[10%] leading-none" style={{ fontSize: w * 0.2, filter: 'drop-shadow(0 0 0 #fff) drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 3px 4px rgba(0,0,0,.35))', animation: A('smSticker 3s ease-out infinite') }}>💸</span>
+              )}
+              {on('hook_freeze') && (
+                <div className="absolute inset-0 rounded-[10px] bg-black/35 flex items-center justify-center" style={{ animation: A('smCover 4s steps(1) infinite') }}>
+                  <span className="rounded-full bg-white/90 flex items-center justify-center" style={{ width: w * 0.16, height: w * 0.16 }}>
+                    <svg viewBox="0 0 24 24" style={{ width: w * 0.07 }} fill="#111"><path d="M8 5v14l11-7z" /></svg>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-[8%] flex flex-col items-center gap-1" style={{ perspective: 200 }}>
+              <div style={{ animation: on('cascade') ? A('smUnfold 2.4s ease-out infinite') : undefined, transformOrigin: 'top' }}>
+                <CaptionSample cap={cap} dark={dark} size={w * 0.072} animate={!still} marker={on('marker')} circle={on('scribble')} />
+              </div>
+              {(on('counter') || on('money_stack')) && (
+                <div className="flex items-end gap-1.5 mt-0.5">
+                  {on('money_stack') && (
+                    <div className="flex flex-col-reverse gap-[1px] origin-bottom" style={{ animation: A('smStack 2.8s ease-out infinite') }}>
+                      {[0, 1, 2, 3].map(i => <span key={i} className="block rounded-[2px] border border-[#14532d]" style={{ width: w * 0.12, height: w * 0.035, background: '#22C55E' }} />)}
+                    </div>
+                  )}
+                  <span className="px-1.5 py-0.5 rounded-md bg-thumb-red text-white font-black" style={{ fontSize: w * 0.065, fontFamily: IMPACT }}>$10,000</span>
+                </div>
+              )}
+              {on('scramble') && (
+                <span className="relative overflow-hidden rounded-md bg-[#111] text-[#FACC15] font-black px-1.5" style={{ fontSize: w * 0.07, fontFamily: IMPACT, height: w * 0.1, lineHeight: `${w * 0.1}px` }}>
+                  <span className="flex flex-col" style={{ animation: A('smRoll 1.6s steps(3) infinite') }}>
+                    <span>$73,912</span><span>$18,406</span><span>$52,771</span><span>$10,000</span>
+                  </span>
+                </span>
+              )}
+              {on('facts') && (
+                <div className="rounded-md bg-white shadow-md px-1.5 py-1 space-y-[3px]" style={{ width: w * 0.62 }}>
+                  {[0.9, 0.55, 0.3].map((f, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className="text-[#111] font-bold" style={{ fontSize: w * 0.04, width: w * 0.12 }}>{['2024', '2023', '2022'][i]}</span>
+                      <span className="h-[4px] rounded origin-left" style={{ width: `${f * 60}%`, background: ['#EF4444', '#F97316', '#FACC15'][i], animation: A(`smBar 2.6s ${i * 0.15}s ease-out infinite`) }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {on('real_images') && (
+                <div className="bg-white p-[3px] pb-[6px] shadow-md" style={{ width: w * 0.36, animation: A('smPhoto 3.4s ease-out infinite') }}>
+                  <div style={{ aspectRatio: '1 / 1', background: 'linear-gradient(160deg,#fde68a,#f59e0b 60%,#92400e)' }} className="flex items-center justify-center" >
+                    <span style={{ fontSize: w * 0.14 }}>🏦</span>
+                  </div>
+                  <p className="text-center text-[#111] font-bold mt-[2px]" style={{ fontSize: w * 0.04 }}>Wall Street</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {look.style === 'classic' && (
+          <div className="absolute inset-0 flex flex-col">
+            <div className="bg-white px-2 pb-[6%]" style={{ paddingTop: '16%' }}>{headline('#111')}</div>
+            <div className="relative flex-1 bg-black flex items-center">
+              <Footage className="w-full" style={{ height: look.fit === 'full' ? '42%' : '100%' }} anim={look.fit === 'zoom' ? A('smPush 4s ease-in-out infinite alternate') : undefined} />
+            </div>
+            <div className="absolute bottom-[12%] inset-x-0 flex justify-center"><CaptionSample cap={cap} dark size={w * 0.072} animate={!still} /></div>
+          </div>
+        )}
+
+        {look.style === 'boxed' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-[7%] gap-[5%]">
+            {headline('#fff')}
+            <Footage className="w-full rounded-2xl" style={{ aspectRatio: look.fit === 'full' ? '16 / 11' : '4 / 5' }} />
+            <CaptionSample cap={cap} dark size={w * 0.072} animate={!still} />
+          </div>
+        )}
+
+        {!studio && look.fit === 'track' && (
+          <span className="absolute top-[42%] left-[20%] w-[34%] h-[20%] border-2 border-dashed border-[#4ADE80] rounded-lg z-10" />
+        )}
+        {on('burst') && ['#EF4444', '#FACC15', '#3B82F6', '#22C55E', '#EC4899', '#A855F7'].map((c, i) => (
+          <span key={c} className="absolute rounded-sm z-10" style={{ width: w * 0.03, height: w * 0.05, background: c, left: `${10 + i * 15}%`, top: '48%', animation: A(`smConf 2.4s ${i * 0.2}s ease-out infinite`) }} />
+        ))}
+      </div>
+    );
+
+    return (
+      <div style={{ width: w }} className="shrink-0">
+        <style>{KEYFRAMES}</style>
+        {frame ? <div className="rounded-[18%/10%] bg-[#111] shadow-[0_18px_40px_-16px_rgba(0,0,0,.5)]" style={{ padding: w * 0.04, borderRadius: w * 0.16 }}>{screen}</div> : screen}
+      </div>
+    );
+  };
 
 // ── the picker: small buttons above Generate, each opening a centred scrollable popup ─────────────────
 type Panel = 'style' | 'bg' | 'caption' | 'fx' | 'fit' | 'length' | 'count';
@@ -302,21 +396,7 @@ const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?
     document.querySelector('.thumb-scope') || document.body,
   );
 
-const StyleMock: React.FC<{ id: string }> = ({ id }) => (
-  <div className="mx-auto w-[58px] rounded-xl overflow-hidden border border-black/10" style={{ aspectRatio: '9 / 16', background: id === 'boxed' ? '#0B0B0F' : '#fff' }}>
-    {id === 'split' && (<div className="h-full flex flex-col items-center pt-2 px-1.5 gap-1">
-      <div className="h-1 w-4/5 rounded bg-black/80" /><div className="h-1 w-3/5 rounded bg-thumb-red" />
-      <Footage className="w-full rounded-md mt-1" style={{ aspectRatio: '1 / 1' }} />
-      <div className="h-1.5 w-3/4 rounded bg-[#FACC15] mt-1" /></div>)}
-    {id === 'classic' && (<div className="h-full flex flex-col">
-      <div className="h-[22%] flex flex-col items-center justify-center gap-0.5"><div className="h-1 w-4/5 rounded bg-black/80" /><div className="h-1 w-3/5 rounded bg-black/80" /></div>
-      <Footage className="flex-1" /></div>)}
-    {id === 'boxed' && (<div className="h-full flex flex-col items-center justify-center px-1.5 gap-1">
-      <div className="h-1 w-4/5 rounded bg-white/80" /><Footage className="w-full rounded-lg" style={{ aspectRatio: '1 / 1' }} /><div className="h-1 w-3/5 rounded bg-white/70" /></div>)}
-  </div>
-);
-
-export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void }> = ({ look, onChange }) => {
+export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void; thumb?: string | null }> = ({ look, onChange, thumb = null }) => {
   const [open, setOpen] = React.useState<Panel | null>(null);
   const set = (patch: Partial<ShortsLook>) => onChange({ ...look, ...patch });
   const pickOne = (patch: Partial<ShortsLook>) => { set(patch); setOpen(null); };
@@ -366,17 +446,17 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
   ];
 
   return (
-    <>
+    <ThumbCtx.Provider value={thumb}>
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap [&>*:last-child:nth-child(odd)]:col-span-2">{buttons}</div>
 
       {open === 'style' && (
         <Popup title={TITLES.style} onClose={() => setOpen(null)}>
           <div className="grid grid-cols-3 gap-3">
             {STYLES.map(s => (
-              <button key={s.id} type="button" className={`${cardCls(look.style === s.id)} p-2 bg-thumb-soft`}
+              <button key={s.id} type="button" className={`${cardCls(look.style === s.id)} p-2 sm:p-3 bg-thumb-soft flex flex-col items-center`}
                 onClick={() => pickOne({ style: s.id, caption: (s.id === 'split' ? CAPS : SIMPLE_CAPS).some(c => c.id === look.caption) ? look.caption : 'auto' })}>
                 <Tick on={look.style === s.id} />
-                <StyleMock id={s.id} />
+                <PhonePreview look={{ ...look, style: s.id, fxMode: 'auto' }} width={small ? 88 : 128} />
                 <p className="mt-2 text-[13px] font-black text-thumb-ink text-center">{s.label}</p>
                 <p className="text-[10.5px] text-thumb-sub text-center leading-tight mt-0.5">{s.note}</p>
               </button>
@@ -387,16 +467,15 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
 
       {open === 'bg' && (
         <Popup title={TITLES.bg} hint="🤖 Auto: AI reads each clip’s mood and picks · 🎲 Mix: a different one every Short" onClose={() => setOpen(null)}>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
             {BGS.map(b => (
-              <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} overflow-hidden`}>
+              <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} p-1.5 bg-thumb-soft flex flex-col items-center`}>
                 <Tick on={look.bg === b.id} />
-                <div className="relative h-[72px] flex items-center justify-center" style={b.css}>
-                  {b.tag
-                    ? <span className="text-[13px] font-black text-[#111] drop-shadow-[0_1px_0_#fff]">{b.tag}</span>
-                    : <span className="w-[42%] h-[46%] rounded-md shadow-md" style={{ background: 'linear-gradient(160deg,#334155,#0F172A)' }} />}
+                <div className="relative">
+                  <PhonePreview look={{ ...look, style: 'split', bg: b.id, fxMode: 'auto' }} width={small ? 82 : 104} still frame={false} />
+                  {b.tag && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-black">{b.tag === '🎲' ? '🎲 MIX' : '🤖 AI'}</span>}
                 </div>
-                <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">{b.label}</p>
+                <p className="mt-1.5 text-[11.5px] font-bold text-thumb-ink truncate max-w-full">{b.label}</p>
               </button>
             ))}
           </div>
@@ -434,9 +513,8 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
               <button type="button" onClick={() => setOpen(null)} className="thumb-btn px-5 h-10 rounded-xl text-white font-black text-[14px]">Done</button>
             </div>
           }>
-          <div className="flex gap-4 items-start">
-            <div className="hidden sm:block shrink-0"><PhonePreview look={look} compact /></div>
-            <div className="flex-1 min-w-0 space-y-3">
+          <div className="space-y-3">
+            <div className="space-y-3">
               <div className="grid grid-cols-2 p-1 rounded-xl bg-thumb-soft border border-thumb-line">
                 {(['auto', 'pick'] as const).map(m => (
                   <button key={m} type="button"
@@ -446,19 +524,18 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
                   </button>
                 ))}
               </div>
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 transition-opacity ${look.fxMode === 'auto' ? 'opacity-45 pointer-events-none' : ''}`}>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {FX.map(f => {
                   const sel = look.fxMode === 'auto' ? f.id !== 'real_images' : look.fx.includes(f.id);
                   return (
-                    <button key={f.id} type="button" onClick={() => toggleFx(f.id)}
-                      className={`flex items-start gap-2 p-2.5 rounded-xl border-2 text-left transition-colors ${sel ? 'border-thumb-red bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/40'}`}>
-                      <span className={`mt-0.5 w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center ${sel ? 'bg-thumb-red border-thumb-red text-white' : 'border-thumb-line'}`}>
+                    <button key={f.id} type="button" onClick={() => { if (look.fxMode === 'auto') set({ fxMode: 'pick', fx: FX.map(x => x.id).filter(id => id !== 'real_images' && id !== f.id) }); else toggleFx(f.id); }}
+                      className={`relative flex flex-col items-center p-1.5 pb-2 rounded-xl border-2 transition-colors ${sel ? 'border-thumb-red bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/40'}`}>
+                      <span className={`absolute top-1 right-1 z-40 w-4 h-4 rounded-md border-2 flex items-center justify-center ${sel ? 'bg-thumb-red border-thumb-red text-white' : 'bg-white/80 border-thumb-line'}`}>
                         {sel && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={4}><path d="M20 6 9 17l-5-5" /></svg>}
                       </span>
-                      <span className="min-w-0">
-                        <span className="block text-[12.5px] font-black text-thumb-ink leading-tight">{f.icon} {f.label}</span>
-                        <span className="block text-[11px] text-thumb-sub leading-snug mt-0.5">{f.note}</span>
-                      </span>
+                      <PhonePreview look={{ ...look, style: 'split', caption: 'auto', fxMode: 'pick', fx: [f.id] }} fxOnly={f.id} width={small ? 78 : 104} frame={false} />
+                      <span className="mt-1.5 text-[11px] font-black text-thumb-ink leading-tight text-center">{f.label}</span>
+                      <span className="text-[9.5px] text-thumb-sub leading-tight text-center mt-0.5 hidden sm:block">{f.note}</span>
                     </button>
                   );
                 })}
@@ -473,12 +550,9 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
         <Popup title={TITLES.fit} onClose={() => setOpen(null)}>
           <div className="grid grid-cols-3 gap-3">
             {FITS.map(f => (
-              <button key={f.id} type="button" onClick={() => pickOne({ fit: f.id })} className={`${cardCls(look.fit === f.id)} p-2.5 bg-thumb-soft`}>
+              <button key={f.id} type="button" onClick={() => pickOne({ fit: f.id })} className={`${cardCls(look.fit === f.id)} p-1.5 bg-thumb-soft`}>
                 <Tick on={look.fit === f.id} />
-                <div className="relative mx-auto w-[46px] rounded-lg overflow-hidden bg-black" style={{ aspectRatio: '9 / 16' }}>
-                  <Footage className="absolute inset-x-0 top-1/2 -translate-y-1/2" style={{ height: f.id === 'full' ? '38%' : '100%', left: f.id === 'track' ? '-40%' : f.id === 'zoom' ? '-60%' : 0, width: f.id === 'full' ? '100%' : '220%' }} />
-                  {f.id === 'track' && <span className="absolute top-[40%] left-[18%] w-[60%] h-[22%] border border-dashed border-[#4ADE80] rounded" />}
-                </div>
+                <div className="flex justify-center"><PhonePreview look={{ ...look, fit: f.id }} width={small ? 80 : 104} frame={false} /></div>
                 <p className="mt-1.5 text-[12.5px] font-black text-thumb-ink text-center">{f.label}</p>
                 <p className="text-[10.5px] text-thumb-sub text-center leading-tight">{f.note}</p>
               </button>
@@ -514,6 +588,6 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           </div>
         </Popup>
       )}
-    </>
+    </ThumbCtx.Provider>
   );
 };
