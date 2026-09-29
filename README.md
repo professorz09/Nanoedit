@@ -54,6 +54,11 @@ Payments for billing.
    | `VITE_SUPABASE_URL` | Supabase project URL (client-side) |
    | `VITE_SUPABASE_ANON_KEY` | Supabase anon/publishable key (client-side) |
    | `VITE_SHORTS_API_URL` | Shorts Maker render server (Movievideomaker's `shortsbot/web.py`), e.g. `https://shorts.yourdomain.com` — without it the Shorts page shows "coming soon" |
+   | `VITE_API_URL` | Our own thumbnail/text API server (Movievideomaker's `thumbapi` service, `server/api-server.ts`), e.g. `https://api.yourdomain.com` — without it the site uses the Supabase functions |
+
+   On the live site (Cloudflare → Workers & Pages → podcastflux → Settings → Build) the `VITE_*` values go in
+   **Build variables** — they're baked into the build, so a change needs a new build; "Variables and Secrets"
+   are never seen by it.
 
    Only the vars for the features you're testing are required — the app
    degrades gracefully (e.g. no Supabase env vars means auth/credits/payments
