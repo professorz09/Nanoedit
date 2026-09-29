@@ -528,6 +528,19 @@ const ThumbnailStudio: React.FC<Props> = ({
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
   };
 
+  // home page (Shorts first): a link typed there opens the Shorts Maker and starts making them right away
+  const [homeShortsUrl, setHomeShortsUrl] = useState('');
+  const [homeShortsNote, setHomeShortsNote] = useState<string | null>(null);
+  const [shortsStartUrl, setShortsStartUrl] = useState<string | null>(null);
+  const startShortsFromHome = () => {
+    const link = homeShortsUrl.trim();
+    if (!extractYouTubeId(link)) { setHomeShortsNote('Paste a YouTube video link.'); return; }
+    setHomeShortsNote(null);
+    setShortsStartUrl(link);
+    setHomeShortsUrl('');
+    goShorts();
+  };
+
   const goShorts = () => {
     setSection('shorts');
     setSidebarOpen(false);
@@ -1473,11 +1486,11 @@ const ThumbnailStudio: React.FC<Props> = ({
             {/* Desktop nav */}
             <nav className="hidden lg:flex items-center gap-1">
               {[
+                { label: 'Shorts', on: goShorts, active: section === 'shorts' },
                 { label: 'Thumbnail', on: goGenerate, active: section === 'generate' },
                 { label: 'Editor', on: () => onOpenEditor(), active: false },
                 { label: 'Titles', on: goTitle, active: section === 'title' },
                 { label: 'Chapters', on: goChapters, active: section === 'chapters' },
-                { label: 'Shorts', on: goShorts, active: section === 'shorts' },
                 { label: 'Feed test', on: goPreview, active: section === 'preview' },
                 { label: 'Pricing', on: goPricing, active: section === 'pricing' },
                 ...(profile?.is_admin ? [{ label: 'Admin', on: goAdmin, active: section === 'admin' }] : []),
@@ -1554,10 +1567,10 @@ const ThumbnailStudio: React.FC<Props> = ({
             <p className="px-2 pt-1 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Menu</p>
             {([
               { key: 'home', label: 'Home', tag: 'Landing', icon: I.Wand, active: section === 'home', onClick: goHome },
+              { key: 'shorts', label: 'Shorts Maker', tag: 'Clips', icon: I.Play, active: section === 'shorts', onClick: goShorts },
               { key: 'generate', label: 'Generate', tag: 'Create', icon: I.Bolt, active: section === 'generate', onClick: goGenerate },
               { key: 'title', label: 'Title Generator', tag: 'Titles', icon: I.Text, active: section === 'title', onClick: goTitle },
               { key: 'chapters', label: 'Chapter Maker', tag: 'Timestamps', icon: I.List, active: section === 'chapters', onClick: goChapters },
-              { key: 'shorts', label: 'Shorts Maker', tag: 'Clips', icon: I.Play, active: section === 'shorts', onClick: goShorts },
               { key: 'preview', label: 'Preview', tag: 'Feed test', icon: I.Tv, active: section === 'preview', onClick: goPreview },
               { key: 'editor', label: 'Editor', tag: 'Canvas', icon: I.Edit, active: false, onClick: () => { setSidebarOpen(false); onOpenEditor(); } },
               { key: 'pricing', label: 'Pricing', tag: 'Plans', icon: I.Star, active: section === 'pricing', onClick: goPricing },
@@ -1615,11 +1628,77 @@ const ThumbnailStudio: React.FC<Props> = ({
       </div>
 
       <main className="max-w-6xl mx-auto px-5">
-        {/* ── Hero (clean landing) ── */}
+        {/* ── Hero: the Shorts Maker first (user-decided) — paste a link, Generate, and it starts on the Shorts page ── */}
         {section === 'home' && (
-        <section className="pt-14 sm:pt-20 lg:pt-24 pb-12 text-center">
+        <section className="pt-14 sm:pt-20 lg:pt-24 pb-10 text-center">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-thumb-redSoft text-thumb-red text-[12px] font-black uppercase tracking-wider">
+            <I.Play className="w-3.5 h-3.5" /> New · Shorts Maker
+          </span>
+          <h1 className="mt-4 text-[2rem] sm:text-[3rem] lg:text-[3.6rem] font-black uppercase leading-[1.05] tracking-[-0.02em]">
+            <span className="text-thumb-ink">Turn videos into</span>{' '}
+            <span
+              className="liquid-text"
+              style={{
+                backgroundImage: 'linear-gradient(180deg, #ffffff 0%, #ffc7d1 18%, #ff3b5c 50%, #a30d28 100%)',
+                filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.18)) drop-shadow(0 0 16px rgba(255,59,92,0.6)) drop-shadow(0 0 38px rgba(255,59,92,0.4))',
+              }}
+            >viral Shorts</span>
+          </h1>
+          <p className="mt-4 text-thumb-sub text-[15px] sm:text-[17px] max-w-xl mx-auto">
+            Stop editing Shorts by hand. Paste one YouTube link — AI finds the moments that will go viral, scores each one, and makes them all at once.
+          </p>
+          <div className="mt-8 max-w-3xl mx-auto text-left">
+            <div className="thumb-glass thumb-float-red rounded-[28px] p-3.5 sm:p-4">
+              <input
+                value={homeShortsUrl}
+                onChange={e => setHomeShortsUrl(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') startShortsFromHome(); }}
+                inputMode="url"
+                placeholder="Paste a YouTube link…"
+                className="w-full bg-transparent px-3 py-4 outline-none text-[16px] sm:text-[17px] placeholder-thumb-sub/40"
+              />
+              {homeShortsNote && <p className="px-3 pb-2 text-[13px] font-bold text-thumb-red">{homeShortsNote}</p>}
+              <button
+                onClick={startShortsFromHome}
+                className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3"
+              >
+                <I.Play className="w-5 h-5" /> Generate Shorts
+              </button>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-thumb-sub">
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Preview free</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Pay only for what you download</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Captions, effects & speaker tracking</span>
+            </div>
+          </div>
+        </section>
+        )}
+
+        {/* ── Why Shorts Maker: the pain (manual editing) and what it does instead ── */}
+        {section === 'home' && (
+        <section className="pb-14">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
+            {[
+              { icon: '😩', title: 'No more manual editing', text: 'Hours of scrubbing, cutting, cropping and typing captions — done for you in minutes.' },
+              { icon: '🔥', title: 'Viral score for every Short', text: 'Each moment gets a score out of 100, so you know which one to post first.' },
+              { icon: '📦', title: 'Bulk: up to 20 at once', text: 'One link, many Shorts. Download them one by one or all together as a ZIP.' },
+              { icon: '✨', title: 'Ready to post', text: 'Animated captions, effects, speaker tracking, a title and description to copy.' },
+            ].map(f => (
+              <div key={f.title} className="thumb-glass rounded-2xl p-5 text-left">
+                <div className="w-10 h-10 rounded-xl bg-thumb-redSoft flex items-center justify-center text-xl">{f.icon}</div>
+                <p className="mt-3 text-[15px] font-black text-thumb-ink">{f.title}</p>
+                <p className="mt-1 text-[13px] text-thumb-sub leading-relaxed">{f.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+        )}
+
+        {/* ── Second: the thumbnail maker (was the hero) ── */}
+        {section === 'home' && (
+        <section className="pt-10 pb-12 text-center border-t border-thumb-line">
           {/* 3-word heading — plain ink words + one glowing liquid-glass PREMIUM */}
-          <h1 className="text-[2rem] sm:text-[3rem] lg:text-[3.6rem] font-black uppercase leading-[1.05] tracking-[-0.02em]">
+          <h2 className="text-[1.6rem] sm:text-[2.4rem] lg:text-[2.8rem] font-black uppercase leading-[1.05] tracking-[-0.02em]">
             <span className="text-thumb-ink">Generate</span>{' '}
             <span
               className="liquid-text"
@@ -1629,17 +1708,17 @@ const ThumbnailStudio: React.FC<Props> = ({
               }}
             >Premium</span>{' '}
             <span className="text-thumb-ink">Thumbnails</span>
-          </h1>
+          </h2>
 
           {/* Kept for SEO/crawlers (matches index.html's meta description) —
               visually hidden since it read as redundant filler directly under
               the hero heading. */}
           <p className="sr-only">
-            The best free AI thumbnail maker for YouTube — make high-quality thumbnails with AI from a prompt, photo, or YouTube video link. No Photoshop or Adobe Express needed. Also turns any YouTube link into AI titles &amp; timestamps.
+            Turn any YouTube video into viral Shorts with AI — the best moments found for you, with animated captions. Plus the best free AI thumbnail maker for YouTube — make high-quality thumbnails with AI from a prompt, photo, or YouTube video link. No Photoshop or Adobe Express needed. Also turns any YouTube link into AI titles &amp; timestamps.
           </p>
 
           {/* One clean prompt box — click sends you into the generator and starts */}
-          <div className="mt-9 max-w-3xl mx-auto text-left">
+          <div className="mt-7 max-w-3xl mx-auto text-left">
             <div className="thumb-glass thumb-float-red rounded-[28px] p-3.5 sm:p-4">
               <textarea
                 value={promptText}
@@ -2742,7 +2821,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         {section === 'shorts' && (
           <div className="animate-fade-in-up pt-10 sm:pt-12 pb-16">
             <Suspense fallback={<PanelFallback />}>
-              <ShortsMaker onRequireLogin={requireLogin} onBuyCredits={goPricing} />
+              <ShortsMaker onRequireLogin={requireLogin} onBuyCredits={goPricing} startUrl={shortsStartUrl} onStarted={() => setShortsStartUrl(null)} />
             </Suspense>
           </div>
         )}

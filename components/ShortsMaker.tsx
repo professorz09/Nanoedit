@@ -175,7 +175,7 @@ const ShortSkeleton = () => (
 );
 
 // ── the page ─────────────────────────────────────────────────────────────────────────────────────
-const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCredits: () => void }> = ({ onRequireLogin, onBuyCredits }) => {
+const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCredits: () => void; startUrl?: string | null; onStarted?: () => void }> = ({ onRequireLogin, onBuyCredits, startUrl, onStarted }) => {
   const { user, configured, totalCredits, refreshProfile } = useAuth();
   const [url, setUrl] = useState('');
   const [look, setLookState] = useState<ShortsLook>(savedLook);
@@ -237,14 +237,14 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     return () => { stop = true; clearTimeout(timer); };
   }, [openId, refreshProfile, pollCount]);
 
-  const generate = async () => {
+  const generate = async (link: string = url) => {
     setNote(null);
-    if (!extractYouTubeId(url.trim())) { setNote('Paste a valid YouTube link.'); return; }
+    if (!extractYouTubeId(link.trim())) { setNote('Paste a valid YouTube link.'); return; }
     if (!isShortsConfigured) { setNote('The Shorts server is not connected yet. Please try again later.'); return; }
     if (!signedIn) { onRequireLogin('Log in to make Shorts.'); return; }
     setBusy(true);
     try {
-      const id = await createProject({ url: url.trim(), ...lookToRequest(look) });
+      const id = await createProject({ url: link.trim(), ...lookToRequest(look) });
       setUrl('');
       setOpenId(id);
       loadProjects();
@@ -255,6 +255,16 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
       setBusy(false);
     }
   };
+
+  // a link typed on the home page: made straight away with the saved (or default) look
+  const started = useRef(false);
+  useEffect(() => {
+    if (!startUrl || started.current) return;
+    started.current = true;
+    setUrl(startUrl);
+    onStarted?.();
+    generate(startUrl).finally(() => { started.current = false; });
+  }, [startUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateClip = (id: number, patch: Partial<ShortClip>) =>
     setProject(p => (p && p.shorts ? { ...p, shorts: p.shorts.map(s => (s.id === id ? { ...s, ...patch } : s)) } : p));
@@ -399,7 +409,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         />
         <LookBar look={look} onChange={setLook} thumb={extractYouTubeId(url.trim()) ? `https://i.ytimg.com/vi/${extractYouTubeId(url.trim())}/hqdefault.jpg` : null} />
         {noteBox}
-        <button type="button" onClick={generate} disabled={busy}
+        <button type="button" onClick={() => generate()} disabled={busy}
           className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
           {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
             : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
