@@ -189,10 +189,9 @@ const ExamplePhone: React.FC = () => {
   if (!s) return null;
   return (
     <div className="flex flex-col items-center">
-      <div className="relative">
-        <VideoPhone key={s.url} short={s} width={180} />
-        <span className="absolute -top-2.5 -right-2 px-2 py-0.5 rounded-lg bg-thumb-red text-white text-[11px] font-black shadow-lg">Made here</span>
-      </div>
+      {/* the badge sits above the phone, centred — never over its frame or screen */}
+      <span className="mb-2.5 px-2.5 py-1 rounded-full bg-thumb-red text-white text-[11px] font-black uppercase tracking-wider shadow-sm">Made here</span>
+      <VideoPhone key={s.url} short={s} width={180} />
       <p className="mt-3 text-[13px] font-bold text-thumb-ink text-center max-w-[190px] leading-snug line-clamp-2">{s.title}</p>
       <div className="mt-2 flex gap-1.5">
         {HOME_SHORTS.map((x, n) => (

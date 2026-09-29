@@ -58,12 +58,13 @@ const ShortsFlow: React.FC = () => {
       {/* the Shorts it makes */}
       <div className="flex justify-center gap-3 sm:gap-6">
         {PHONES.map((p, i) => (
-          <div key={i} className="relative" style={{ animation: `sfPhone${i} ${T} ease-out infinite` }}>
+          <div key={i} className="flex flex-col items-center" style={{ animation: `sfPhone${i} ${T} ease-out infinite` }}>
+            {/* the viral score: a pill centred above the phone, never over its frame or screen */}
+            <span className="mb-2 inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-thumb-red text-white text-[11px] sm:text-[12px] font-black shadow-sm"
+              style={{ animation: `sfScore${i} ${T} ease-out infinite` }}>🔥 {p.score}</span>
             {real[i]
               ? <VideoPhone short={real[i]} width={phoneW} />
               : <PhonePreview look={{ ...DEFAULT_LOOK, bg: p.bg, caption: p.caption }} width={phoneW} head={p.head} words={p.words} />}
-            <span className="absolute -top-2 -right-2 z-40 inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-thumb-red text-white text-[11px] sm:text-[13px] font-black shadow-lg"
-              style={{ animation: `sfScore${i} ${T} ease-out infinite` }}>🔥 {p.score}</span>
           </div>
         ))}
       </div>
