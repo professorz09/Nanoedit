@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 // A styled stand-in for window.confirm() — the native browser dialog looks
 // completely out of place next to the rest of the app's UI and can't be
@@ -16,12 +17,7 @@ interface Props {
 const ConfirmModal: React.FC<Props> = ({ open, title, message, confirmLabel = 'Delete', onConfirm, onCancel }) => {
   // Same reasoning as ChangeFaceModal — a fixed-overlay modal shouldn't leave
   // the page behind it scrollable.
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
+  useScrollLock(open);
 
   if (!open) return null;
 

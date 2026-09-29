@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fetchPersonas, savePersona, deletePersona, Persona } from '../services/personasService';
 import { I } from './ThumbIcons';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 // A row of the user's saved faces, shown above the upload area so a face
 // uploaded once can be reused on later generations without re-uploading. The
@@ -35,6 +36,7 @@ const PersonaPicker: React.FC<{
   const [pickerOpen, setPickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const modalControlled = externalOpen !== undefined;
+  useScrollLock(!!enabled && !!loggedIn && (modalControlled ? !!externalOpen : pickerOpen));
 
   useEffect(() => {
     if (!enabled || !loggedIn) { setPersonas(null); return; }

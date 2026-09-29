@@ -1,5 +1,6 @@
 import React from 'react';
 import { I } from './ThumbIcons';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 // A full-screen popup for picking one style reference from the shared style
 // pool — same look as the "Add from Styles" popup in the image editor, reused
@@ -13,6 +14,7 @@ const StylePickerModal: React.FC<{
   onSelect: (src: string | null) => void;
   hint?: string;
 }> = ({ open, onClose, styleImages, selected, onSelect, hint }) => {
+  useScrollLock(open);
   if (!open) return null;
   // Solid (not glass/translucent) panel over a near-opaque backdrop — a busy
   // real photo bleeding through a translucent glass panel behind this made

@@ -6,6 +6,7 @@ import { Plan, BillingCycle, getPlan, PlanId } from '../services/plans';
 import { buyItem } from '../services/paymentsService';
 import { extractYouTubeId, urlToBase64, fetchYouTubeTitle, fetchYouTubeThumb } from '../services/youtubeService';
 import AuthModal from './AuthModal';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { I } from './ThumbIcons';
 import ResultThumb from './ResultThumb';
 import ChangeFaceModal from './ChangeFaceModal';
@@ -348,13 +349,8 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [legal, setLegal] = useState<null | 'about' | 'privacy' | 'terms'>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Lock background scroll while the sidebar (mobile drawer) is open
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    if (sidebarOpen) document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [sidebarOpen]);
+  // lock background scroll while the sidebar (mobile drawer) or the legal popup is open
+  useScrollLock(!!legal || sidebarOpen);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getFromLocalStorage('nano_theme', 'light'));
   useEffect(() => { saveToLocalStorage('nano_theme', theme); }, [theme]);
 

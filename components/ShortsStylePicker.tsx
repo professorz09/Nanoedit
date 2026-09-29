@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { HOME_SHORTS, HomeShort } from './homeShorts';
 
 // The Shorts Maker's look picker: style, background, subtitles, effects, fit and length — each as a small visual
@@ -404,23 +405,11 @@ const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?
   // the page behind stays put while the popup is open (no scrolling it on phones either); Esc closes it
   const closeRef = React.useRef(onClose);
   closeRef.current = onClose;
+  useScrollLock();
   React.useEffect(() => {
-    const html = document.documentElement, body = document.body;
-    const before = { html: html.style.overflow, body: body.style.overflow, pad: body.style.paddingRight, touch: body.style.touchAction };
-    const bar = window.innerWidth - html.clientWidth; // keep the layout from jumping where a scrollbar disappears
-    html.style.overflow = 'hidden';
-    body.style.overflow = 'hidden';
-    body.style.touchAction = 'none';
-    if (bar > 0) body.style.paddingRight = `${bar}px`;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
-    return () => {
-      html.style.overflow = before.html;
-      body.style.overflow = before.body;
-      body.style.paddingRight = before.pad;
-      body.style.touchAction = before.touch;
-      window.removeEventListener('keydown', onKey);
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
   return createPortal(
     // on the page root (.thumb-scope keeps the light/dark theme): inside the glass box a "fixed" popup would be

@@ -8,6 +8,7 @@ import {
 import LoadedThumb from './LoadedThumb';
 import RetryImage from './RetryImage';
 import AuthModal from './AuthModal';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { shareImage } from '../services/shareService';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchPersonas, deletePersona, Persona } from '../services/personasService';
@@ -262,6 +263,7 @@ export default function EditorView(props: EditorViewProps) {
   const [showPersonaPicker, setShowPersonaPicker] = React.useState(false);
   const [personas, setPersonas] = React.useState<Persona[] | null>(null);
   const [personaError, setPersonaError] = React.useState<string | null>(null);
+  useScrollLock(!!showStylePicker || showPersonaPicker || !!showHelp || !!viewedImage);
 
   React.useEffect(() => {
     if (!showPersonaPicker || !loggedIn) return;

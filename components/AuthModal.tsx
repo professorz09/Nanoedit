@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 const GoogleG = (p: any) => (
   <svg viewBox="0 0 48 48" width="20" height="20" {...p}>
@@ -18,6 +19,7 @@ interface Props {
 
 const AuthModal: React.FC<Props> = ({ open, onClose, reason }) => {
   const { signInWithGoogle, configured } = useAuth();
+  useScrollLock(open);
   if (!open) return null;
 
   return (

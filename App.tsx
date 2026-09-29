@@ -9,6 +9,7 @@ import { usePersistentState } from './hooks/usePersistentState';
 import { useZoomPan } from './hooks/useZoomPan';
 import { useImageQueue } from './hooks/useImageQueue';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useScrollLock } from './hooks/useScrollLock';
 import { deleteGenerationOnServer } from './services/geminiService';
 import { EditorSettings, GeneratedImage, QueueItem, ASPECT_RATIOS, RESOLUTIONS, STYLES, CAMERA_ANGLES, PRESET_PROMPTS } from './types';
 import { IconUpload, IconSparkles, IconAspectRatio, IconX, IconDownload, IconPalette, IconToggleLeft, IconToggleRight, IconLayers, IconEye, IconLayerPlus, IconZip, IconEraser, IconTrash, IconZoomIn, IconZoomOut, IconSettings, IconCamera } from './components/Icons';
@@ -81,6 +82,7 @@ function App() {
 
   // State for Full Screen Image Viewer
   const [viewedImage, setViewedImage] = useState<string | null>(null);
+  useScrollLock(!!viewedImage);
   // "Change face" target — lifted here (rather than local to ThumbnailStudio)
   // so the Studio's own lightbox below can offer it too, not just the
   // per-card button in the results grid. ThumbnailStudio still owns

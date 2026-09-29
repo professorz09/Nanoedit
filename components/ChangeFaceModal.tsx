@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { I } from './ThumbIcons';
 import PersonaPicker from './PersonaPicker';
 import { urlToBase64 } from '../services/youtubeService';
@@ -37,11 +38,7 @@ const ChangeFaceModal: React.FC<{
   // The modal renders over the page as a fixed overlay, but the page BEHIND
   // it could still scroll while it's open — lock body scroll for as long as
   // this modal is mounted, restore whatever it was on close/unmount.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useScrollLock();
 
   const addSlot = () => setSlots(prev => (prev.length >= 4 ? prev : [...prev, newSlot()]));
   const removeSlot = (id: string) => setSlots(prev => (prev.length <= 1 ? prev : prev.filter(s => s.id !== id)));
