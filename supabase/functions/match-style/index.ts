@@ -20,7 +20,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { embedWithFallback } from '../_shared/embedding.ts';
+import { canRunOn, embedWithFallback } from '../_shared/embedding.ts';
+import { loadAppSettings } from '../_shared/appSettings.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -107,7 +108,8 @@ Deno.serve(async (req) => {
   const ownOnly = body?.ownOnly === true;
 
   const ai = makeVertex();
-  if (!ai && !Deno.env.get('OPENROUTER_API_KEY')) {
+  const provider = (await loadAppSettings(admin)).textProvider; // Admin → ⚙️ Settings
+  if (!canRunOn(ai, provider)) {
     return json(500, { error: 'Match service is not configured.' });
   }
 
@@ -116,7 +118,7 @@ Deno.serve(async (req) => {
   // Falls back to the same google/gemini-embedding-2 model served through
   // OpenRouter if Vertex is unavailable — see _shared/embedding.ts for why
   // that stays safe to mix with Vertex-produced vectors (same model, same dims).
-  const embedding = await embedWithFallback(ai, text, EMBED_DIMS, 'RETRIEVAL_QUERY');
+  const embedding = await embedWithFallback(ai, text, EMBED_DIMS, 'RETRIEVAL_QUERY', provider);
   if (!embedding?.length) {
     return json(502, { error: 'Could not analyse the topic. Please try again.' });
   }

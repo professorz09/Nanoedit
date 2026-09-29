@@ -26,6 +26,8 @@
 //   VERTEX_FLASH_MODEL       = gemini-3.1-flash-image         (optional override; 1K/Fast + Pro degrade)
 //   OPENROUTER_API_KEY       = <openrouter key>               (fallback)
 //   OPENROUTER_IMAGE_MODEL   = openai/gpt-5.4-image-2         (optional override; GPT fallback)
+// Which image model (Gemini / ChatGPT) and provider (Google Cloud / OpenRouter / fallback) run is the
+// admin's choice (Admin → ⚙️ Settings, public.app_settings); the model ids above are the defaults.
 //   MAX_THUMBNAILS_PER_USER  = 200                            (optional override)
 //   (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -36,6 +38,7 @@
 // requests for gemini-3-pro-image always came back at the default 1K.
 import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { loadAppSettings, providerSteps } from '../_shared/appSettings.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -319,7 +322,8 @@ Deno.serve(async (req) => {
 
   // 4) Generate — try each provider until one returns an image. Credit stays
   //    spent on the first success; refunded only if EVERY provider fails.
-  const orGptModel = Deno.env.get('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-5.4-image-2';
+  const settings = await loadAppSettings(admin);
+  const orGptModel = settings.gptImageModel || Deno.env.get('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-5.4-image-2';
   // Vertex model chain — GA (no `-preview`) IDs now that the preview phase ended.
   // 2K/4K → Gemini 3 Pro Image (only model honouring imageSize 2K/4K); then
   // degrade to Gemini 3.1 Flash Image so a Pro miss still generates at 1K.
@@ -330,17 +334,24 @@ Deno.serve(async (req) => {
   const flashModel = Deno.env.get('VERTEX_FLASH_MODEL') || 'gemini-3.1-flash-image';
   const isHiRes = resolution === '2K' || resolution === '4K';
   const vertexModels = isHiRes ? [proModel, flashModel] : [flashModel];
-  const attempts: Array<{ name: string; run: () => Promise<GenResult> }> = [
-    ...vertexModels.map((m) => ({
-      name: `vertex:${m}`,
-      run: () => viaVertex(m, prompt, sources, aspectRatio, resolution),
-    })),
-    // (Imagen 4 removed — deprecated, shuts down 2026-08-17; the Gemini-3 Flash
-    //  model already covers text-to-image and honours aspect ratio. Seedream
-    //  fallback removed too — Gemini-3's Pro→Flash chain covers hi-res, so the
-    //  only remaining fallback needed is a non-Google provider: OpenRouter GPT.)
-    { name: `openrouter:${orGptModel}`, run: () => viaOpenRouter(orGptModel, prompt, sources, aspectRatio) },
-  ];
+  // Admin → ⚙️ Settings: ChatGPT (OpenRouter only), or Gemini on Google Cloud / OpenRouter / Google
+  // Cloud then OpenRouter (the same Gemini models there)
+  const attempts: Array<{ name: string; run: () => Promise<GenResult> }> = [];
+  if (settings.imageModel === 'gpt') {
+    attempts.push({ name: `openrouter:${orGptModel}`, run: () => viaOpenRouter(orGptModel, prompt, sources, aspectRatio) });
+  } else {
+    for (const step of providerSteps(settings.imageProvider)) {
+      if (step === 'google') {
+        attempts.push(...vertexModels.map((m) => ({
+          name: `vertex:${m}`,
+          run: () => viaVertex(m, prompt, sources, aspectRatio, resolution),
+        })));
+      } else {
+        const orModels = [...new Set(vertexModels.map((m) => settings.geminiOpenRouterImageModel || `google/${m}`))];
+        attempts.push(...orModels.map((m) => ({ name: `openrouter:${m}`, run: () => viaOpenRouter(m, prompt, sources, aspectRatio) })));
+      }
+    }
+  }
 
   // Supabase's Free-plan Edge Runtime kills the whole invocation at a hard
   // 150s wall-clock limit — an unresponsive Vertex Pro call with no timeout

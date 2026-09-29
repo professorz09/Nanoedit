@@ -28,6 +28,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { loadAppSettings, providerSteps } from '../_shared/appSettings.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -164,8 +165,11 @@ Deno.serve(async (req) => {
   const errs: string[] = [];
   const isLargePrompt = prompt.length > LARGE_PROMPT_THRESHOLD;
 
+  // Google Cloud, OpenRouter, or Google Cloud then OpenRouter — the admin's text provider setting
+  const steps = providerSteps((await loadAppSettings(admin)).textProvider);
+
   // 1) Vertex (Gemini) — service-account JSON or Vertex Express key
-  const ai = makeVertex();
+  const ai = steps.includes('google') ? makeVertex() : null;
   if (ai) {
     try {
       const result: any = await ai.models.generateContent({
@@ -179,8 +183,8 @@ Deno.serve(async (req) => {
     } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
   }
 
-  // 2) OpenRouter fallback
-  const orKey = Deno.env.get('OPENROUTER_API_KEY');
+  // 2) OpenRouter (the same Gemini models)
+  const orKey = steps.includes('openrouter') ? Deno.env.get('OPENROUTER_API_KEY') : undefined;
   if (orKey) {
     try {
       const model = isLargePrompt ? OR_MODEL_LARGE : OR_MODEL_DEFAULT;

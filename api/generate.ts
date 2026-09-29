@@ -29,12 +29,15 @@
 //   VERTEX_FLASH_MODEL          = gemini-3.1-flash-image         (optional override; 1K/Fast + Pro degrade)
 //   OPENROUTER_API_KEY          = <openrouter key>               (fallback)
 //   OPENROUTER_IMAGE_MODEL      = openai/gpt-5.4-image-2         (optional override)
+// Which image model (Gemini / ChatGPT) and provider (Google Cloud / OpenRouter / fallback) run is the
+// admin's choice (Admin → ⚙️ Settings, public.app_settings); the model ids above are the defaults.
 //   MAX_THUMBNAILS_PER_USER     = 200                            (optional override)
 //   APP_PUBLIC_URL               = https://podcastflux.com        (optional; OpenRouter referer)
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import { loadAppSettings, providerSteps } from '../supabase/functions/_shared/appSettings.ts';
 
 export const config = { maxDuration: 300 };
 
@@ -249,15 +252,26 @@ export default async function handler(req: any, res: any) {
     reserved++;
   }
 
-  const orGptModel = process.env.OPENROUTER_IMAGE_MODEL || 'openai/gpt-5.4-image-2';
+  const settings = await loadAppSettings(admin);
+  const orGptModel = settings.gptImageModel || process.env.OPENROUTER_IMAGE_MODEL || 'openai/gpt-5.4-image-2';
   const proModel = process.env.VERTEX_PRO_MODEL || 'gemini-3-pro-image';
   const flashModel = process.env.VERTEX_FLASH_MODEL || 'gemini-3.1-flash-image';
   const isHiRes = resolution === '2K' || resolution === '4K';
   const vertexModels = isHiRes ? [proModel, flashModel] : [flashModel];
-  const attempts: Array<{ name: string; run: () => Promise<GenResult> }> = [
-    ...vertexModels.map((m) => ({ name: `vertex:${m}`, run: () => viaVertex(m, prompt, sources, aspectRatio, resolution) })),
-    { name: `openrouter:${orGptModel}`, run: () => viaOpenRouter(orGptModel, prompt, sources, aspectRatio) },
-  ];
+  const attempts: Array<{ name: string; run: () => Promise<GenResult> }> = [];
+  if (settings.imageModel === 'gpt') {
+    // ChatGPT's image model runs on OpenRouter only
+    attempts.push({ name: `openrouter:${orGptModel}`, run: () => viaOpenRouter(orGptModel, prompt, sources, aspectRatio) });
+  } else {
+    for (const step of providerSteps(settings.imageProvider)) {
+      if (step === 'google') {
+        attempts.push(...vertexModels.map((m) => ({ name: `vertex:${m}`, run: () => viaVertex(m, prompt, sources, aspectRatio, resolution) })));
+      } else {
+        const orModels = [...new Set(vertexModels.map((m) => settings.geminiOpenRouterImageModel || `google/${m}`))];
+        attempts.push(...orModels.map((m) => ({ name: `openrouter:${m}`, run: () => viaOpenRouter(m, prompt, sources, aspectRatio) })));
+      }
+    }
+  }
 
   let gen: GenResult | null = null;
   let usedProvider = '';

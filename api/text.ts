@@ -29,6 +29,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
+import { loadAppSettings, providerSteps } from '../supabase/functions/_shared/appSettings.ts';
 
 export const config = { maxDuration: 300 };
 
@@ -143,46 +144,50 @@ export default async function handler(req: any, res: any) {
 
   const errs: string[] = [];
   const isLargePrompt = prompt.length > LARGE_PROMPT_THRESHOLD;
+  // Google Cloud, OpenRouter, or Google Cloud then OpenRouter — the admin's text provider setting
+  const steps = providerSteps((await loadAppSettings(admin)).textProvider);
 
-  // 1) Vertex (Gemini)
-  const ai = makeVertex();
-  if (ai) {
-    try {
-      const result: any = await ai.models.generateContent({
-        model: isLargePrompt ? MODEL_LARGE : MODEL_DEFAULT,
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      });
-      let text = '';
-      for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
-      if (text.trim()) return res.status(200).json({ text });
-      errs.push('vertex: empty');
-    } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
-  }
+  for (const step of steps) {
+    // Vertex (Gemini)
+    const ai = step === 'google' ? makeVertex() : null;
+    if (ai) {
+      try {
+        const result: any = await ai.models.generateContent({
+          model: isLargePrompt ? MODEL_LARGE : MODEL_DEFAULT,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
+        let text = '';
+        for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
+        if (text.trim()) return res.status(200).json({ text });
+        errs.push('vertex: empty');
+      } catch (e: any) { errs.push('vertex: ' + (e?.message || String(e))); }
+    }
 
-  // 2) OpenRouter fallback
-  const orKey = process.env.OPENROUTER_API_KEY;
-  if (orKey) {
-    try {
-      const model = isLargePrompt ? OR_MODEL_LARGE : OR_MODEL_DEFAULT;
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${orKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.APP_PUBLIC_URL || 'https://podcastflux.com',
-          'X-Title': 'PodcastFlux',
-        },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
-      });
-      const data: any = await r.json().catch(() => ({}));
-      if (r.ok) {
-        const text = data?.choices?.[0]?.message?.content || '';
-        if (typeof text === 'string' && text.trim()) return res.status(200).json({ text });
-        errs.push('openrouter: empty');
-      } else {
-        errs.push('openrouter: ' + (data?.error?.message || r.status));
-      }
-    } catch (e: any) { errs.push('openrouter: ' + (e?.message || String(e))); }
+    // OpenRouter (the same Gemini models)
+    const orKey = step === 'openrouter' ? process.env.OPENROUTER_API_KEY : '';
+    if (orKey) {
+      try {
+        const model = isLargePrompt ? OR_MODEL_LARGE : OR_MODEL_DEFAULT;
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${orKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.APP_PUBLIC_URL || 'https://podcastflux.com',
+            'X-Title': 'PodcastFlux',
+          },
+          body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
+        });
+        const data: any = await r.json().catch(() => ({}));
+        if (r.ok) {
+          const text = data?.choices?.[0]?.message?.content || '';
+          if (typeof text === 'string' && text.trim()) return res.status(200).json({ text });
+          errs.push('openrouter: empty');
+        } else {
+          errs.push('openrouter: ' + (data?.error?.message || r.status));
+        }
+      } catch (e: any) { errs.push('openrouter: ' + (e?.message || String(e))); }
+    }
   }
 
   await refundAll(); // every provider failed — a failed run is free

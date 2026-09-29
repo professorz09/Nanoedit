@@ -27,6 +27,7 @@ const TimeGraph = React.lazy(() => import('./TimeGraph'));
 import HeroRotator from './HeroRotator';
 const ShortsShowcase = React.lazy(() => import('./ShortsShowcase'));
 const AdminStyles = React.lazy(() => import('./AdminStyles'));
+const AdminSettings = React.lazy(() => import('./AdminSettings'));
 
 // Lightweight loader shown while a lazy tab chunk arrives (usually a few ms).
 const PanelFallback = () => (
@@ -2913,9 +2914,10 @@ const ThumbnailStudio: React.FC<Props> = ({
           </Suspense>
         )}
 
-        {/* ── Admin: global styles (server re-checks is_admin on every call) ── */}
+        {/* ── Admin: settings (app_settings RLS: admins only) + global styles (server re-checks is_admin on every call) ── */}
         {section === 'admin' && profile?.is_admin && (
           <Suspense fallback={<PanelFallback />}>
+            <AdminSettings />
             <AdminStyles />
           </Suspense>
         )}

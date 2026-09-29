@@ -22,7 +22,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { GoogleGenAI } from 'npm:@google/genai@2.21.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { embedWithFallback } from '../_shared/embedding.ts';
+import { canRunOn, embedWithFallback, tagImage } from '../_shared/embedding.ts';
+import { loadAppSettings } from '../_shared/appSettings.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -173,7 +174,8 @@ Deno.serve(async (req) => {
   }
 
   const ai = makeVertex();
-  if (!ai) return json(500, { error: 'Indexing service is not configured.' });
+  const provider = (await loadAppSettings(admin)).textProvider; // Admin → ⚙️ Settings
+  if (!canRunOn(ai, provider)) return json(500, { error: 'Indexing service is not configured.' });
 
   // 1) Read the uploaded image from Storage (service role).
   let inline: { mimeType: string; data: string };
@@ -191,23 +193,12 @@ Deno.serve(async (req) => {
   }
 
   // 2) Vision-tag the thumbnail.
-  let meta: any = null;
-  try {
-    const result: any = await ai.models.generateContent({
-      model: TAG_MODEL,
-      contents: [{ role: 'user', parts: [{ inlineData: inline }, { text: buildPrompt(title) }] }],
-    });
-    let text = '';
-    for (const p of result?.candidates?.[0]?.content?.parts ?? []) if (p.text) text += p.text;
-    meta = parseJson(text);
-  } catch (e: any) {
-    console.error('tag_failed', e?.message || String(e));
-  }
+  const meta: any = parseJson(await tagImage(ai, TAG_MODEL, inline, buildPrompt(title), provider));
   if (!meta) return json(502, { error: 'Could not analyse the image. Please try a clearer thumbnail.' });
   if (title) meta.title = title;
 
   // 3) Embed the topic fingerprint (same model + dims + taskType as the index).
-  const embedding = await embedWithFallback(ai, embedText(meta, title), EMBED_DIMS, 'RETRIEVAL_DOCUMENT');
+  const embedding = await embedWithFallback(ai, embedText(meta, title), EMBED_DIMS, 'RETRIEVAL_DOCUMENT', provider);
   if (!embedding?.length) return json(502, { error: 'Indexing is busy right now. Please try again in a moment.' });
 
   // 4) Insert the owned style row.

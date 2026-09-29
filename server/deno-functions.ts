@@ -39,8 +39,9 @@ const hasGoogle = () => !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.en
 export const FUNCTIONS: Record<string, () => boolean> = {
   'transcript': () => !!process.env.SUPADATA_API_KEY,
   'match-style': () => hasGoogle() || !!process.env.OPENROUTER_API_KEY,
-  'index-style': hasGoogle,
-  'admin-styles': hasGoogle,
+  // tagging + embedding: Google Cloud and/or OpenRouter, per the admin's text provider setting
+  'index-style': () => hasGoogle() || !!process.env.OPENROUTER_API_KEY,
+  'admin-styles': () => hasGoogle() || !!process.env.OPENROUTER_API_KEY,
 };
 
 const handlers = new Map<string, Promise<Handler>>();
