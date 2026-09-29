@@ -1,7 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useScrollLock } from '../hooks/useScrollLock';
-import { HOME_SHORTS, HomeShort } from './homeShorts';
 
 // The Shorts Maker's look picker: style, background, subtitles, effects, fit and length — each as a small visual
 // card — and a phone preview that shows the picked combination. The keys match the render server
@@ -211,22 +210,23 @@ const ThumbCtx = React.createContext<string | null>(null);
 // a real podcast frame (public/home/footage.jpg, from a real Short) instead of a drawing
 const REAL_FOOTAGE = '/home/footage.jpg';
 
-// options seen in the real Shorts (components/homeShorts.ts): their card plays that Short
-const realShort = (prefix: string): HomeShort | undefined =>
-  HOME_SHORTS.find(s => s.url.includes(`/${prefix}-`) || s.url.split('/').pop()!.startsWith(`${prefix}-`));
-const REAL_STYLE: Record<string, string> = { split: '03' };
-const REAL_BG: Record<string, string> = { white: '03', wall_red: '04' };
-// caption look → [Short, where its words sit (% down the frame)]
-const REAL_CAP: Record<string, [string, number]> = { sticky_blue: ['02', 53], underline_swipe: ['03', 52], chalkboard: ['04', 38] };
+// every option's card: a real frame of a Short made with that option by the render server (Movievideomaker's
+// pipeline.shorts_split / assemble.build_shorts_final) on the MrBeast podcast clip — public/shorts-looks/
+const LOOK_IMG = (name: string) => `/shorts-looks/${name}.webp`;
+const HAS_IMG = new Set([
+  'style-split', 'style-classic', 'style-boxed', 'fit-full', 'fit-zoom', 'fit-track',
+  'simple-auto', 'simple-animated', 'simple-simple', 'simple-off', 'cap-auto', 'cap-poster_words', 'cap-off',
+  ...['white', 'white_grid', 'yellow', 'blue', 'green', 'pink', 'glass', 'black', 'black_grid', 'wall_red', 'wall_maroon',
+    'wall_navy', 'wall_emerald', 'wall_purple', 'wall_teal', 'wall_charcoal'].map(b => `bg-${b}`),
+  ...['sticky_blue', 'underline_swipe', 'chalkboard', 'hormozi', 'mrbeast', 'neon_green', 'glass', 'red_box', 'black_box',
+    'karaoke', 'highlighter', 'comic', 'fire', 'ice', 'gold', 'typewriter', 'sticker', 'chat_bubble', 'sticky_note',
+    'news_bar', 'pop_art', 'rgb_split', 'minimal'].map(c => `cap-${c}`),
+]);
 
-const RealClip: React.FC<{ short: HomeShort; className?: string; style?: React.CSSProperties; focusY?: number }> = ({ short, className = '', style, focusY }) => (
+const RealShot: React.FC<{ name: string; className?: string; style?: React.CSSProperties; focusY?: number }> = ({ name, className = '', style, focusY }) => (
   <div className={`relative overflow-hidden bg-black ${className}`} style={style}>
-    <video poster={short.poster} autoPlay muted loop playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover"
-      style={{ objectPosition: `50% ${focusY ?? 50}%` }}>
-      {short.webm && <source src={short.webm} type="video/webm" />}
-      <source src={short.url} type="video/mp4" />
-    </video>
-    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-thumb-red text-white text-[9px] font-black tracking-wider">REAL</span>
+    <img src={LOOK_IMG(name)} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover"
+      style={{ objectPosition: `50% ${focusY ?? 50}%` }} />
   </div>
 );
 
@@ -494,8 +494,8 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
               <button key={s.id} type="button" className={`${cardCls(look.style === s.id)} p-2 sm:p-3 bg-thumb-soft flex flex-col items-center`}
                 onClick={() => pickOne({ style: s.id, caption: (s.id === 'split' ? CAPS : SIMPLE_CAPS).some(c => c.id === look.caption) ? look.caption : 'auto' })}>
                 <Tick on={look.style === s.id} />
-                {REAL_STYLE[s.id] && realShort(REAL_STYLE[s.id])
-                  ? <RealClip short={realShort(REAL_STYLE[s.id])!} className="rounded-[14px]" style={{ width: small ? 88 : 128, aspectRatio: '9 / 16' }} />
+                {HAS_IMG.has(`style-${s.id}`)
+                  ? <RealShot name={`style-${s.id}`} className="rounded-[14px] shadow-md" style={{ width: small ? 88 : 128, aspectRatio: '9 / 16' }} />
                   : <PhonePreview look={{ ...look, style: s.id, fxMode: 'auto' }} width={small ? 88 : 128} />}
                 <p className="mt-2 text-[13px] font-black text-thumb-ink text-center">{s.label}</p>
                 <p className="text-[10.5px] text-thumb-sub text-center leading-tight mt-0.5">{s.note}</p>
@@ -512,8 +512,8 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
               <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} p-1.5 bg-thumb-soft flex flex-col items-center`}>
                 <Tick on={look.bg === b.id} />
                 <div className="relative">
-                  {REAL_BG[b.id] && realShort(REAL_BG[b.id])
-                    ? <RealClip short={realShort(REAL_BG[b.id])!} className="rounded-[12px]" style={{ width: small ? 82 : 104, aspectRatio: '9 / 16' }} />
+                  {HAS_IMG.has(`bg-${b.id}`)
+                    ? <RealShot name={`bg-${b.id}`} className="rounded-[12px]" style={{ width: small ? 82 : 104, aspectRatio: '9 / 16' }} />
                     : <PhonePreview look={{ ...look, style: 'split', bg: b.id, fxMode: 'auto' }} width={small ? 82 : 104} still frame={false} />}
                   {b.tag && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-black">{b.tag === '🎲' ? '🎲 MIX' : '🤖 AI'}</span>}
                 </div>
@@ -530,8 +530,8 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
             {caps.map(c => (
               <button key={c.id} type="button" onClick={() => pickOne({ caption: c.id })} className={`${cardCls(look.caption === c.id)} overflow-hidden`}>
                 <Tick on={look.caption === c.id} />
-                {studio && REAL_CAP[c.id] && realShort(REAL_CAP[c.id][0])
-                  ? <RealClip short={realShort(REAL_CAP[c.id][0])!} className="h-[76px]" focusY={REAL_CAP[c.id][1]} />
+                {HAS_IMG.has(`${studio ? 'cap' : 'simple'}-${c.id}`)
+                  ? <RealShot name={`${studio ? 'cap' : 'simple'}-${c.id}`} className="h-[76px]" focusY={studio ? 44 : 60} />
                   : (
                     <div className="h-[76px] overflow-hidden flex items-center justify-center px-1" style={{ background: studio ? '#FFFFFF' : 'linear-gradient(160deg,#334155,#0F172A)' }}>
                       <CaptionSample cap={c} dark={!studio} size={small ? 12 : 14} animate={look.caption === c.id} />
@@ -598,7 +598,9 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
             {FITS.map(f => (
               <button key={f.id} type="button" onClick={() => pickOne({ fit: f.id })} className={`${cardCls(look.fit === f.id)} p-1.5 bg-thumb-soft`}>
                 <Tick on={look.fit === f.id} />
-                <div className="flex justify-center"><PhonePreview look={{ ...look, fit: f.id }} width={small ? 80 : 104} frame={false} /></div>
+                <div className="flex justify-center">
+                  <RealShot name={`fit-${f.id}`} className="rounded-[12px]" style={{ width: small ? 80 : 104, aspectRatio: '9 / 16' }} />
+                </div>
                 <p className="mt-1.5 text-[12.5px] font-black text-thumb-ink text-center">{f.label}</p>
                 <p className="text-[10.5px] text-thumb-sub text-center leading-tight">{f.note}</p>
               </button>
