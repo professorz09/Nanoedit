@@ -178,8 +178,8 @@ const cardCls = (on: boolean) =>
   `relative rounded-2xl border-2 transition-all text-left ${on ? 'border-thumb-red shadow-[0_8px_24px_-8px_rgba(239,68,68,.45)] -translate-y-0.5' : 'border-thumb-line hover:border-thumb-red/40 hover:-translate-y-0.5'}`;
 
 // a caption sample: "THIS CHANGED EVERYTHING", the key word in the look
-const CaptionSample: React.FC<{ cap: Cap; dark: boolean; size?: number; animate?: boolean; marker?: boolean; circle?: boolean }> =
-  ({ cap, dark, size = 13, animate, marker, circle }) => {
+const CaptionSample: React.FC<{ cap: Cap; dark: boolean; size?: number; animate?: boolean; marker?: boolean; circle?: boolean; words?: [string, string] }> =
+  ({ cap, dark, size = 13, animate, marker, circle, words = ['THIS CHANGED', 'EVERYTHING'] }) => {
     if (cap.id === 'off') return <span className="text-[11px] font-bold" style={{ color: dark ? '#fff8' : '#0006' }}>— no words —</span>;
     const ink = dark ? '#fff' : '#111';
     const keyStyle: React.CSSProperties = {
@@ -188,9 +188,9 @@ const CaptionSample: React.FC<{ cap: Cap; dark: boolean; size?: number; animate?
     };
     return (
       <span className="inline-flex flex-col items-center leading-[1.08] text-center whitespace-nowrap" style={{ fontFamily: cap.font, fontSize: size, ...cap.wrap }}>
-        <span style={{ color: ink, fontWeight: 800, ...cap.soft }}>{cap.id === 'poster_words' ? 'this changed' : 'THIS CHANGED'}</span>
+        <span style={{ color: ink, fontWeight: 800, ...cap.soft }}>{cap.id === 'poster_words' ? words[0].toLowerCase() : words[0]}</span>
         <span className="relative inline-block" style={{ animation: animate ? 'smPop 2.4s ease-in-out infinite' : undefined }}>
-          <span style={{ fontWeight: 900, color: ink, textTransform: 'uppercase', ...keyStyle }}>EVERYTHING</span>
+          <span style={{ fontWeight: 900, color: ink, textTransform: 'uppercase', ...keyStyle }}>{words[1]}</span>
           {circle && (
             <svg viewBox="0 0 100 40" className="absolute -inset-x-2 -inset-y-1.5 w-[calc(100%+16px)] h-[calc(100%+12px)] pointer-events-none" preserveAspectRatio="none">
               <ellipse cx="50" cy="20" rx="47" ry="17" fill="none" stroke="#EF4444" strokeWidth="3" strokeDasharray="120" style={{ animation: animate ? 'smDraw 3s ease-out infinite' : undefined }} />
@@ -204,7 +204,7 @@ const CaptionSample: React.FC<{ cap: Cap; dark: boolean; size?: number; animate?
 // the video stand-in: the pasted video's own thumbnail when there is one, else a podcast-studio scene
 const ThumbCtx = React.createContext<string | null>(null);
 
-const Studio = () => (
+export const Studio = () => (
   <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 w-full h-full">
     <defs>
       <radialGradient id="smWall" cx="50%" cy="30%" r="80%"><stop offset="0" stopColor="#3b2a4d" /><stop offset="1" stopColor="#120d1a" /></radialGradient>
@@ -241,8 +241,9 @@ const Footage: React.FC<{ className?: string; style?: React.CSSProperties; anim?
 };
 
 // ── a phone with the look on it (the popups' previews and the live one) ────────────────────────────────
-export const PhonePreview: React.FC<{ look: ShortsLook; width?: number; fxOnly?: string; still?: boolean; frame?: boolean }> =
-  ({ look, width = 150, fxOnly, still, frame = true }) => {
+export const PhonePreview: React.FC<{ look: ShortsLook; width?: number; fxOnly?: string; still?: boolean; frame?: boolean;
+  head?: [string, string, string]; words?: [string, string] }> =
+  ({ look, width = 150, fxOnly, still, frame = true, head = ['HE LOST', 'EVERYTHING', 'IN ONE DAY'], words }) => {
     const studio = look.style === 'split';
     const bg = BGS.find(b => b.id === look.bg) || BGS[0];
     const dark = studio ? !!bg.dark : look.style === 'boxed';
@@ -255,7 +256,7 @@ export const PhonePreview: React.FC<{ look: ShortsLook; width?: number; fxOnly?:
     const A = (v: string) => (still ? undefined : v);
     const headline = (color = ink) => (
       <p className="text-center font-black leading-[1.05]" style={{ fontSize: w * 0.075, color, fontFamily: IMPACT, letterSpacing: '.01em' }}>
-        HE LOST <span style={{ color: '#EF4444' }}>EVERYTHING</span><br />IN ONE DAY
+        {head[0]} <span style={{ color: '#EF4444' }}>{head[1]}</span><br />{head[2]}
       </p>
     );
     const cardAnim = on('card_drop') ? A('smDrop 3.2s ease-out infinite') : on('card_move') ? A('smSwap 4s ease-in-out infinite') : undefined;
@@ -291,7 +292,7 @@ export const PhonePreview: React.FC<{ look: ShortsLook; width?: number; fxOnly?:
 
             <div className="mt-[8%] flex flex-col items-center gap-1" style={{ perspective: 200 }}>
               <div style={{ animation: on('cascade') ? A('smUnfold 2.4s ease-out infinite') : undefined, transformOrigin: 'top' }}>
-                <CaptionSample cap={cap} dark={dark} size={w * 0.072} animate={!still} marker={on('marker')} circle={on('scribble')} />
+                <CaptionSample cap={cap} dark={dark} size={w * 0.072} animate={!still} marker={on('marker')} circle={on('scribble')} words={words} />
               </div>
               {(on('counter') || on('money_stack')) && (
                 <div className="flex items-end gap-1.5 mt-0.5">

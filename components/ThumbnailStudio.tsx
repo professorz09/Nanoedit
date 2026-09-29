@@ -21,6 +21,7 @@ const Account = React.lazy(() => import('./Account'));
 const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
 const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
 const ShortsMaker = React.lazy(() => import('./ShortsMaker'));
+const ShortsFlow = React.lazy(() => import('./ShortsFlow'));
 const AdminStyles = React.lazy(() => import('./AdminStyles'));
 
 // Lightweight loader shown while a lazy tab chunk arrives (usually a few ms).
@@ -376,9 +377,13 @@ const ThumbnailStudio: React.FC<Props> = ({
   // each section has its own address (podcastflux.com/shorts …): a refresh, the back button and a shared link
   // land on the same page
   const [section, setSection] = useState<Section>(() => sectionFromPath(window.location.pathname));
+  const replaceUrl = useRef(false); // a redirect (not a click) swaps the address instead of adding a back step
   useEffect(() => {
     const path = SECTION_PATHS[section];
-    if (window.location.pathname !== path) window.history.pushState({ section }, '', path + window.location.search);
+    if (window.location.pathname !== path) {
+      window.history[replaceUrl.current ? 'replaceState' : 'pushState']({ section }, '', path + window.location.search);
+    }
+    replaceUrl.current = false;
   }, [section]);
   useEffect(() => {
     const onBack = () => setSection(sectionFromPath(window.location.pathname));
@@ -503,7 +508,13 @@ const ThumbnailStudio: React.FC<Props> = ({
   const handlePreviewUpload = (e: React.ChangeEvent<HTMLInputElement>) => readPreviewFile(e, setPreviewImage);
   const handlePreviewUploadB = (e: React.ChangeEvent<HTMLInputElement>) => readPreviewFile(e, setPreviewImageB);
 
+  // the home page is the landing page for visitors only (user-decided): signed in, it's the Shorts Maker
+  useEffect(() => {
+    if (user && section === 'home') { replaceUrl.current = true; setSection('shorts'); }
+  }, [user, section]);
+
   const goHome = () => {
+    if (user) { goShorts(); return; }
     setSection('home');
     setSidebarOpen(false);
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
@@ -1671,6 +1682,13 @@ const ThumbnailStudio: React.FC<Props> = ({
               <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Captions, effects & speaker tracking</span>
             </div>
           </div>
+        </section>
+        )}
+
+        {/* ── How it works, animated: one long video → its best moments → ready Shorts ── */}
+        {section === 'home' && (
+        <section className="pb-14">
+          <Suspense fallback={null}><ShortsFlow /></Suspense>
         </section>
         )}
 
