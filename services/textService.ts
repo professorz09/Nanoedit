@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { postFunction } from './functionsClient';
 
 // our own API server (server/api-server.ts on Oracle, e.g. https://api.podcastflux.com); empty = same site
 // (Vercel's /api functions). Down or not set up there → the Supabase functions take over.
@@ -125,25 +126,15 @@ export const fetchTranscript = async (videoId: string): Promise<TranscriptSegmen
       return segments.length ? segments : null;
     }
 
-    // PROD: call the secure Edge Function. The Supadata key lives as a Supabase
-    // secret and is NEVER bundled into the browser.
-    const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-    const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-    if (!supaUrl || !supabase) return null;
+    // PROD: the "transcript" function (our API server first, else Supabase). The
+    // Supadata key lives there and is NEVER bundled into the browser.
+    if (!import.meta.env.VITE_SUPABASE_URL || !supabase) return null;
 
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) return null; // not signed in → fall back to manual paste
 
-    const resp = await fetch(`${supaUrl}/functions/v1/transcript`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: supaAnon ?? '',
-      },
-      body: JSON.stringify({ videoId }),
-    });
+    const resp = await postFunction('transcript', { videoId }, token);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) return null;
     const segments: TranscriptSegment[] = data.segments || [];

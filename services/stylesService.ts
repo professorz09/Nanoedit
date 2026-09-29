@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
+import { postFunction } from './functionsClient';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Style / reference thumbnails, sourced from the database.
@@ -92,18 +93,12 @@ export interface MatchedStyle {
  */
 export const matchStyles = async (text: string, count = 8, ownOnly = false): Promise<MatchedStyle[]> => {
   if (!supabase) return [];
-  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supaUrl) return [];
+  if (!import.meta.env.VITE_SUPABASE_URL) return [];
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) return [];
-    const resp = await fetch(`${supaUrl}/functions/v1/match-style`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
-      body: JSON.stringify({ text, count, ownOnly }),
-    });
+    const resp = await postFunction('match-style', { text, count, ownOnly }, token);
     if (!resp.ok) return [];
     const data = await resp.json().catch(() => ({}));
     return Array.isArray(data?.styles) ? data.styles : [];
@@ -181,9 +176,7 @@ export const fetchMyStyles = async (): Promise<UserStyle[]> => {
 
 export const uploadMyStyle = async (dataUrl: string, name?: string): Promise<UserStyle> => {
   if (!supabase) throw new Error('Not configured.');
-  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supaUrl) throw new Error('Not configured.');
+  if (!import.meta.env.VITE_SUPABASE_URL) throw new Error('Not configured.');
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth?.user?.id;
   if (!uid) throw new Error('Please sign in to save a style.');
@@ -198,11 +191,13 @@ export const uploadMyStyle = async (dataUrl: string, name?: string): Promise<Use
   const token = session?.access_token;
   if (!token) { await supabase.storage.from(BUCKET).remove([path]).catch(() => {}); throw new Error('Please sign in.'); }
 
-  const resp = await fetch(`${supaUrl}/functions/v1/index-style`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
-    body: JSON.stringify({ path, name }),
-  });
+  let resp: Response;
+  try {
+    resp = await postFunction('index-style', { path, name }, token);
+  } catch {
+    await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+    throw new Error('Could not save that style.');
+  }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || !data?.style) {
     await supabase.storage.from(BUCKET).remove([path]).catch(() => {});

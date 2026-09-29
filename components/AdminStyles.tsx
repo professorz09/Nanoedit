@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../services/supabase';
+import { postFunction } from '../services/functionsClient';
 
 interface AdminStyle {
   id: string;
@@ -18,18 +19,11 @@ interface AdminStyle {
 // behind that same check (see ThumbnailStudio), but the real gate is there.
 const callAdmin = async (body: unknown) => {
   if (!supabase) throw new Error('Not configured.');
-  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supaUrl) throw new Error('Not configured.');
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) throw new Error('Please sign in.');
 
-  const resp = await fetch(`${supaUrl}/functions/v1/admin-styles`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
-    body: JSON.stringify(body),
-  });
+  const resp = await postFunction('admin-styles', body, token);
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(data?.error || `Request failed (${resp.status})`);
   return data;

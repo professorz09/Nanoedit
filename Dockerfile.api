@@ -8,6 +8,8 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 COPY api ./api
 COPY server ./server
+# the Supabase functions it also runs (/fn/<name>, server/deno-functions.ts)
+COPY supabase/functions ./supabase/functions
 ENV NODE_ENV=production API_PORT=8095
 EXPOSE 8095
 CMD ["node", "server/api-server.ts"]
