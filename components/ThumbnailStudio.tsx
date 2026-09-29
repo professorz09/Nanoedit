@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react
 import { GeneratedImage, QueueItem, ThumbInputMode, THUMBNAIL_TEMPLATES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
-import { Plan, BillingCycle } from '../services/plans';
+import { Plan, BillingCycle, getPlan, PlanId } from '../services/plans';
 import { buyItem } from '../services/paymentsService';
 import { extractYouTubeId, urlToBase64, fetchYouTubeTitle, fetchYouTubeThumb } from '../services/youtubeService';
 import AuthModal from './AuthModal';
@@ -1616,7 +1616,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       {creditsLoading
                         ? <span className="thumb-skeleton inline-block w-6 h-3 rounded align-middle" aria-label="Loading credits" />
                         : totalCredits}
-                      {' '}credits · {profile?.plan ?? 'free'}
+                      {' '}credits · {getPlan((profile?.plan ?? 'free') as PlanId)?.name ?? 'Free'}
                     </p>
                   </div>
                 </button>
@@ -2829,7 +2829,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         {/* ── Pricing ── */}
         {section === 'pricing' && (
           <Suspense fallback={<PanelFallback />}>
-            <Pricing onCheckout={startCheckout} onBuyAddon={buyAddon} onRequireLogin={() => requireLogin('Log in to upgrade.')} />
+            <Pricing onCheckout={startCheckout} onBuyAddon={buyAddon} onRequireLogin={() => requireLogin('Log in to upgrade.')} onStartFree={goShorts} />
           </Suspense>
         )}
 

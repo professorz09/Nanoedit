@@ -14,35 +14,39 @@ export interface PriceOption {
 export interface Plan {
   id: PlanId;
   name: string;
-  credits: number;            // thumbnails per month (same on both cycles)
+  credits: number;            // credits per month (1 credit = 1 Short or 1 thumbnail)
+  tagline: string;
   monthly: PriceOption;
   yearly: PriceOption;        // billed once a year (~2 months free)
   features: string[];
   highlight?: boolean;
 }
 
-// New (free) users get ZERO credits — they must buy a plan before generating.
-// Kept as a named constant so the signup trigger + UI stay in sync.
-export const TRIAL_CREDITS = 0;
+// New (free) users get enough credits for ONE Short (user-decided) — the signup trigger
+// (supabase/migrations/0022_free_one_short.sql) grants the same number.
+export const TRIAL_CREDITS = 1;
 
 // The two purchasable plans. Yearly = 10× the monthly price (2 months free).
 export const PLANS: Plan[] = [
+  // ids stay 'pro' / 'studio' (stored on profiles and in past purchases); only the names shown changed
   {
     id: 'pro',
-    name: 'Pro',
-    credits: 130,
-    monthly: { priceUsd: 39 },
-    yearly:  { priceUsd: 390 },
+    name: 'Starter',
+    tagline: 'For creators posting a few Shorts a week',
+    credits: 100,
+    monthly: { priceUsd: 29 },
+    yearly:  { priceUsd: 290 },
     highlight: true,
-    features: ['130 thumbnails / month', 'HD 16:9 output', 'All styles & templates', 'Priority generation'],
+    features: ['100 credits / month', 'Up to 100 Shorts', 'Viral score for every moment', 'Bulk: up to 20 Shorts from one link', 'All styles, captions & effects', 'HD thumbnails too'],
   },
   {
     id: 'studio',
-    name: 'Studio',
+    name: 'Creator',
+    tagline: 'For podcasts and daily posting',
     credits: 400,
     monthly: { priceUsd: 79 },
     yearly:  { priceUsd: 790 },
-    features: ['400 thumbnails / month', '4K max quality', 'Fastest queue', 'Everything in Pro'],
+    features: ['400 credits / month', 'Up to 400 Shorts', 'Everything in Starter', 'Fastest queue', '4K thumbnails'],
   },
 ];
 

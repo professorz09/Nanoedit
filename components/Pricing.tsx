@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PLANS, ADDONS, perMonth, priceFor, yearlySavingPct, PLAN_RANK, PlanId, BillingCycle, Plan } from '../services/plans';
+import { PLANS, ADDONS, perMonth, priceFor, yearlySavingPct, PLAN_RANK, PlanId, BillingCycle, Plan, TRIAL_CREDITS } from '../services/plans';
 import { useAuth } from '../contexts/AuthContext';
 
 const Check = (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z" /></svg>);
@@ -9,9 +9,10 @@ interface Props {
   onCheckout: (plan: Plan, cycle: BillingCycle) => Promise<void>;
   onBuyAddon: (addonId: string) => Promise<void>;
   onRequireLogin: () => void;
+  onStartFree?: () => void;
 }
 
-const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) => {
+const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onStartFree }) => {
   const { user, profile } = useAuth();
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   // Only one checkout can be in flight — 'plan:<id>' | 'addon:<id>' | null.
@@ -71,8 +72,38 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
         </div>
       </div>
 
-      {/* Plan cards */}
-      <div className="grid sm:grid-cols-2 gap-5 lg:gap-6 max-w-3xl mx-auto mt-9 px-1">
+      <div className="text-center mt-8">
+        <h2 className="text-[28px] sm:text-[40px] font-black tracking-[-0.02em] text-thumb-ink leading-tight">Simple pricing. <span className="text-thumb-red">1 credit = 1 Short.</span></h2>
+        <p className="text-thumb-sub mt-2 text-[15px]">Preview every moment for free — you only spend a credit on the Shorts you download.</p>
+      </div>
+
+      {/* Plan cards: Free, then the two paid plans */}
+      <div className="grid md:grid-cols-3 gap-5 lg:gap-6 max-w-5xl mx-auto mt-9 px-1 items-stretch">
+        {/* Free */}
+        <div className="thumb-glass rounded-3xl p-6 sm:p-7 flex flex-col relative">
+          <h3 className="text-xl font-black text-thumb-ink">Free</h3>
+          <p className="text-[13px] text-thumb-sub mt-1 min-h-[20px]">Try it on your own video</p>
+          <div className="mt-4 flex items-end gap-1.5">
+            <span className="text-5xl font-black text-thumb-ink tracking-tight">$0</span>
+          </div>
+          <p className="text-xs text-thumb-sub mt-1.5 h-4">No card needed</p>
+          <div className="mt-5 rounded-2xl bg-thumb-soft border border-thumb-line px-4 py-3">
+            <p className="text-[22px] font-black text-thumb-ink leading-none">{TRIAL_CREDITS} Short</p>
+            <p className="text-[12px] text-thumb-sub mt-1">free when you sign up</p>
+          </div>
+          <ul className="mt-5 space-y-2.5 flex-1">
+            {['Preview all the best moments', 'Viral score for each one', 'All styles, captions & effects'].map(f => (
+              <li key={f} className="flex items-start gap-2.5 text-sm text-thumb-ink"><Check className="w-4 h-4 text-thumb-green shrink-0 mt-0.5" /> {f}</li>
+            ))}
+          </ul>
+          <button
+            onClick={() => (user ? onStartFree?.() : onRequireLogin())}
+            className="mt-6 w-full py-3.5 rounded-2xl font-bold text-[15px] bg-thumb-soft border border-thumb-line text-thumb-ink hover:border-thumb-red/50 transition-colors"
+          >
+            {user ? (profile?.plan === 'free' ? 'Make my free Short' : 'Open Shorts Maker') : 'Start free'}
+          </button>
+        </div>
+
         {PLANS.map(plan => {
           const isCurrent = profile?.plan === plan.id;
           // A plan buy always resets credits to the purchased plan's
@@ -81,25 +112,31 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
           // block it here instead of letting it through as a real purchase.
           const isDowngrade = !isCurrent && PLAN_RANK[plan.id] < currentRank;
           const opt = priceFor(plan, cycle);
+          const perShort = (perMonth(plan, cycle) / plan.credits).toFixed(2);
           return (
             <div
               key={plan.id}
-              className={`thumb-glass rounded-3xl p-6 sm:p-7 flex flex-col relative ${plan.highlight ? 'thumb-float-red ring-1 ring-thumb-red/40' : ''}`}
+              className={`thumb-glass rounded-3xl p-6 sm:p-7 flex flex-col relative ${plan.highlight ? 'thumb-float-red ring-2 ring-thumb-red/60 md:-translate-y-2' : ''}`}
             >
               {plan.highlight && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-black uppercase tracking-wider bg-thumb-red text-white px-3 py-1 rounded-full shadow">Most popular</span>
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-black uppercase tracking-wider bg-thumb-red text-white px-3 py-1 rounded-full shadow whitespace-nowrap">Most popular</span>
               )}
               <h3 className="text-xl font-black text-thumb-ink">{plan.name}</h3>
-              <div className="mt-3 flex items-end gap-1.5">
-                <span className="text-4xl font-black text-thumb-ink">${perMonth(plan, cycle)}</span>
-                <span className="text-sm text-thumb-sub mb-1.5">/ month</span>
+              <p className="text-[13px] text-thumb-sub mt-1 min-h-[20px]">{plan.tagline}</p>
+              <div className="mt-4 flex items-end gap-1.5">
+                <span className="text-5xl font-black text-thumb-ink tracking-tight">${perMonth(plan, cycle)}</span>
+                <span className="text-sm text-thumb-sub mb-2">/ month</span>
               </div>
-              <p className="text-xs text-thumb-sub mt-1 h-4">
-                {cycle === 'yearly' ? `Billed $${opt.priceUsd}/year · save ${yearlySavingPct(plan)}%` : 'Billed monthly'}
+              <p className="text-xs text-thumb-sub mt-1.5 h-4">
+                {cycle === 'yearly' ? `Billed $${opt.priceUsd}/year · save ${yearlySavingPct(plan)}%` : 'Billed monthly · one-time payment'}
               </p>
+              <div className={`mt-5 rounded-2xl px-4 py-3 border ${plan.highlight ? 'bg-thumb-redSoft border-thumb-red/25' : 'bg-thumb-soft border-thumb-line'}`}>
+                <p className="text-[22px] font-black text-thumb-ink leading-none">{plan.credits} Shorts <span className="text-[13px] font-bold text-thumb-sub">/ month</span></p>
+                <p className="text-[12px] text-thumb-sub mt-1">≈ ${perShort} per Short</p>
+              </div>
 
               <ul className="mt-5 space-y-2.5 flex-1">
-                {plan.features.map(f => (
+                {plan.features.filter(f => !/credits \/ month|^Up to \d+ Shorts/.test(f)).map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-thumb-ink">
                     <Check className="w-4 h-4 text-thumb-green shrink-0 mt-0.5" /> {f}
                   </li>
@@ -109,11 +146,11 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
               <button
                 onClick={() => handlePick(plan)}
                 disabled={isCurrent || isDowngrade || busy !== null}
-                title={isDowngrade ? `You're already on ${profile?.plan} — this would reset your credits down, so it's blocked. Buy add-on credits instead if you need more.` : undefined}
+                title={isDowngrade ? `You're already on a bigger plan — this would reset your credits down, so it's blocked. Buy add-on credits instead if you need more.` : undefined}
                 className={`mt-6 w-full py-3.5 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2 transition-all disabled:opacity-60 ${
                   isCurrent || isDowngrade
                     ? 'bg-thumb-soft border border-thumb-line text-thumb-sub cursor-default'
-                    : 'thumb-btn text-white'
+                    : plan.highlight ? 'thumb-btn text-white' : 'border-2 border-thumb-red text-thumb-red hover:bg-thumb-redSoft'
                 }`}
               >
                 {isCurrent
@@ -128,10 +165,11 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin }) =>
           );
         })}
       </div>
+      <p className="text-center text-[12px] text-thumb-sub mt-6">Credits also work for thumbnails (1 credit = 1 thumbnail). Unused Shorts that fail to render are refunded.</p>
 
       {/* Add-on credit packs — paid plans only */}
       {hasPaidPlan && (
-      <div className="max-w-3xl mx-auto mt-10 px-1">
+      <div className="max-w-5xl mx-auto mt-10 px-1">
         <div className="thumb-glass rounded-3xl p-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>

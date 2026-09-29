@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
         .from('profiles').select('plan').eq('id', uid).single();
       if (profErr) return json(500, { error: 'Could not verify your plan.' });
       if (item.kind === 'addon' && prof?.plan !== 'pro' && prof?.plan !== 'studio') {
-        return json(403, { error: 'Add-on credits require an active Pro or Studio plan.' });
+        return json(403, { error: 'Add-on credits require an active Starter or Creator plan.' });
       }
       if (item.kind === 'plan') {
         const currentRank = PLAN_RANK[(prof?.plan as 'free' | 'pro' | 'studio') ?? 'free'] ?? 0;

@@ -29,13 +29,13 @@ export interface CatalogItem {
 // allotment) up front, since there's no recurring monthly refill mechanism —
 // billing is a one-time Dodo Payments checkout, not a subscription. Without
 // this, a yearly buyer got only ONE month's credits for the whole year
-// (services/plans.ts advertises "130 thumbnails / month" regardless of
+// (services/plans.ts advertises "100 credits / month" regardless of
 // cycle), which they'd burn through immediately.
 export const CATALOG: Record<string, CatalogItem> = {
-  'plan:pro:monthly':    { kind: 'plan',  plan: 'pro',    cycle: 'monthly', credits: 130,      usd: 39,  label: 'Pro plan (monthly)' },
-  'plan:pro:yearly':     { kind: 'plan',  plan: 'pro',    cycle: 'yearly',  credits: 130 * 12, usd: 390, label: 'Pro plan (yearly)' },
-  'plan:studio:monthly': { kind: 'plan',  plan: 'studio', cycle: 'monthly', credits: 400,      usd: 79,  label: 'Studio plan (monthly)' },
-  'plan:studio:yearly':  { kind: 'plan',  plan: 'studio', cycle: 'yearly',  credits: 400 * 12, usd: 790, label: 'Studio plan (yearly)' },
+  'plan:pro:monthly':    { kind: 'plan',  plan: 'pro',    cycle: 'monthly', credits: 100,      usd: 29,  label: 'Starter plan (monthly)' },
+  'plan:pro:yearly':     { kind: 'plan',  plan: 'pro',    cycle: 'yearly',  credits: 100 * 12, usd: 290, label: 'Starter plan (yearly)' },
+  'plan:studio:monthly': { kind: 'plan',  plan: 'studio', cycle: 'monthly', credits: 400,      usd: 79,  label: 'Creator plan (monthly)' },
+  'plan:studio:yearly':  { kind: 'plan',  plan: 'studio', cycle: 'yearly',  credits: 400 * 12, usd: 790, label: 'Creator plan (yearly)' },
   'addon:addon_small':   { kind: 'addon', credits: 25,  usd: 10, label: '25 credit pack' },
   'addon:addon_large':   { kind: 'addon', credits: 100, usd: 35, label: '100 credit pack' },
 };
