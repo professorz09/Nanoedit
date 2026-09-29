@@ -14,7 +14,7 @@ export interface PriceOption {
 export interface Plan {
   id: PlanId;
   name: string;
-  credits: number;            // credits per month (1 credit = 1 Short or 1 thumbnail)
+  credits: number;            // credits per month (1 credit = 1 Short; a thumbnail is 1–5, see supabase/functions/generate IMAGE_COST)
   tagline: string;
   monthly: PriceOption;
   yearly: PriceOption;        // billed once a year (~2 months free)
