@@ -40,6 +40,7 @@ export interface ShortsProject {
   length: string | null;
   created_at: number | null;
   count: number | null;
+  options?: { real_images?: boolean };
   shorts?: ShortClip[];
   zip?: string;
 }

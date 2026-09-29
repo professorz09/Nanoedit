@@ -49,7 +49,8 @@ const ShortCard: React.FC<{
   clip: ShortClip; videoId: string | null; duration: number | null;
   onTrim: (c: ShortClip, start: number, end: number) => void;
   onDownload: (c: ShortClip) => void;
-}> = ({ clip, videoId, duration, onTrim, onDownload }) => {
+  cost: number;
+}> = ({ clip, videoId, duration, onTrim, onDownload, cost }) => {
   const [playing, setPlaying] = useState(false);
   const busy = clip.status === 'queued' || clip.status === 'rendering';
   const len = clip.end - clip.start;
@@ -154,7 +155,7 @@ const ShortCard: React.FC<{
             <button type="button" onClick={() => onDownload(clip)}
               className="thumb-btn w-full h-[52px] rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2">
               <Ic.Download className="w-5 h-5" />
-              {clip.status === 'ready' ? 'Download' : clip.paid ? 'Download · free re-make' : 'Download · 1 credit'}
+              {clip.status === 'ready' ? 'Download' : clip.paid ? 'Download · free re-make' : `Download · ${cost} credit${cost === 1 ? '' : 's'}`}
             </button>
           )}
         </div>
@@ -236,7 +237,9 @@ const GettingStarted: React.FC = () => (
 
 // ── the page ─────────────────────────────────────────────────────────────────────────────────────
 const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCredits: () => void; startUrl?: string | null; onStarted?: () => void }> = ({ onRequireLogin, onBuyCredits, startUrl, onStarted }) => {
-  const { user, configured, totalCredits, refreshProfile } = useAuth();
+  const { user, configured, totalCredits, refreshProfile, profile } = useAuth();
+  // 🔬 AI B-roll is the Creator plan's (id "studio") and adds a credit to each Short made with it
+  const brollOk = !configured || profile?.plan === 'studio';
   const [url, setUrl] = useState('');
   const [look, setLookState] = useState<ShortsLook>(savedLook);
   const setLook = (l: ShortsLook) => { setLookState(l); try { localStorage.setItem(LOOK_KEY, JSON.stringify(l)); } catch { /* private mode */ } };
@@ -245,6 +248,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   const [projects, setProjects] = useState<ShortsProject[] | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
   const [project, setProject] = useState<ShortsProject | null>(null);
+  const cost = project?.options?.real_images && brollOk ? 2 : 1;  // credits for a Short the first time
+  const credits = (n: number) => `${n} credit${n === 1 ? '' : 's'}`;
   const [wantZip, setWantZip] = useState(false);
   const wantShorts = useRef<Set<number>>(new Set());
   const trimTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
@@ -304,7 +309,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     if (!signedIn) { onRequireLogin('Log in to make Shorts.'); return; }
     setBusy(true);
     try {
-      const id = await createProject({ url: link.trim(), ...lookToRequest(look) });
+      const id = await createProject({ url: link.trim(), ...lookToRequest({ ...look, broll: look.broll && brollOk }) });
       setUrl('');
       setOpenId(id);
       loadProjects();
@@ -349,7 +354,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   const onDownload = async (clip: ShortClip) => {
     setNote(null);
     if (clip.status === 'ready' && clip.download) { startDownload(clip.download); return; }
-    if (configured && !clip.paid && totalCredits < 1) { setNote('You need 1 credit to download this Short.'); onBuyCredits(); return; }
+    if (configured && !clip.paid && totalCredits < cost) { setNote(`You need ${credits(cost)} to download this Short.`); onBuyCredits(); return; }
     try {
       await flushTrim(clip);
       await renderShort(clip.id);
@@ -366,8 +371,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     if (!project?.shorts) return;
     setNote(null);
     if (project.zip) { startDownload(project.zip); return; }
-    const unpaid = project.shorts.filter(s => !s.paid).length;
-    if (configured && unpaid > totalCredits) { setNote(`You need ${unpaid} credits to download all (you have ${totalCredits}).`); onBuyCredits(); return; }
+    const unpaid = project.shorts.filter(s => !s.paid).length * cost;
+    if (configured && unpaid > totalCredits) { setNote(`You need ${credits(unpaid)} to download all (you have ${totalCredits}).`); onBuyCredits(); return; }
     try {
       for (const s of project.shorts) await flushTrim(s);
       await renderAll(project.id);
@@ -389,7 +394,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     const shorts = project?.shorts || [];
     const made = shorts.filter(s => s.status === 'ready').length;
     const working = shorts.filter(s => s.status === 'queued' || s.status === 'rendering').length;
-    const unpaid = shorts.filter(s => !s.paid).length;
+    const unpaid = shorts.filter(s => !s.paid).length * cost;
     return (
       <div className="max-w-6xl mx-auto space-y-6">
         <button type="button" onClick={() => { setOpenId(null); loadProjects(); }} className="inline-flex items-center gap-1.5 text-sm font-bold text-thumb-sub hover:text-thumb-ink">
@@ -432,7 +437,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
               </button>
             )}
             <p className="text-center text-[12px] text-thumb-sub">
-              {unpaid ? `${unpaid} credit${unpaid === 1 ? '' : 's'} for the Shorts not made yet · ` : ''}Each Short is made when you download it and kept for 24 hours.
+              {unpaid ? `${credits(unpaid)} for the Shorts not made yet · ` : ''}Each Short is made when you download it and kept for 24 hours.
             </p>
           </div>
         )}
@@ -441,7 +446,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           {!project || project.status === 'finding'
             ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
             : shorts.map(s => (
-              <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} />
+              <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost} />
             ))}
         </div>
       </div>
@@ -466,7 +471,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           placeholder="Paste a YouTube link…"
           className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
         />
-        <LookBar look={look} onChange={setLook} thumb={extractYouTubeId(url.trim()) ? `https://i.ytimg.com/vi/${extractYouTubeId(url.trim())}/hqdefault.jpg` : null} />
+        <LookBar look={look} onChange={setLook} brollOk={brollOk} onUpgrade={onBuyCredits} thumb={extractYouTubeId(url.trim()) ? `https://i.ytimg.com/vi/${extractYouTubeId(url.trim())}/hqdefault.jpg` : null} />
         {noteBox}
         <button type="button" onClick={() => generate()} disabled={busy}
           className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">

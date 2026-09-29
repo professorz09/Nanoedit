@@ -45,11 +45,11 @@ export const lookToRequest = (l: ShortsLook) => {
 // the Effects popup is one Auto (these, picked per clip) plus four switches
 const MOTION_FX = ['hook_freeze', 'card_drop', 'card_move', 'push_in', 'zoom_punch', 'cascade', 'marker', 'scribble', 'burst', 'audio_react', 'progress'];
 const EXPLAIN_FX = ['facts', 'counter', 'scramble', 'money_stack'];
-const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; icon: string; label: string; note: string }[] = [
-  { key: 'explain', icon: '📊', label: 'AI explainer designs', note: 'Fact cards, numbers that count up, money stacks' },
-  { key: 'broll', icon: '🔬', label: 'AI B-roll', note: 'A real, labelled picture of what is being explained' },
-  { key: 'stickers', icon: '🎨', label: 'AI stickers', note: 'A drawn sticker of what is said' },
-  { key: 'sfx', icon: '🔊', label: 'Sound effects', note: 'Whooshes and pops on the moments' },
+const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; img?: string; label: string; note: string }[] = [
+  { key: 'explain', img: 'fx-explain', label: 'AI explainer designs', note: 'Fact cards, counting numbers, money stacks' },
+  { key: 'broll', img: 'fx-broll', label: 'AI B-roll', note: 'A real picture of what is being explained' },
+  { key: 'stickers', img: 'fx-stickers', label: 'AI stickers', note: 'A drawn sticker of what is said' },
+  { key: 'sfx', label: 'Sound effects', note: 'Whooshes and pops on the big moments' },
 ];
 
 const STYLES = [
@@ -448,7 +448,9 @@ const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?
   );
 };
 
-export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void; thumb?: string | null }> = ({ look, onChange, thumb = null }) => {
+// brollOk: the user's plan has 🔬 AI B-roll (the Creator plan); onUpgrade: where a locked B-roll tap goes
+export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void; thumb?: string | null; brollOk?: boolean; onUpgrade?: () => void }> =
+  ({ look, onChange, thumb = null, brollOk = true, onUpgrade }) => {
   const [open, setOpen] = React.useState<Panel | null>(null);
   const set = (patch: Partial<ShortsLook>) => onChange({ ...look, ...patch });
   const pickOne = (patch: Partial<ShortsLook>) => { set(patch); setOpen(null); };
@@ -491,7 +493,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           icon={<span className="block w-4 h-4 rounded-full ring-1 ring-black/15" style={bg.css} />} />
       : <Chip key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} icon={ICONS.fit} />,
     <Chip key="caption" panel="caption" label="Subtitles" value={cap.label} icon={ICONS.caption} />,
-    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = FX_SWITCHES.filter(f => look[f.key]).length; return n ? `Auto + ${n}` : 'Auto'; })()} icon={ICONS.fx} />] : []),
+    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = FX_SWITCHES.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length; return n ? `Auto + ${n}` : 'Auto'; })()} icon={ICONS.fx} />] : []),
     <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
     <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
   ];
@@ -558,29 +560,51 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
       )}
 
       {open === 'fx' && (
-        <Popup title={TITLES.fx} onClose={() => setOpen(null)}
+        <Popup title={TITLES.fx} hint="Auto effects are always on — add the extras you want" onClose={() => setOpen(null)}
           footer={<button type="button" onClick={() => setOpen(null)} className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px]">Done</button>}>
-          <div className="space-y-2.5">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-thumb-redSoft border-2 border-thumb-red">
-              <span className="text-[22px] leading-none">✨</span>
-              <div className="min-w-0">
-                <p className="text-[14px] font-black text-thumb-ink">Auto effects</p>
-                <p className="text-[12px] text-thumb-sub leading-snug">Zooms, card moves, word highlights and more — AI picks what fits each clip</p>
-              </div>
+          <div className="flex items-center gap-3 p-2 pr-3 rounded-2xl border-2 border-thumb-line bg-thumb-soft">
+            <RealShot name="fx-auto" className="rounded-xl shrink-0" style={{ width: 64, aspectRatio: '9 / 16' }} focusY={40} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-black text-thumb-ink">Auto effects</p>
+              <p className="text-[12px] text-thumb-sub leading-snug">Zooms, card moves and word highlights, picked to fit each clip</p>
             </div>
-            {FX_SWITCHES.map(f => (
-              <button key={f.key} type="button" role="switch" aria-checked={look[f.key]} onClick={() => set({ [f.key]: !look[f.key] } as Partial<ShortsLook>)}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-thumb-soft border border-thumb-line text-left hover:border-thumb-red/40 transition-colors">
-                <span className="text-[22px] leading-none">{f.icon}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] font-black text-thumb-ink">{f.label}</span>
-                  <span className="block text-[12px] text-thumb-sub leading-snug">{f.note}</span>
-                </span>
-                <span className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${look[f.key] ? 'bg-thumb-red' : 'bg-thumb-line'}`}>
-                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${look[f.key] ? 'left-[22px]' : 'left-0.5'}`} />
-                </span>
-              </button>
-            ))}
+            <span className="shrink-0 px-2 py-1 rounded-lg bg-thumb-card border border-thumb-line text-[10.5px] font-black text-thumb-sub uppercase tracking-wide">Always on</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+            {FX_SWITCHES.map(f => {
+              const locked = f.key === 'broll' && !brollOk;
+              const on = look[f.key] && !locked;
+              return (
+                <button key={f.key} type="button" role="switch" aria-checked={on}
+                  onClick={() => locked ? onUpgrade?.() : set({ [f.key]: !look[f.key] } as Partial<ShortsLook>)}
+                  className={`${cardCls(on)} overflow-hidden bg-thumb-soft flex flex-col`}>
+                  <div className="relative h-[112px] overflow-hidden">
+                    {f.img
+                      ? <RealShot name={f.img} className="w-full h-full" focusY={f.key === 'explain' ? 72 : f.key === 'stickers' ? 80 : 50} />
+                      : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-thumb-card">
+                          <svg viewBox="0 0 64 32" className="w-24 h-12 text-thumb-red" fill="currentColor">
+                            {[6, 14, 22, 12, 28, 18, 10, 24, 16, 8, 20, 12].map((v, n) => <rect key={n} x={2 + n * 5} y={16 - v / 2} width="3" height={v} rx="1.5" />)}
+                          </svg>
+                        </div>
+                      )}
+                    {locked && <div className="absolute inset-0 bg-black/45" />}
+                    <span className={`absolute top-1.5 right-1.5 w-9 h-5 rounded-full transition-colors ${on ? 'bg-thumb-red' : 'bg-black/35'}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+                    </span>
+                    {f.key === 'broll' && (
+                      <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-black">
+                        {locked ? '🔒 Creator plan' : 'Creator · +1 credit'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="px-2.5 py-2 bg-thumb-card flex-1">
+                    <p className="text-[12.5px] font-black text-thumb-ink leading-tight">{f.label}</p>
+                    <p className="text-[11px] text-thumb-sub leading-snug mt-0.5">{locked ? 'Upgrade to the Creator plan to use it' : f.note}</p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </Popup>
       )}

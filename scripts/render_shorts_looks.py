@@ -48,14 +48,25 @@ def frame(mp4: Path, name: str, at: float = AT) -> None:
                     "-vf", "scale=360:-2", "-c:v", "libwebp", "-quality", "78", str(OUT / f"{name}.webp")], check=True)
 
 
-def studio(name: str, bg: str = "white", preset: str | None = "hormozi.pop", captions: bool = True, seed: int = 7):
+def studio(name: str, bg: str = "white", preset: str | None = "hormozi.pop", captions: bool = True, seed: int = 7,
+           fx: dict | None = None, at: float = AT, **extra):
     presets = [preset] if preset else None
     look = shorts_split.pick_look(random.Random(seed), bg=bg, caption_presets=presets, fx=[])
-    look.update(card_in="none", side="right", fx={}, emoji=False)
+    look.update(card_in="none", side="right", fx=fx or {}, emoji=False)
     mp4 = WORK / f"{name}.mp4"
     shorts_split.build(clip(), mp4, TITLE, TITLE_EMPH, groups() if captions else [], SIZE, DUR, (854, 480), CROP,
-                       assemble._encode_args(False), assemble.AUDIO_ENCODE_ARGS, assemble.TARGET_FPS, look=look)
-    frame(mp4, name)
+                       assemble._encode_args(False), assemble.AUDIO_ENCODE_ARGS, assemble.TARGET_FPS, look=look, **extra)
+    frame(mp4, name, at)
+
+
+# the Effects popup's cards: its effects on the same clip (the B-roll picture: scripts/shorts-looks-src/cash.jpg,
+# CC0 from Wikimedia Commons; the sticker: the Noto money-bag emoji, Apache 2.0)
+SRC = SCR / "scripts" / "shorts-looks-src"
+FACT = [{"start": 0.3, "kind": "stat", "title": "Super Bowl prize",
+         "items": [{"label": "Hidden in a Super Bowl ad", "value": 1000000, "display": "$1,000,000"}]}]
+BROLL = [{"start": 0.8, "word": "", "seconds": 2.0, "picture": "a case of cash", "labels": [],
+          "image": str(SRC / "cash.jpg")}]
+STICKER = [{"start": 0.35, "image": str(SRC / "money.png"), "motion": "pop", "size": "small", "word": ""}]
 
 
 def simple(name: str, layout: str = "bar", sub_look: str | None = "bold_green", fit: str = "full"):
@@ -85,6 +96,10 @@ JOBS = {
     "simple-simple": lambda: simple("simple-simple", sub_look="plain"),
     "simple-off": lambda: simple("simple-off", sub_look=None),
     **{f"fit-{f}": (lambda f=f: simple(f"fit-{f}", fit=f)) for f in ("full", "zoom", "track")},
+    "fx-auto": lambda: studio("fx-auto", preset="sticky_blue.pop", fx={"marker": "swipe", "progress": "top_line", "zoom_punch": "punch"}),
+    "fx-explain": lambda: studio("fx-explain", fx={"facts": "bold"}, fact_cards=FACT),
+    "fx-broll": lambda: studio("fx-broll", fx={"info_images": "card"}, info_images=BROLL, at=2.0),
+    "fx-stickers": lambda: studio("fx-stickers", fx={"stickers": "emoji_3d"}, stickers=STICKER, at=1.4),
 }
 
 if __name__ == "__main__":
