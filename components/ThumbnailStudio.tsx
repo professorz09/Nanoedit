@@ -225,16 +225,70 @@ const TESTIMONIALS = [
 ];
 
 const FAQS = [
-  { q: 'What is PodcastFlux?', a: 'PodcastFlux is an AI thumbnail maker for YouTube. Describe your idea, upload a photo, or paste a video link, and it generates high-converting HD 16:9 thumbnails in seconds — no design skills or editing apps needed.' },
-  { q: 'How is this different from other thumbnail makers?', a: 'Most tools hand you a template to edit by hand. PodcastFlux is a true AI thumbnail generator — it designs the whole thumbnail for you (layout, background, and text) and keeps your face when you upload one.' },
-  { q: 'Do I need design skills to use it?', a: 'No. Everything works through simple prompts, templates, and text-based edits. You describe what you want and the AI handles the design and execution.' },
-  { q: 'Can I use it with my own face?', a: 'Yes. Upload your photo in Reference or Templates mode and the AI keeps your likeness while building a fresh, high-converting thumbnail around it.' },
-  { q: 'How does the YouTube link option work?', a: 'Paste any video link and we pull its current thumbnail as a reference, then generate improved, more click-worthy versions that keep the same theme.' },
-  { q: 'What size are the thumbnails?', a: 'Full 16:9 HD, ready to upload straight to YouTube. Every result downloads at high resolution with no watermark.' },
-  { q: 'Can I edit a thumbnail after generating?', a: 'Yes. Send any result to the built-in editor to tweak text, swap backgrounds, brush-select areas, remove background, and more.' },
-  { q: 'Is PodcastFlux really free to use?', a: 'Yes — new accounts start on a free plan with generation credits included, so you can try the AI thumbnail maker at no cost before upgrading for more credits.' },
-  { q: 'Can it also generate YouTube titles and timestamps?', a: 'Yes. Paste a YouTube video link into the Title Generator for AI-written, click-worthy titles, or into the Chapter Maker to auto-generate accurate timestamps — both free tools built into PodcastFlux alongside the thumbnail maker.' },
+  { q: "What is PodcastFlux?", a: "PodcastFlux is an AI Shorts maker: it turns long YouTube videos and podcasts into ready-to-post YouTube Shorts, TikToks and Instagram Reels. Paste a link and the AI finds the best clips, adds animated captions and effects, and writes the title — no editing app needed." },
+  { q: "How do I turn a YouTube video into Shorts?", a: "Paste the YouTube link into the AI Shorts Maker. The AI watches the whole video, picks the moments most likely to go viral and gives each one a viral score. Preview them for free, trim the start and end if you like, then download one Short or all of them as a ZIP." },
+  { q: "Can I turn a podcast into Shorts?", a: "Yes — PodcastFlux is built for podcast clips. Long episodes are fine: the AI goes through the whole podcast, finds the best moments, and crops the video to follow whoever is speaking." },
+  { q: "Does it add captions to my Shorts automatically?", a: "Yes. Every Short gets auto captions with word-by-word animated subtitles. Choose from 25+ caption styles — Hormozi, MrBeast, karaoke, sticky notes, neon and more — or let the AI pick one." },
+  { q: "What effects can the AI Shorts maker add?", a: "Zooms, card moves, word highlights and sound effects, picked by the AI to fit each clip. You can also turn on AI explainer designs (fact cards, numbers that count up, money stacks), AI stickers and, on the Creator plan, AI B-roll." },
+  { q: "How much does a Short cost?", a: "Finding and previewing clips is free. A Short costs 1 credit the first time you download it, and downloading it again is free. If a render fails, the credit comes back. AI B-roll adds 1 credit per Short." },
+  { q: "Is PodcastFlux a free Shorts maker?", a: "Yes — new accounts start with free credits, so you can make Shorts from your own videos before picking a plan." },
+  { q: "Which platforms are the Shorts for?", a: "Every Short is a vertical 9:16 video, ready for YouTube Shorts, TikTok, Instagram Reels and Facebook Reels." },
+  { q: "Can I make thumbnails, titles and timestamps too?", a: "Yes. PodcastFlux also has an AI thumbnail maker for HD 16:9 YouTube thumbnails, a title generator, and a chapter maker for YouTube timestamps — all from the same video link." },
 ];
+
+// An FAQ answer sliding open to its own measured height (a max-height guess made the close lag and the open
+// jump; fr-unit grid rows don't animate smoothly on iOS Safari)
+const FaqAnswer: React.FC<{ id: string; open: boolean; children: React.ReactNode }> = ({ id, open, children }) => {
+  const inner = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const el = inner.current;
+    if (!el) return;
+    const measure = () => setH(el.scrollHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div id={id} aria-hidden={!open} className="overflow-hidden transition-[height,opacity] duration-200 ease-out"
+      style={{ height: open ? h : 0, opacity: open ? 1 : 0 }}>
+      <div ref={inner}>{children}</div>
+    </div>
+  );
+};
+
+// the FAQ keeps its own open/closed state: a click re-renders only this list, not the whole studio page
+const FaqList: React.FC = () => {
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+  return (
+    <div className="space-y-4">
+      {FAQS.map((f, i) => {
+        const open = openFaq === i;
+        return (
+          <div key={i} className={`thumb-glass rounded-2xl overflow-hidden border transition-colors duration-200 ${open ? 'border-thumb-red/40' : 'border-transparent'}`}>
+            <h3 className="m-0">
+              <button
+                onClick={() => setOpenFaq(open ? null : i)}
+                aria-expanded={open}
+                aria-controls={`faq-answer-${i}`}
+                className="w-full flex items-center gap-4 text-left px-4 sm:px-5 py-4"
+              >
+                <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition-colors duration-200 ${open ? 'bg-thumb-red text-white' : 'bg-thumb-soft border border-thumb-line text-thumb-ink'}`}>
+                  <span className={`transition-transform duration-200 ${open ? 'rotate-45' : ''} text-xl leading-none font-light`}>+</span>
+                </span>
+                <span className={`font-bold text-[15px] sm:text-base transition-colors duration-200 ${open ? 'text-thumb-red' : 'text-thumb-ink'}`}>{f.q}</span>
+              </button>
+            </h3>
+            <FaqAnswer id={`faq-answer-${i}`} open={open}>
+              <p className="px-4 sm:px-5 pb-5 sm:pl-[4.25rem] text-sm text-thumb-sub leading-relaxed">{f.a}</p>
+            </FaqAnswer>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 // Steps shown while a thumbnail is being generated (advance ~every 4s of elapsed time)
 const GEN_STEPS = ['Understanding your idea', 'Composing the scene', 'Rendering in HD', 'Adding final polish'];
@@ -346,7 +400,6 @@ const ThumbnailStudio: React.FC<Props> = ({
   // NOT cached here — it's a free (0-credit) operation, so it's regenerated
   // fresh on every Generate click for more variety instead of going stale.
   const ytFetchCache = useRef<Record<string, [string | null, string | null, Awaited<ReturnType<typeof fetchTranscript>>]>>({});
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [legal, setLegal] = useState<null | 'about' | 'privacy' | 'terms'>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // lock background scroll while the sidebar (mobile drawer) or the legal popup is open
@@ -3056,33 +3109,7 @@ const ThumbnailStudio: React.FC<Props> = ({
         <section className="py-16 max-w-3xl mx-auto">
           <p className="text-center text-thumb-green font-black tracking-widest text-xs uppercase">Got questions?</p>
           <h2 className="text-center text-3xl sm:text-4xl font-black mt-3 mb-10">Frequently asked questions</h2>
-          <div className="space-y-4">
-            {FAQS.map((f, i) => {
-              const open = openFaq === i;
-              return (
-                <div key={i} className={`thumb-glass rounded-2xl overflow-hidden transition-all duration-300 ${open ? 'thumb-float-red' : ''}`}>
-                  <h3 className="m-0">
-                    <button
-                      onClick={() => setOpenFaq(open ? null : i)}
-                      aria-expanded={open}
-                      aria-controls={`faq-answer-${i}`}
-                      className="w-full flex items-center gap-4 text-left px-4 sm:px-5 py-4"
-                    >
-                      <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 ${open ? 'thumb-btn text-white' : 'bg-white/5 border border-white/10 text-thumb-ink'}`}>
-                        <span className={`transition-transform duration-300 ${open ? 'rotate-45' : ''} text-xl leading-none font-light`}>+</span>
-                      </span>
-                      <span className={`font-bold text-[15px] sm:text-base transition-colors duration-200 ${open ? 'text-thumb-red' : 'text-thumb-ink'}`}>{f.q}</span>
-                    </button>
-                  </h3>
-                  {/* max-height (not grid-template-rows) — animates reliably on iOS Safari,
-                      which doesn't smoothly interpolate fr-unit grid track sizes. */}
-                  <div id={`faq-answer-${i}`} className={`overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? 'max-h-[400px]' : 'max-h-0'}`}>
-                    <p className="px-4 sm:px-5 pb-5 sm:pl-[4.25rem] text-sm text-thumb-sub leading-relaxed">{f.a}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <FaqList />
         </section>
 
         {/* ── Footer ── */}
@@ -3093,17 +3120,18 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <div className="thumb-btn w-8 h-8 rounded-xl flex items-center justify-center text-white"><I.Wand className="w-4 h-4" /></div>
                 <span className="text-lg font-extrabold tracking-tight text-thumb-ink">PodcastFlux</span>
               </div>
-              <p className="text-sm text-thumb-sub leading-relaxed">The best free AI thumbnail maker for YouTube — turn a prompt, photo, or YouTube video link into high-quality, click-worthy HD thumbnails, titles &amp; timestamps in seconds.</p>
+              <p className="text-sm text-thumb-sub leading-relaxed">Turn your YouTube videos and podcasts into ready-to-post Shorts — with the thumbnails, titles and timestamps to go with them.</p>
             </div>
             <div className="flex flex-wrap gap-x-12 gap-y-6">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-wider text-thumb-sub mb-3">Product</p>
                 <ul className="space-y-2 text-sm">
                   <li><button onClick={goHome} className="text-thumb-ink hover:text-thumb-red transition-colors">Home</button></li>
-                  <li><button onClick={() => setSection('pricing')} className="text-thumb-ink hover:text-thumb-red transition-colors">Pricing</button></li>
+                  <li><button onClick={goShorts} className="text-thumb-ink hover:text-thumb-red transition-colors">AI Shorts Maker</button></li>
                   <li><button onClick={() => setSection('generate')} className="text-thumb-ink hover:text-thumb-red transition-colors">AI Thumbnail Maker</button></li>
                   <li><button onClick={goTitle} className="text-thumb-ink hover:text-thumb-red transition-colors">YouTube Title Generator</button></li>
                   <li><button onClick={goChapters} className="text-thumb-ink hover:text-thumb-red transition-colors">YouTube Timestamps Maker</button></li>
+                  <li><button onClick={() => setSection('pricing')} className="text-thumb-ink hover:text-thumb-red transition-colors">Pricing</button></li>
                 </ul>
               </div>
               <div>
@@ -3119,7 +3147,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           </div>
           <div className="max-w-6xl mx-auto px-1 mt-10 pt-6 border-t border-thumb-line flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-xs text-thumb-sub">© {new Date().getFullYear()} PodcastFlux. All rights reserved.</p>
-            <p className="text-xs text-thumb-sub">Made for creators who want more clicks.</p>
+            <p className="text-xs text-thumb-sub">Made for creators who want more views.</p>
           </div>
         </footer>
         </>
