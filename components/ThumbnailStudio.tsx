@@ -22,6 +22,8 @@ const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
 const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
 const ShortsMaker = React.lazy(() => import('./ShortsMaker'));
 const ShortsFlow = React.lazy(() => import('./ShortsFlow'));
+const TimeGraph = React.lazy(() => import('./TimeGraph'));
+import HeroRotator from './HeroRotator';
 const ShortsShowcase = React.lazy(() => import('./ShortsShowcase'));
 const AdminStyles = React.lazy(() => import('./AdminStyles'));
 
@@ -1646,19 +1648,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-thumb-redSoft text-thumb-red text-[12px] font-black uppercase tracking-wider">
             <I.Play className="w-3.5 h-3.5" /> New · Shorts Maker
           </span>
-          <h1 className="mt-4 text-[2rem] sm:text-[3rem] lg:text-[3.6rem] font-black uppercase leading-[1.05] tracking-[-0.02em]">
-            <span className="text-thumb-ink">Turn videos into</span>{' '}
-            <span
-              className="liquid-text"
-              style={{
-                backgroundImage: 'linear-gradient(180deg, #ffffff 0%, #ffc7d1 18%, #ff3b5c 50%, #a30d28 100%)',
-                filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.18)) drop-shadow(0 0 16px rgba(255,59,92,0.6)) drop-shadow(0 0 38px rgba(255,59,92,0.4))',
-              }}
-            >viral Shorts</span>
-          </h1>
-          <p className="mt-4 text-thumb-sub text-[15px] sm:text-[17px] max-w-xl mx-auto">
-            Stop editing Shorts by hand. Paste one YouTube link — AI finds the moments that will go viral, scores each one, and makes them all at once.
-          </p>
+          <div className="mt-5"><HeroRotator /></div>
           <div className="mt-8 max-w-3xl mx-auto text-left">
             <div className="thumb-glass thumb-float-red rounded-[28px] p-3.5 sm:p-4">
               <input
@@ -1710,6 +1700,13 @@ const ThumbnailStudio: React.FC<Props> = ({
               </div>
             ))}
           </div>
+        </section>
+        )}
+
+        {/* ── Why it matters: an illustrative hours-by-hand vs PodcastFlux chart ── */}
+        {section === 'home' && (
+        <section className="pb-16 max-w-5xl mx-auto">
+          <Suspense fallback={null}><TimeGraph /></Suspense>
         </section>
         )}
 
