@@ -1677,17 +1677,17 @@ const ThumbnailStudio: React.FC<Props> = ({
         {/* ── Why Shorts Maker: the pain (manual editing) and what it does instead ── */}
         {section === 'home' && (
         <section className="pb-14">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 max-w-5xl mx-auto">
             {[
               { icon: '😩', title: 'No more manual editing', text: 'Hours of scrubbing, cutting, cropping and typing captions — done for you in minutes.' },
               { icon: '🔥', title: 'Viral score for every Short', text: 'Each moment gets a score out of 100, so you know which one to post first.' },
               { icon: '📦', title: 'Bulk: up to 20 at once', text: 'One link, many Shorts. Download them one by one or all together as a ZIP.' },
               { icon: '✨', title: 'Ready to post', text: 'Animated captions, effects, speaker tracking, a title and description to copy.' },
             ].map(f => (
-              <div key={f.title} className="thumb-glass rounded-2xl p-5 text-left">
+              <div key={f.title} className="thumb-glass rounded-2xl p-3.5 sm:p-5 text-left">
                 <div className="w-10 h-10 rounded-xl bg-thumb-redSoft flex items-center justify-center text-xl">{f.icon}</div>
-                <p className="mt-3 text-[15px] font-black text-thumb-ink">{f.title}</p>
-                <p className="mt-1 text-[13px] text-thumb-sub leading-relaxed">{f.text}</p>
+                <p className="mt-2.5 text-[13.5px] sm:text-[15px] font-black text-thumb-ink leading-snug">{f.title}</p>
+                <p className="mt-1 text-[12px] sm:text-[13px] text-thumb-sub leading-relaxed">{f.text}</p>
               </div>
             ))}
           </div>
