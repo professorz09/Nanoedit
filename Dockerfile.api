@@ -1,0 +1,13 @@
+# The thumbnail + text API (server/api-server.ts) for our own server — Movievideomaker's
+# docker-compose builds this straight from GitHub (service "thumbapi").
+FROM node:24-slim
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+# only the two runtime packages the API uses — not the whole site's build tooling
+RUN pnpm install --prod --frozen-lockfile
+COPY api ./api
+COPY server ./server
+ENV NODE_ENV=production API_PORT=8095
+EXPOSE 8095
+CMD ["node", "server/api-server.ts"]

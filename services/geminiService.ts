@@ -2,6 +2,10 @@
 import { EditorSettings } from "../types";
 import { supabase } from "./supabase";
 
+// our own API server (server/api-server.ts on Oracle, e.g. https://api.podcastflux.com); empty = same site
+// (Vercel's /api functions). Down or not set up there → the Supabase functions take over.
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '');
+
 // Try to inline a source as a base64 data URL. Layers added from generated
 // results (remote Supabase URLs) or from the Styles pool (asset paths) are plain
 // URLs — sending those to the model produces a malformed `data:...;base64,https://…`
@@ -319,7 +323,7 @@ export const editImageWithGemini = async (
 
   try {
     const viaVercel = await tryEndpoint(
-      '/api/generate',
+      `${API_BASE}/api/generate`,
       { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       // 405: a host without these functions (e.g. Cloudflare static assets) turns the POST away
       (status) => status === 404 || status === 405 || status === 501
