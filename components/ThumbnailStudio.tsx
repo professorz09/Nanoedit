@@ -35,6 +35,17 @@ import { useStyleImages, matchStyles, fetchStyleImages, fetchMyStyles } from '..
 
 // Auto-load any real thumbnails dropped into attached_assets/showcase/ (16:9 jpg/png/webp).
 // No code changes needed — just add image files and they appear in the showcase gallery.
+type Section = 'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'shorts' | 'pricing' | 'account' | 'admin';
+const SECTION_PATHS: Record<Section, string> = {
+  home: '/', generate: '/thumbnail-maker', preview: '/feed-test', title: '/title-generator', chapters: '/chapters',
+  shorts: '/shorts', pricing: '/pricing', account: '/account', admin: '/admin',
+};
+const sectionFromPath = (path: string): Section => {
+  const clean = path.replace(/\/+$/, '') || '/';
+  const hit = (Object.keys(SECTION_PATHS) as Section[]).find(k => SECTION_PATHS[k] === clean);
+  return hit || 'home';
+};
+
 const SHOWCASE_IMAGES = Object.entries(
   import.meta.glob('../attached_assets/showcase/*.{png,jpg,jpeg,webp,PNG,JPG,JPEG,WEBP}', {
     eager: true, query: '?url', import: 'default',
@@ -362,7 +373,18 @@ const ThumbnailStudio: React.FC<Props> = ({
     return () => { if (ric && cancel) cancel(id); else clearTimeout(id); };
   }, []);
   // Landing ('home') vs generator ('generate') vs feed preview ('preview') vs pricing
-  const [section, setSection] = useState<'home' | 'generate' | 'preview' | 'title' | 'chapters' | 'shorts' | 'pricing' | 'account' | 'admin'>('home');
+  // each section has its own address (podcastflux.com/shorts …): a refresh, the back button and a shared link
+  // land on the same page
+  const [section, setSection] = useState<Section>(() => sectionFromPath(window.location.pathname));
+  useEffect(() => {
+    const path = SECTION_PATHS[section];
+    if (window.location.pathname !== path) window.history.pushState({ section }, '', path + window.location.search);
+  }, [section]);
+  useEffect(() => {
+    const onBack = () => setSection(sectionFromPath(window.location.pathname));
+    window.addEventListener('popstate', onBack);
+    return () => window.removeEventListener('popstate', onBack);
+  }, []);
 
   // Auth + billing
   const { user, profile, totalCredits, creditsLoading, signOut, configured, refreshProfile } = useAuth();
