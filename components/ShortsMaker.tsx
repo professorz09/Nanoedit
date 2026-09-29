@@ -5,6 +5,12 @@ import {
   ShortClip, ShortsProject, createProject, fmtTime, getProject, isShortsConfigured, listProjects,
   renderAll, renderShort, startDownload, trimShort,
 } from '../services/shortsService';
+import { DEFAULT_LOOK, PhonePreview, ShortsLook, StylePicker, lookToRequest } from './ShortsStylePicker';
+
+const LOOK_KEY = 'shorts_look_v1';
+const savedLook = (): ShortsLook => {
+  try { return { ...DEFAULT_LOOK, ...JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') }; } catch { return DEFAULT_LOOK; }
+};
 
 // Shorts Maker: paste a YouTube link → a project with the best Short-worthy moments. Each one is previewed
 // straight from YouTube (nothing is rendered to preview it), its start/end can be nudged, and it's made
@@ -21,40 +27,6 @@ const Ic = {
   Fire: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2s1 3.5-1.5 6.5S7 12 7 15a5 5 0 0 0 10 0c0-2.2-1-3.7-2-5 0 1.5-.8 2.6-2 3 .7-2.6.2-6.4-1-11Z" /></svg>),
   Reset: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>),
 };
-
-const LENGTHS = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'u1', label: '< 1 min' },
-  { id: '2', label: '2 min' },
-  { id: '5', label: '5 min' },
-  { id: '8', label: '8 min' },
-];
-const SUBTITLES = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'animated', label: 'Animated' },
-  { id: 'simple', label: 'Simple' },
-  { id: 'off', label: 'Off' },
-];
-const STYLES = [
-  { id: 'split', label: 'Studio' },
-  { id: 'classic', label: 'Classic' },
-  { id: 'boxed', label: 'Boxed' },
-];
-
-const Select: React.FC<{ value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; label: string }> =
-  ({ value, onChange, options, label }) => (
-    <label className="relative flex-1 min-w-0 block">
-      <span className="pointer-events-none absolute left-3 top-2 text-[10px] font-bold uppercase tracking-wider text-thumb-sub">{label}</span>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full appearance-none bg-thumb-soft border border-thumb-line rounded-xl pl-3 pr-7 pt-6 pb-2.5 text-[14px] font-black text-thumb-ink focus:border-thumb-red/50 outline-none cursor-pointer truncate"
-      >
-        {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-      </select>
-      <svg viewBox="0 0 24 24" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-thumb-sub" fill="none" stroke="currentColor" strokeWidth={2.6}><path d="m6 9 6 6 6-6" /></svg>
-    </label>
-  );
 
 const CopyButton: React.FC<{ text: string; label: string }> = ({ text, label }) => {
   const [done, setDone] = useState(false);
@@ -206,9 +178,8 @@ const ShortSkeleton = () => (
 const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCredits: () => void }> = ({ onRequireLogin, onBuyCredits }) => {
   const { user, configured, totalCredits, refreshProfile } = useAuth();
   const [url, setUrl] = useState('');
-  const [length, setLength] = useState('auto');
-  const [subtitles, setSubtitles] = useState('auto');
-  const [style, setStyle] = useState('split');
+  const [look, setLookState] = useState<ShortsLook>(savedLook);
+  const setLook = (l: ShortsLook) => { setLookState(l); try { localStorage.setItem(LOOK_KEY, JSON.stringify(l)); } catch { /* private mode */ } };
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [projects, setProjects] = useState<ShortsProject[] | null>(null);
@@ -273,7 +244,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     if (!signedIn) { onRequireLogin('Log in to make Shorts.'); return; }
     setBusy(true);
     try {
-      const id = await createProject({ url: url.trim(), length, subtitles, style });
+      const id = await createProject({ url: url.trim(), ...lookToRequest(look) });
       setUrl('');
       setOpenId(id);
       loadProjects();
@@ -417,26 +388,36 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         <p className="text-sm sm:text-base text-thumb-sub">Paste a YouTube link — we find the best moments. Preview free, pay only for what you download.</p>
       </div>
 
-      <div className="thumb-glass rounded-[28px] p-4 sm:p-5 max-w-2xl mx-auto space-y-3.5">
-        <textarea
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}
-          rows={3}
-          placeholder="Paste a YouTube link…"
-          className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
-        />
-        <div className="flex gap-2">
-          <Select label="Duration" value={length} onChange={setLength} options={LENGTHS} />
-          <Select label="Subtitles" value={subtitles} onChange={setSubtitles} options={SUBTITLES} />
-          <Select label="Style" value={style} onChange={setStyle} options={STYLES} />
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6 lg:gap-8 items-start">
+        <div className="space-y-5 min-w-0">
+          <div className="thumb-glass rounded-[28px] p-4 sm:p-5 space-y-3.5">
+            <textarea
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}
+              rows={2}
+              placeholder="Paste a YouTube link…"
+              className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
+            />
+            {noteBox}
+            <button type="button" onClick={generate} disabled={busy}
+              className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
+              {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
+                : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
+            </button>
+          </div>
+
+          {/* phone preview on small screens: above the choices */}
+          <div className="lg:hidden flex justify-center"><PhonePreview look={look} compact /></div>
+
+          <div className="thumb-glass rounded-[28px] p-4 sm:p-6">
+            <StylePicker look={look} onChange={setLook} />
+          </div>
         </div>
-        {noteBox}
-        <button type="button" onClick={generate} disabled={busy}
-          className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
-          {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
-            : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
-        </button>
+
+        <aside className="hidden lg:block sticky top-24">
+          <PhonePreview look={look} />
+        </aside>
       </div>
 
       {signedIn && (

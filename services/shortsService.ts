@@ -49,6 +49,12 @@ export interface NewProject {
   length: string;
   subtitles: string;
   style: string;
+  // Studio picks (components/ShortsStylePicker.tsx)
+  bg?: string;
+  caption_look?: string;
+  fx?: string[] | 'auto';
+  sfx?: boolean;
+  fit?: string;
 }
 
 const call = async <T>(path: string, body?: unknown): Promise<T> => {
