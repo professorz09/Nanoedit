@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 // The Shorts Maker's look picker: style, background, subtitles, effects, fit and length — each as a small visual
 // card — and a phone preview that shows the picked combination. The keys match the render server
@@ -152,19 +153,6 @@ const KEYFRAMES = `
 `;
 
 // ── small parts ───────────────────────────────────────────────────────────────────────────────────
-const Section: React.FC<{ title: string; hint?: string; right?: React.ReactNode; children: React.ReactNode }> = ({ title, hint, right, children }) => (
-  <section className="space-y-2.5">
-    <div className="flex items-end justify-between gap-3">
-      <div>
-        <h3 className="text-[13px] font-black uppercase tracking-wider text-thumb-ink">{title}</h3>
-        {hint && <p className="text-[12px] text-thumb-sub mt-0.5">{hint}</p>}
-      </div>
-      {right}
-    </div>
-    {children}
-  </section>
-);
-
 const Tick: React.FC<{ on: boolean }> = ({ on }) => (
   <span className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white transition-all ${on ? 'bg-thumb-red scale-100' : 'scale-0'}`}>
     <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3.4}><path d="M20 6 9 17l-5-5" /></svg>
@@ -217,7 +205,7 @@ export const PhonePreview: React.FC<{ look: ShortsLook; compact?: boolean }> = (
   const caps = studio ? CAPS : SIMPLE_CAPS;
   const cap = caps.find(c => c.id === look.caption) || caps[0];
   const on = (k: string) => studio && (look.fxMode === 'auto' ? ['marker', 'push_in', 'progress', 'counter', 'burst'].includes(k) : look.fx.includes(k));
-  const w = compact ? 170 : 240;
+  const w = compact ? 150 : 240;
   const pageBg: React.CSSProperties = studio ? bg.css : look.style === 'boxed' ? { background: '#0B0B0F' } : { background: '#fff' };
 
   return (
@@ -281,149 +269,220 @@ export const PhonePreview: React.FC<{ look: ShortsLook; compact?: boolean }> = (
   );
 };
 
-// ── the picker ───────────────────────────────────────────────────────────────────────────────────
-export const StylePicker: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void }> = ({ look, onChange }) => {
+// ── the picker: small buttons above Generate, each opening a centred scrollable popup ─────────────────
+type Panel = 'style' | 'bg' | 'caption' | 'fx' | 'fit' | 'length';
+const TITLES: Record<Panel, string> = {
+  style: 'Pick a style', bg: 'Pick a background', caption: 'Pick a subtitle look', fx: 'Effects', fit: 'Video fit', length: 'Length of each Short',
+};
+
+const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?: boolean; footer?: React.ReactNode; children: React.ReactNode }> =
+  ({ title, hint, onClose, wide, footer, children }) => createPortal(
+    // on the page root (.thumb-scope keeps the light/dark theme): inside the glass box a "fixed" popup would be
+    // trapped by its backdrop-filter
+    <div className="fixed inset-0 z-[140] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <style>{KEYFRAMES}</style>
+      <div className={`bg-thumb-card border border-thumb-line rounded-2xl p-5 w-full ${wide ? 'max-w-2xl' : 'max-w-xl'} max-h-[80vh] flex flex-col shadow-2xl`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-base font-black text-thumb-ink">{title}</h3>
+            {hint && <p className="text-xs text-thumb-sub mt-0.5">{hint}</p>}
+          </div>
+          <button onClick={onClose} aria-label="Close" className="w-8 h-8 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center">
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto no-scrollbar pt-1 pr-1 -mr-1">{children}</div>
+        {footer && <div className="pt-3 mt-3 border-t border-thumb-line">{footer}</div>}
+      </div>
+    </div>,
+    document.querySelector('.thumb-scope') || document.body,
+  );
+
+const StyleMock: React.FC<{ id: string }> = ({ id }) => (
+  <div className="mx-auto w-[58px] rounded-xl overflow-hidden border border-black/10" style={{ aspectRatio: '9 / 16', background: id === 'boxed' ? '#0B0B0F' : '#fff' }}>
+    {id === 'split' && (<div className="h-full flex flex-col items-center pt-2 px-1.5 gap-1">
+      <div className="h-1 w-4/5 rounded bg-black/80" /><div className="h-1 w-3/5 rounded bg-thumb-red" />
+      <Footage className="w-full rounded-md mt-1" style={{ aspectRatio: '1 / 1' }} />
+      <div className="h-1.5 w-3/4 rounded bg-[#FACC15] mt-1" /></div>)}
+    {id === 'classic' && (<div className="h-full flex flex-col">
+      <div className="h-[22%] flex flex-col items-center justify-center gap-0.5"><div className="h-1 w-4/5 rounded bg-black/80" /><div className="h-1 w-3/5 rounded bg-black/80" /></div>
+      <Footage className="flex-1" /></div>)}
+    {id === 'boxed' && (<div className="h-full flex flex-col items-center justify-center px-1.5 gap-1">
+      <div className="h-1 w-4/5 rounded bg-white/80" /><Footage className="w-full rounded-lg" style={{ aspectRatio: '1 / 1' }} /><div className="h-1 w-3/5 rounded bg-white/70" /></div>)}
+  </div>
+);
+
+export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void }> = ({ look, onChange }) => {
+  const [open, setOpen] = React.useState<Panel | null>(null);
   const set = (patch: Partial<ShortsLook>) => onChange({ ...look, ...patch });
+  const pickOne = (patch: Partial<ShortsLook>) => { set(patch); setOpen(null); };
   const studio = look.style === 'split';
   const bg = BGS.find(b => b.id === look.bg) || BGS[2];
   const caps = studio ? CAPS : SIMPLE_CAPS;
-  const pickStyle = (id: string) => {
-    const nextCaps = id === 'split' ? CAPS : SIMPLE_CAPS;
-    set({ style: id, caption: nextCaps.some(c => c.id === look.caption) ? look.caption : 'auto' });
-  };
+  const cap = caps.find(c => c.id === look.caption) || caps[0];
+  const style = STYLES.find(s => s.id === look.style) || STYLES[0];
+  const small = typeof window !== 'undefined' && window.innerWidth < 640;
   const toggleFx = (id: string) => set({ fx: look.fx.includes(id) ? look.fx.filter(f => f !== id) : [...look.fx, id] });
 
+  const Btn: React.FC<{ panel: Panel; label: string; value: string; icon: React.ReactNode; changed?: boolean }> = ({ panel, label, value, icon, changed }) => (
+    <button type="button" onClick={() => setOpen(panel)}
+      className={`h-16 min-w-0 rounded-xl border-2 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors ${changed ? 'border-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 hover:border-thumb-red'}`}>
+      <span className="h-4 flex items-center">{icon}</span>
+      <span className={`text-[10.5px] sm:text-[11px] font-bold leading-tight truncate max-w-full ${changed ? 'text-thumb-red' : 'text-thumb-sub'}`}>{label}</span>
+      <span className="text-[9.5px] text-thumb-sub leading-tight truncate max-w-full">{value}</span>
+    </button>
+  );
+
+  const buttons = [
+    <Btn key="style" panel="style" label="Style" value={style.label} changed={look.style !== 'split'}
+      icon={<span className="w-2.5 h-4 rounded-[3px] border-[1.5px] border-current text-thumb-sub" />} />,
+    studio
+      ? <Btn key="bg" panel="bg" label="Background" value={bg.label} changed={look.bg !== 'white'}
+          icon={<span className="w-4 h-4 rounded-full border border-black/20" style={bg.css} />} />
+      : <Btn key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} changed={look.fit !== 'full'}
+          icon={<span className="text-[12px]">🎯</span>} />,
+    <Btn key="caption" panel="caption" label="Subtitles" value={cap.label} changed={look.caption !== 'auto'}
+      icon={<span className="text-[12px] font-black text-thumb-sub" style={{ fontFamily: IMPACT }}>Aa</span>} />,
+    ...(studio ? [<Btn key="fx" panel="fx" label="Effects" value={look.fxMode === 'auto' ? 'Auto' : `${look.fx.length} on`} changed={look.fxMode !== 'auto' || !look.sfx}
+      icon={<span className="text-[12px]">✨</span>} />] : []),
+    <Btn key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} changed={look.length !== 'auto'}
+      icon={<span className="text-[12px]">⏱️</span>} />,
+  ];
+
   return (
-    <div className="space-y-7">
+    <>
+      <div className={`grid gap-2 ${buttons.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}>{buttons}</div>
 
-      <Section title="Style">
-        <div className="grid grid-cols-3 gap-2.5">
-          {STYLES.map(s => (
-            <button key={s.id} type="button" onClick={() => pickStyle(s.id)} className={`${cardCls(look.style === s.id)} p-2 bg-thumb-card`}>
-              <Tick on={look.style === s.id} />
-              <div className="mx-auto w-[58px] rounded-xl overflow-hidden border border-black/10" style={{ aspectRatio: '9 / 16', background: s.id === 'boxed' ? '#0B0B0F' : '#fff' }}>
-                {s.id === 'split' && (<div className="h-full flex flex-col items-center pt-2 px-1.5 gap-1">
-                  <div className="h-1 w-4/5 rounded bg-black/80" /><div className="h-1 w-3/5 rounded bg-thumb-red" />
-                  <Footage className="w-full rounded-md mt-1" style={{ aspectRatio: '1 / 1' }} />
-                  <div className="h-1.5 w-3/4 rounded bg-[#FACC15] mt-1" /></div>)}
-                {s.id === 'classic' && (<div className="h-full flex flex-col">
-                  <div className="h-[22%] flex flex-col items-center justify-center gap-0.5"><div className="h-1 w-4/5 rounded bg-black/80" /><div className="h-1 w-3/5 rounded bg-black/80" /></div>
-                  <Footage className="flex-1" /></div>)}
-                {s.id === 'boxed' && (<div className="h-full flex flex-col items-center justify-center px-1.5 gap-1">
-                  <div className="h-1 w-4/5 rounded bg-white/80" /><Footage className="w-full rounded-lg" style={{ aspectRatio: '1 / 1' }} /><div className="h-1 w-3/5 rounded bg-white/70" /></div>)}
-              </div>
-              <p className="mt-2 text-[13px] font-black text-thumb-ink text-center">{s.label}</p>
-              <p className="text-[10.5px] text-thumb-sub text-center leading-tight mt-0.5 hidden sm:block">{s.note}</p>
-            </button>
-          ))}
-        </div>
-      </Section>
-
-      {studio && (
-        <Section title="Background" hint={look.bg === 'ai' ? 'AI reads each clip’s mood and picks the background' : look.bg === 'random' ? 'A different background for every Short' : bg.label}>
-          <div className="grid grid-cols-6 sm:grid-cols-9 gap-2">
-            {BGS.map(b => (
-              <button key={b.id} type="button" title={b.label} onClick={() => set({ bg: b.id })}
-                className={`relative aspect-square rounded-xl border-2 transition-all ${look.bg === b.id ? 'border-thumb-red scale-105 shadow-md' : 'border-black/10 hover:scale-105'}`} style={b.css}>
-                {b.tag && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-black text-[#111] drop-shadow-[0_1px_0_#fff]">{b.tag}</span>}
-                {look.bg === b.id && <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-thumb-red text-white flex items-center justify-center"><svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={4}><path d="M20 6 9 17l-5-5" /></svg></span>}
+      {open === 'style' && (
+        <Popup title={TITLES.style} onClose={() => setOpen(null)}>
+          <div className="grid grid-cols-3 gap-3">
+            {STYLES.map(s => (
+              <button key={s.id} type="button" className={`${cardCls(look.style === s.id)} p-2 bg-thumb-soft`}
+                onClick={() => pickOne({ style: s.id, caption: (s.id === 'split' ? CAPS : SIMPLE_CAPS).some(c => c.id === look.caption) ? look.caption : 'auto' })}>
+                <Tick on={look.style === s.id} />
+                <StyleMock id={s.id} />
+                <p className="mt-2 text-[13px] font-black text-thumb-ink text-center">{s.label}</p>
+                <p className="text-[10.5px] text-thumb-sub text-center leading-tight mt-0.5">{s.note}</p>
               </button>
             ))}
           </div>
-        </Section>
+        </Popup>
       )}
 
-      <Section title="Subtitles" hint={studio ? 'How the spoken words look' : undefined}>
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-2">
-          {caps.map(c => {
-            const dark = studio ? !!bg.dark : true;
-            return (
-              <button key={c.id} type="button" onClick={() => set({ caption: c.id })} className={`${cardCls(look.caption === c.id)} overflow-hidden`}>
+      {open === 'bg' && (
+        <Popup title={TITLES.bg} hint="🤖 Auto: AI reads each clip’s mood and picks · 🎲 Mix: a different one every Short" onClose={() => setOpen(null)}>
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+            {BGS.map(b => (
+              <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} overflow-hidden`}>
+                <Tick on={look.bg === b.id} />
+                <div className="relative h-[72px] flex items-center justify-center" style={b.css}>
+                  {b.tag
+                    ? <span className="text-[13px] font-black text-[#111] drop-shadow-[0_1px_0_#fff]">{b.tag}</span>
+                    : <span className="w-[42%] h-[46%] rounded-md shadow-md" style={{ background: 'linear-gradient(160deg,#334155,#0F172A)' }} />}
+                </div>
+                <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">{b.label}</p>
+              </button>
+            ))}
+          </div>
+        </Popup>
+      )}
+
+      {open === 'caption' && (
+        <Popup title={TITLES.caption} onClose={() => setOpen(null)}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {caps.map(c => (
+              <button key={c.id} type="button" onClick={() => pickOne({ caption: c.id })} className={`${cardCls(look.caption === c.id)} overflow-hidden`}>
                 <Tick on={look.caption === c.id} />
-                <div className="h-[62px] sm:h-[74px] overflow-hidden flex items-center justify-center px-1" style={studio ? bg.css : { background: 'linear-gradient(160deg,#334155,#0F172A)' }}>
-                  <CaptionSample cap={c} dark={dark} size={typeof window !== 'undefined' && window.innerWidth < 640 ? 10.5 : 13} />
+                <div className="h-[76px] overflow-hidden flex items-center justify-center px-1" style={studio ? bg.css : { background: 'linear-gradient(160deg,#334155,#0F172A)' }}>
+                  <CaptionSample cap={c} dark={studio ? !!bg.dark : true} size={small ? 12 : 14} animate={look.caption === c.id} />
                 </div>
                 <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">{c.label}</p>
               </button>
-            );
-          })}
-        </div>
-      </Section>
-
-      {studio && (
-        <Section
-          title="Effects"
-          hint={look.fxMode === 'auto' ? 'Every Short gets its own mix, picked to fit the clip' : `${look.fx.length} picked — each Short uses some of them`}
-          right={
-            <div className="inline-flex p-1 rounded-xl bg-thumb-soft border border-thumb-line">
-              {(['auto', 'pick'] as const).map(m => (
-                <button key={m} type="button" onClick={() => set({ fxMode: m, fx: m === 'pick' && !look.fx.length ? FX.map(f => f.id).filter(id => id !== 'stickers' && id !== 'facts') : look.fx })}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-black whitespace-nowrap transition-colors ${look.fxMode === m ? 'bg-thumb-card text-thumb-ink shadow-sm' : 'text-thumb-sub'}`}>
-                  {m === 'auto' ? '✨ Auto' : 'Choose'}
-                </button>
-              ))}
-            </div>
-          }
-        >
-          {look.fxMode === 'pick' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {FX.map(f => {
-                const sel = look.fx.includes(f.id);
-                return (
-                  <button key={f.id} type="button" onClick={() => toggleFx(f.id)}
-                    className={`relative flex items-start gap-2 p-2.5 rounded-xl border-2 text-left transition-all ${sel ? 'border-thumb-red bg-thumb-redSoft' : 'border-thumb-line bg-thumb-card hover:border-thumb-red/40'}`}>
-                    <span className={`mt-0.5 w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center ${sel ? 'bg-thumb-red border-thumb-red text-white' : 'border-thumb-line'}`}>
-                      {sel && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={4}><path d="M20 6 9 17l-5-5" /></svg>}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[12px] font-black text-thumb-ink leading-tight">{f.icon} {f.label}</span>
-                      <span className="block text-[10.5px] text-thumb-sub leading-snug mt-0.5">{f.note}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <label className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line cursor-pointer">
-            <span className="text-[13px] font-bold text-thumb-ink">🔊 Sound effects <span className="font-normal text-thumb-sub">— whooshes & pops on the moves</span></span>
-            <button type="button" role="switch" aria-checked={look.sfx} onClick={() => set({ sfx: !look.sfx })}
-              className={`relative w-10 h-6 rounded-full transition-colors ${look.sfx ? 'bg-thumb-red' : 'bg-black/20'}`}>
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${look.sfx ? 'left-[18px]' : 'left-0.5'}`} />
-            </button>
-          </label>
-        </Section>
+            ))}
+          </div>
+        </Popup>
       )}
 
-      {studio ? (
-        <p className="text-[12px] text-thumb-sub -mt-3">🎯 Studio keeps the speaker in the card on its own — the crop follows whoever is talking.</p>
-      ) : (
-        <Section title="Fit">
-          <div className="grid grid-cols-3 gap-2">
+      {open === 'fx' && (
+        <Popup title={TITLES.fx} wide onClose={() => setOpen(null)}
+          hint={look.fxMode === 'auto' ? 'Every Short gets its own mix, picked to fit the clip' : `${look.fx.length} picked — each Short uses some of them`}
+          footer={
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2.5 text-[13px] font-bold text-thumb-ink cursor-pointer">
+                <button type="button" role="switch" aria-checked={look.sfx} onClick={() => set({ sfx: !look.sfx })}
+                  className={`relative shrink-0 w-10 h-6 rounded-full transition-colors ${look.sfx ? 'bg-thumb-red' : 'bg-thumb-soft border border-thumb-line'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${look.sfx ? 'left-[18px]' : 'left-0.5'}`} />
+                </button>
+                🔊 Sound effects
+              </label>
+              <button type="button" onClick={() => setOpen(null)} className="thumb-btn px-5 h-10 rounded-xl text-white font-black text-[14px]">Done</button>
+            </div>
+          }>
+          <div className="flex gap-4 items-start">
+            <div className="hidden sm:block shrink-0"><PhonePreview look={look} compact /></div>
+            <div className="flex-1 min-w-0 space-y-3">
+              <div className="grid grid-cols-2 p-1 rounded-xl bg-thumb-soft border border-thumb-line">
+                {(['auto', 'pick'] as const).map(m => (
+                  <button key={m} type="button"
+                    onClick={() => set({ fxMode: m, fx: m === 'pick' && !look.fx.length ? FX.map(f => f.id).filter(id => id !== 'stickers' && id !== 'facts') : look.fx })}
+                    className={`py-2 rounded-lg text-[13px] font-black transition-colors ${look.fxMode === m ? 'bg-thumb-card text-thumb-ink shadow-sm' : 'text-thumb-sub'}`}>
+                    {m === 'auto' ? '✨ Auto (AI picks)' : '☑️ Choose myself'}
+                  </button>
+                ))}
+              </div>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 transition-opacity ${look.fxMode === 'auto' ? 'opacity-45 pointer-events-none' : ''}`}>
+                {FX.map(f => {
+                  const sel = look.fxMode === 'auto' || look.fx.includes(f.id);
+                  return (
+                    <button key={f.id} type="button" onClick={() => toggleFx(f.id)}
+                      className={`flex items-start gap-2 p-2.5 rounded-xl border-2 text-left transition-colors ${sel ? 'border-thumb-red bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/40'}`}>
+                      <span className={`mt-0.5 w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center ${sel ? 'bg-thumb-red border-thumb-red text-white' : 'border-thumb-line'}`}>
+                        {sel && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={4}><path d="M20 6 9 17l-5-5" /></svg>}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[12.5px] font-black text-thumb-ink leading-tight">{f.icon} {f.label}</span>
+                        <span className="block text-[11px] text-thumb-sub leading-snug mt-0.5">{f.note}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11.5px] text-thumb-sub">🎯 The crop follows whoever is talking — always on in Studio.</p>
+            </div>
+          </div>
+        </Popup>
+      )}
+
+      {open === 'fit' && (
+        <Popup title={TITLES.fit} onClose={() => setOpen(null)}>
+          <div className="grid grid-cols-3 gap-3">
             {FITS.map(f => (
-              <button key={f.id} type="button" onClick={() => set({ fit: f.id })} className={`${cardCls(look.fit === f.id)} p-2.5 bg-thumb-card`}>
+              <button key={f.id} type="button" onClick={() => pickOne({ fit: f.id })} className={`${cardCls(look.fit === f.id)} p-2.5 bg-thumb-soft`}>
                 <Tick on={look.fit === f.id} />
-                <div className="relative mx-auto w-[42px] rounded-lg overflow-hidden bg-black" style={{ aspectRatio: '9 / 16' }}>
+                <div className="relative mx-auto w-[46px] rounded-lg overflow-hidden bg-black" style={{ aspectRatio: '9 / 16' }}>
                   <Footage className="absolute inset-x-0 top-1/2 -translate-y-1/2" style={{ height: f.id === 'full' ? '38%' : '100%', left: f.id === 'track' ? '-40%' : f.id === 'zoom' ? '-60%' : 0, width: f.id === 'full' ? '100%' : '220%' }} />
                   {f.id === 'track' && <span className="absolute top-[40%] left-[18%] w-[60%] h-[22%] border border-dashed border-[#4ADE80] rounded" />}
                 </div>
-                <p className="mt-1.5 text-[12px] font-black text-thumb-ink text-center">{f.label}</p>
+                <p className="mt-1.5 text-[12.5px] font-black text-thumb-ink text-center">{f.label}</p>
                 <p className="text-[10.5px] text-thumb-sub text-center leading-tight">{f.note}</p>
               </button>
             ))}
           </div>
-        </Section>
+        </Popup>
       )}
 
-      <Section title="Length of each Short">
-        <div className="flex flex-wrap gap-2">
-          {LENGTHS.map(l => (
-            <button key={l.id} type="button" onClick={() => set({ length: l.id })}
-              className={`px-4 py-2 rounded-full text-[13px] font-black border-2 transition-all ${look.length === l.id ? 'bg-thumb-red text-white border-thumb-red' : 'bg-thumb-card text-thumb-ink border-thumb-line hover:border-thumb-red/40'}`}>
-              {l.label}
-            </button>
-          ))}
-        </div>
-      </Section>
-    </div>
+      {open === 'length' && (
+        <Popup title={TITLES.length} hint="Auto: whatever length the best moment needs" onClose={() => setOpen(null)}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {LENGTHS.map(l => (
+              <button key={l.id} type="button" onClick={() => pickOne({ length: l.id })}
+                className={`${cardCls(look.length === l.id)} h-14 bg-thumb-soft text-[14px] font-black text-thumb-ink flex items-center justify-center`}>
+                <Tick on={look.length === l.id} />{l.label}
+              </button>
+            ))}
+          </div>
+        </Popup>
+      )}
+    </>
   );
 };

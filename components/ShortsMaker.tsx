@@ -5,7 +5,7 @@ import {
   ShortClip, ShortsProject, createProject, fmtTime, getProject, isShortsConfigured, listProjects,
   renderAll, renderShort, startDownload, trimShort,
 } from '../services/shortsService';
-import { DEFAULT_LOOK, PhonePreview, ShortsLook, StylePicker, lookToRequest } from './ShortsStylePicker';
+import { DEFAULT_LOOK, LookBar, ShortsLook, lookToRequest } from './ShortsStylePicker';
 
 const LOOK_KEY = 'shorts_look_v1';
 const savedLook = (): ShortsLook => {
@@ -388,36 +388,22 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         <p className="text-sm sm:text-base text-thumb-sub">Paste a YouTube link — we find the best moments. Preview free, pay only for what you download.</p>
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6 lg:gap-8 items-start">
-        <div className="space-y-5 min-w-0">
-          <div className="thumb-glass rounded-[28px] p-4 sm:p-5 space-y-3.5">
-            <textarea
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}
-              rows={2}
-              placeholder="Paste a YouTube link…"
-              className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
-            />
-            {noteBox}
-            <button type="button" onClick={generate} disabled={busy}
-              className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
-              {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
-                : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
-            </button>
-          </div>
-
-          {/* phone preview on small screens: above the choices */}
-          <div className="lg:hidden flex justify-center"><PhonePreview look={look} compact /></div>
-
-          <div className="thumb-glass rounded-[28px] p-4 sm:p-6">
-            <StylePicker look={look} onChange={setLook} />
-          </div>
-        </div>
-
-        <aside className="hidden lg:block sticky top-24">
-          <PhonePreview look={look} />
-        </aside>
+      <div className="thumb-glass rounded-[28px] p-4 sm:p-5 max-w-2xl mx-auto space-y-3.5">
+        <textarea
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}
+          rows={3}
+          placeholder="Paste a YouTube link…"
+          className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
+        />
+        <LookBar look={look} onChange={setLook} />
+        {noteBox}
+        <button type="button" onClick={generate} disabled={busy}
+          className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
+          {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
+            : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
+        </button>
       </div>
 
       {signedIn && (
