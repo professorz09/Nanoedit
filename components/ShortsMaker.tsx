@@ -155,6 +155,10 @@ const ShortCard: React.FC<{
 }> = ({ clip, videoId, duration, onTrim, onDownload, cost }) => {
   const [playing, setPlaying] = useState(false);
   const [showTrim, setShowTrim] = useState(false); // start/end live under "Advanced settings" (user-requested)
+  // user-requested: once made, the card plays the real Short, same size as the preview; when its file expires (no
+  // view link any more) or the link stops working, it's the YouTube preview of that part again
+  const [viewFailed, setViewFailed] = useState<string | null>(null);
+  const made = clip.status === 'ready' && !!clip.view && viewFailed !== clip.view;
   const busy = clip.status === 'queued' || clip.status === 'rendering';
   const len = clip.end - clip.start;
   const trimmed = clip.start !== clip.orig_start || clip.end !== clip.orig_end;
@@ -176,7 +180,18 @@ const ShortCard: React.FC<{
   return (
     <div className="thumb-glass rounded-3xl overflow-hidden flex flex-col animate-fade-in-up">
       <div className="relative aspect-video bg-black">
-        {playing && videoId ? (
+        {made ? (
+          <video
+            key={clip.view!}
+            src={clip.view!}
+            poster={videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : undefined}
+            controls
+            playsInline
+            preload="metadata"
+            onError={() => setViewFailed(clip.view!)}
+            className="absolute inset-0 w-full h-full object-contain bg-black"
+          />
+        ) : playing && videoId ? (
           <ClipPlayer key={`${clip.start}-${clip.end}`} videoId={videoId} start={clip.start} end={clip.end} />
         ) : (
           <button type="button" onClick={() => setPlaying(true)} className="group absolute inset-0 w-full h-full" aria-label={`Preview ${clip.title}`}>
@@ -196,7 +211,7 @@ const ShortCard: React.FC<{
             <Ic.Fire className="w-3.5 h-3.5" /> {clip.score}
           </span>
         )}
-        <span className="absolute top-2.5 right-2.5 bg-black/70 text-white text-[11px] font-bold px-2 py-1 rounded-lg">#{clip.idx + 1}</span>
+        <span className="absolute top-2.5 right-2.5 bg-black/70 text-white text-[11px] font-bold px-2 py-1 rounded-lg">#{clip.idx + 1}{made ? ' · Made' : ''}</span>
       </div>
 
       <div className="p-4 sm:p-5 flex flex-col gap-3.5 flex-1">

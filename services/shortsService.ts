@@ -24,6 +24,7 @@ export interface ShortClip {
   error: string | null;
   paid: boolean;
   download: string | null;
+  view?: string | null; // the made Short, streamed for the card's player (only while its file is kept)
 }
 
 export interface ShortsProject {
