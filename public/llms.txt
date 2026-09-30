@@ -1,0 +1,22 @@
+# PodcastFlux
+
+> PodcastFlux (https://podcastflux.com) is a free AI Shorts maker and automatic AI clipping tool. Paste a podcast or YouTube link and the AI finds the best moments and clips them into ready vertical Shorts, Reels and TikToks with animated captions, effects and titles.
+
+## What it does
+- Automatic AI clipping: one long video or podcast becomes 3–20 Shorts, each with a viral score (0–100).
+- AI speaker tracking: the 9:16 frame follows whoever is talking.
+- Animated captions: word-by-word subtitles in 25+ styles, key words highlighted.
+- Keyword triggers: money, numbers, times, years, percents and feelings animate as they are said.
+- Looks: Studio (video in a card, big animated words), Classic (title bar), Boxed.
+- Also: AI YouTube thumbnail maker, title generator, timestamps/chapters maker.
+
+## Pricing
+- Finding and previewing clips is free; new accounts get free credits.
+- A Short costs 1 credit the first time it is downloaded; a failed render refunds it.
+
+## Pages
+- [AI Shorts maker](https://podcastflux.com/shorts)
+- [AI thumbnail maker](https://podcastflux.com/thumbnail-maker)
+- [Title generator](https://podcastflux.com/title-generator)
+- [Timestamps / chapters maker](https://podcastflux.com/chapters)
+- [Pricing](https://podcastflux.com/pricing)
