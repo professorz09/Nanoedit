@@ -23,12 +23,12 @@ export default {
         },
         // Thumbnail Studio (premium dark / red) theme — richer, cooler charcoal
         thumb: {
-          bg: '#050508', // page: near-true black (user-requested: dark black, not grey-black)
-          soft: '#101016', // inset areas: tab track, inputs
-          card: '#17171f', // raised cards, active pills (lightest surface)
+          bg: '#030304', // page: near-true black (user-requested: dark black, not grey-black)
+          soft: '#0e0e11', // inset areas: tab track, inputs
+          card: '#16161a', // raised cards, active pills (lightest surface)
           ink: '#f5f5f8', // primary text
           sub: '#a2a2b4', // muted text (a touch brighter)
-          line: '#24242f', // hairline borders
+          line: '#232328', // hairline borders
           red: '#ff3355', // accent — juicier, pops on dark
           redDark: '#e01840',
           redSoft: '#2c1320', // dark maroon chip background

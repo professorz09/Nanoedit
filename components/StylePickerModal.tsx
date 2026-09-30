@@ -34,7 +34,10 @@ const StylePickerModal: React.FC<{
             Clear selection
           </button>
         )}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto no-scrollbar pr-1 mt-2">
+        {/* the scroll box wraps the grid: a grid that scrolls itself inside this height-capped column had its rows
+            squeezed to fit, so the pictures overlapped and got cut off (user-reported) */}
+        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pr-1 mt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {styleImages.map((src, i) => {
             const active = selected === src;
             return (
@@ -49,6 +52,7 @@ const StylePickerModal: React.FC<{
               </button>
             );
           })}
+        </div>
         </div>
       </div>
     </div>

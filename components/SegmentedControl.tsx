@@ -19,7 +19,7 @@ const SegmentedControl = <T extends string>({
   className?: string;
 }) => {
   return (
-    <div className={`flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl ${className}`}>
+    <div className={`flex gap-1 p-1 bg-black/40 border border-white/[0.07] rounded-2xl shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)] ${className}`}>
       {options.map(opt => {
         const active = value === opt.value;
         return (
@@ -28,9 +28,9 @@ const SegmentedControl = <T extends string>({
             type="button"
             onClick={() => onChange(opt.value)}
             aria-pressed={active}
-            className={`relative flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-bold transition-colors duration-150 ${active ? 'text-white' : 'text-thumb-sub hover:text-thumb-ink'}`}
+            className={`relative flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl text-[13px] font-bold transition-colors duration-150 ${active ? 'text-white' : 'text-thumb-sub hover:text-thumb-ink'}`}
           >
-            <span aria-hidden className={`absolute inset-0 rounded-lg thumb-liquid transition-opacity duration-150 pointer-events-none ${active ? 'opacity-100' : 'opacity-0'}`} />
+            <span aria-hidden className={`absolute inset-0 rounded-xl thumb-liquid transition-opacity duration-150 pointer-events-none ${active ? 'opacity-100' : 'opacity-0'}`} />
             <span className="relative z-10 flex items-center justify-center gap-1.5">{opt.label}</span>
           </button>
         );

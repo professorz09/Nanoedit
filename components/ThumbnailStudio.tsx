@@ -1852,7 +1852,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               {mode === 'youtube' && (
                 <div className="space-y-4 animate-fade-in-up">
                   <div className="space-y-2.5">
-                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">YouTube video link</label>
+                    <label className="thumb-label">YouTube video link</label>
                     <div className="flex items-center gap-3 bg-thumb-soft border border-thumb-line rounded-2xl px-4 transition-all focus-within:border-thumb-red/50 focus-within:ring-4 focus-within:ring-thumb-red/10">
                       <I.Youtube className="w-5 h-5 text-thumb-red shrink-0" />
                       <input
@@ -1865,23 +1865,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                   </div>
 
                   {/* Advanced (optional) */}
-                  <div className="border-t border-white/10 pt-3">
+                  <div className="pt-1">
                     <button
                       type="button"
                       onClick={() => setYtAdvanced(v => !v)}
-                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                      className="thumb-advbtn w-full group flex items-center justify-between gap-3 pl-2 pr-4 h-[58px] rounded-2xl transition-all"
                     >
                       <span className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                        <span className="w-10 h-10 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-[18px] h-[18px]" /></span>
+                        <span className="text-left leading-tight"><span className="block text-[14px] font-bold text-thumb-ink">Advanced settings</span><span className="block text-[11px] text-thumb-sub mt-0.5">Style, faces, quality &amp; format</span></span>
                       </span>
-                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${ytAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      <svg viewBox="0 0 24 24" className={`w-4 h-4 text-thumb-sub group-hover:text-thumb-ink transition-transform duration-300 shrink-0 ${ytAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
 
                     {ytAdvanced && (
-                      <div className="mt-3 space-y-3 animate-fade-in-up">
+                      <div className="thumb-advpanel mt-3 p-3.5 sm:p-4 rounded-2xl space-y-4 animate-fade-in-up">
                         <div className="space-y-2">
-                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe what you want</label>
+                          <label className="thumb-label">Describe what you want</label>
                           <textarea
                             value={promptText}
                             onChange={e => setPromptText(e.target.value)}
@@ -1892,7 +1892,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Extras (optional)</label>
+                            <label className="thumb-label">Extras (optional)</label>
                             {selectedYtStyle && (
                               <button type="button" onClick={() => setSelectedYtStyle(null)} className="text-[11px] font-bold text-thumb-red hover:underline">
                                 Auto-match style instead
@@ -1916,21 +1916,21 @@ const ThumbnailStudio: React.FC<Props> = ({
                             <button
                               type="button"
                               onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
-                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                              className="thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold"
                             >
                               <I.FaceSwap className="w-4 h-4" /> Persona
                             </button>
                             <button
                               type="button"
                               onClick={() => setStyleModalOpen('youtube')}
-                              className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedYtStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                              className={`thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold ${selectedYtStyle ? 'thumb-tile-on' : ''}`}
                             >
                               <I.Image className="w-4 h-4" /> Style
                             </button>
                             <button
                               type="button"
                               onClick={triggerUpload}
-                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                              className="thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold"
                             >
                               <I.Upload className="w-4 h-4" /> Upload
                             </button>
@@ -1938,7 +1938,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="thumb-optrow flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Only use my custom styles</span>
                           <button
                             type="button"
@@ -1953,10 +1953,10 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </button>
                         </div>
                         {onlyMyStyles && (
-                          <p className="text-[11px] text-thumb-sub -mt-1">Only your own uploaded styles will be used — nothing else.</p>
+                          <p className="thumb-opthint">Only your own uploaded styles will be used — nothing else.</p>
                         )}
 
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="thumb-optrow flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
                           <button
                             type="button"
@@ -1970,11 +1970,11 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </button>
                         </div>
                         {creativeMode && (
-                          <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
+                          <p className="thumb-opthint">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
                         )}
 
                         <div className="space-y-1.5">
-                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                          <label className="thumb-label">Quality</label>
                           <SegmentedControl
                             value={genModel}
                             onChange={setGenModel}
@@ -1983,7 +1983,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           <p className="text-[11px] text-thumb-sub">Fast (1K) is quickest; 2K (default) uses our higher-end model for sharper thumbnails. 4K is our highest resolution and costs {RES_SURCHARGE_4K} extra credits per thumbnail.</p>
                         </div>
 
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="thumb-optrow flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Stick to video's topics</span>
                           <button
                             type="button"
@@ -1997,7 +1997,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </button>
                         </div>
 
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="thumb-optrow flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Match the style's look</span>
                           <button
                             type="button"
@@ -2011,14 +2011,14 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </button>
                         </div>
                         {styleLockMode && (
-                          <p className="text-[11px] text-thumb-sub -mt-1">Copies the matched style's actual layout — same composition, framing, lighting and text placement — with your video's subject in it, instead of just borrowing its vibe.</p>
+                          <p className="thumb-opthint">Copies the matched style's actual layout — same composition, framing, lighting and text placement — with your video's subject in it, instead of just borrowing its vibe.</p>
                         )}
 
                         {/* Format lives here (not always visible) — YouTube
                             is overwhelmingly 16:9, so it doesn't need to be
                             front and center every time. */}
                         <div className="space-y-1.5">
-                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                          <label className="thumb-label">Format</label>
                           <SegmentedControl
                             value={format}
                             onChange={setFormat}
@@ -2062,7 +2062,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               {mode === 'prompt' && (
                 <div className="space-y-3 animate-fade-in-up">
                   <div className="space-y-2.5">
-                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe your thumbnail idea</label>
+                    <label className="thumb-label">Describe your thumbnail idea</label>
                     <textarea
                       value={promptText}
                       onChange={e => setPromptText(e.target.value)}
@@ -2072,35 +2072,35 @@ const ThumbnailStudio: React.FC<Props> = ({
                     />
                   </div>
 
-                  <div className="border-t border-white/10 pt-3">
+                  <div className="pt-1">
                     <button
                       type="button"
                       onClick={() => setPromptAdvanced(v => !v)}
-                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                      className="thumb-advbtn w-full group flex items-center justify-between gap-3 pl-2 pr-4 h-[58px] rounded-2xl transition-all"
                     >
                       <span className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                        <span className="w-10 h-10 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-[18px] h-[18px]" /></span>
+                        <span className="text-left leading-tight"><span className="block text-[14px] font-bold text-thumb-ink">Advanced settings</span><span className="block text-[11px] text-thumb-sub mt-0.5">Style, faces, quality &amp; format</span></span>
                       </span>
-                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${promptAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      <svg viewBox="0 0 24 24" className={`w-4 h-4 text-thumb-sub group-hover:text-thumb-ink transition-transform duration-300 shrink-0 ${promptAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
 
                     {promptAdvanced && (
-                      <div className="mt-3 space-y-4 animate-fade-in-up">
+                      <div className="thumb-advpanel mt-3 p-3.5 sm:p-4 rounded-2xl space-y-4 animate-fade-in-up">
                         <div className="space-y-1.5">
-                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Persona &amp; upload</label>
+                          <label className="thumb-label">Persona &amp; upload</label>
                           <div className="grid grid-cols-2 gap-2">
                             <button
                               type="button"
                               onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
-                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                              className="thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold"
                             >
                               <I.FaceSwap className="w-4 h-4" /> Persona
                             </button>
                             <button
                               type="button"
                               onClick={triggerUpload}
-                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                              className="thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold"
                             >
                               <I.Upload className="w-4 h-4" /> Upload
                             </button>
@@ -2108,7 +2108,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="thumb-optrow flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
                           <button
                             type="button"
@@ -2132,7 +2132,7 @@ const ThumbnailStudio: React.FC<Props> = ({
 
               {mode === 'reference' && (
                 <div className="space-y-2.5 animate-fade-in-up">
-                  <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Upload reference or your photo</label>
+                  <label className="thumb-label">Upload reference or your photo</label>
                   <div
                     onClick={triggerUpload}
                     onDragOver={e => e.preventDefault()}
@@ -2145,22 +2145,22 @@ const ThumbnailStudio: React.FC<Props> = ({
                   </div>
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
 
-                  <div className="border-t border-white/10 pt-3">
+                  <div className="pt-1">
                     <button
                       type="button"
                       onClick={() => setReferenceAdvanced(v => !v)}
-                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                      className="thumb-advbtn w-full group flex items-center justify-between gap-3 pl-2 pr-4 h-[58px] rounded-2xl transition-all"
                     >
                       <span className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                        <span className="w-10 h-10 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-[18px] h-[18px]" /></span>
+                        <span className="text-left leading-tight"><span className="block text-[14px] font-bold text-thumb-ink">Advanced settings</span><span className="block text-[11px] text-thumb-sub mt-0.5">Style, faces, quality &amp; format</span></span>
                       </span>
-                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${referenceAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      <svg viewBox="0 0 24 24" className={`w-4 h-4 text-thumb-sub group-hover:text-thumb-ink transition-transform duration-300 shrink-0 ${referenceAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
 
                     {referenceAdvanced && (
-                      <div className="mt-3 animate-fade-in-up">
-                        <div className="flex items-center justify-between gap-3">
+                      <div className="thumb-advpanel mt-3 p-3.5 sm:p-4 rounded-2xl space-y-4 animate-fade-in-up">
+                        <div className="thumb-optrow flex items-center justify-between gap-3">
                           <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
                           <button
                             type="button"
@@ -2185,12 +2185,12 @@ const ThumbnailStudio: React.FC<Props> = ({
               {mode === 'sketch' && (
                 <div className="space-y-4 animate-fade-in-up">
                   <div className="space-y-2.5">
-                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Sketch your thumbnail layout</label>
+                    <label className="thumb-label">Sketch your thumbnail layout</label>
                     <SketchCanvas onChange={setSketchData} />
                   </div>
 
                   <div className="space-y-2.5">
-                    <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Describe it &amp; the title text</label>
+                    <label className="thumb-label">Describe it &amp; the title text</label>
                     <textarea
                       value={promptText}
                       onChange={e => setPromptText(e.target.value)}
@@ -2205,23 +2205,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                       most sketches don't need a persona/style/upload on top, so
                       none of that needs to sit in the always-visible path
                       between the canvas and the Generate button. */}
-                  <div className="border-t border-white/10 pt-3">
+                  <div className="pt-1">
                     <button
                       type="button"
                       onClick={() => setSketchAdvanced(v => !v)}
-                      className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                      className="thumb-advbtn w-full group flex items-center justify-between gap-3 pl-2 pr-4 h-[58px] rounded-2xl transition-all"
                     >
                       <span className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                        <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                        <span className="w-10 h-10 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-[18px] h-[18px]" /></span>
+                        <span className="text-left leading-tight"><span className="block text-[14px] font-bold text-thumb-ink">Advanced settings</span><span className="block text-[11px] text-thumb-sub mt-0.5">Style, faces, quality &amp; format</span></span>
                       </span>
-                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${sketchAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                      <svg viewBox="0 0 24 24" className={`w-4 h-4 text-thumb-sub group-hover:text-thumb-ink transition-transform duration-300 shrink-0 ${sketchAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
 
                     {sketchAdvanced && (
-                      <div className="mt-3 space-y-4 animate-fade-in-up">
+                      <div className="thumb-advpanel mt-3 p-3.5 sm:p-4 rounded-2xl space-y-4 animate-fade-in-up">
                         <div className="space-y-1.5">
-                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                          <label className="thumb-label">Format</label>
                           <SegmentedControl
                             value={format}
                             onChange={setFormat}
@@ -2236,26 +2236,26 @@ const ThumbnailStudio: React.FC<Props> = ({
                             (opens its popup or the native file picker) instead
                             of expanding an inline panel that needs a second tap. */}
                         <div className="space-y-1.5">
-                          <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Persona, style &amp; upload</label>
+                          <label className="thumb-label">Persona, style &amp; upload</label>
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
                               onClick={() => { if (configured && !user) { requireLogin('Log in to use saved faces.'); return; } setPersonaModalOpen(true); }}
-                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                              className="thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold"
                             >
                               <I.FaceSwap className="w-4 h-4" /> Persona
                             </button>
                             <button
                               type="button"
                               onClick={() => setStyleModalOpen('sketch')}
-                              className={`h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${selectedSketchStyle ? 'border-thumb-red text-thumb-red bg-thumb-redSoft' : 'border-dashed border-white/12 text-thumb-sub hover:border-thumb-red hover:text-thumb-red'}`}
+                              className={`thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold ${selectedSketchStyle ? 'thumb-tile-on' : ''}`}
                             >
                               <I.Image className="w-4 h-4" /> Style
                             </button>
                             <button
                               type="button"
                               onClick={triggerUpload}
-                              className="h-16 rounded-xl border-2 border-dashed border-white/12 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-thumb-sub hover:border-thumb-red hover:text-thumb-red transition-colors"
+                              className="thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold"
                             >
                               <I.Upload className="w-4 h-4" /> Upload
                             </button>
@@ -2264,7 +2264,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </div>
 
                         <div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="thumb-optrow flex items-center justify-between gap-3">
                             <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
                             <button
                               type="button"
@@ -2330,7 +2330,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   Generate. */}
               {mode !== 'youtube' && mode !== 'sketch' && mode !== 'templates' && (
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                  <label className="thumb-label">Format</label>
                   <SegmentedControl
                     value={format}
                     onChange={setFormat}
@@ -2349,7 +2349,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               {mode !== 'templates' && (
                 <div className={mode === 'youtube' ? '' : 'grid grid-cols-2 gap-2.5'}>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
+                    <label className="thumb-label">Variations</label>
                     <SegmentedControl
                       value={String(genCount)}
                       onChange={(v) => setGenCount(Number(v))}
@@ -2358,7 +2358,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   </div>
                   {mode !== 'youtube' && (
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                      <label className="thumb-label">Quality</label>
                       <SegmentedControl
                         value={genModel}
                         onChange={setGenModel}
@@ -2374,23 +2374,23 @@ const ThumbnailStudio: React.FC<Props> = ({
                   the style grid + "What to change" note are the only things
                   that need to be front and center here. */}
               {mode === 'templates' && (
-                <div className="border-t border-white/10 pt-3">
+                <div className="pt-1">
                   <button
                     type="button"
                     onClick={() => setTemplatesAdvanced(v => !v)}
-                    className="w-full group flex items-center justify-between gap-2 pl-2 pr-3.5 py-2.5 rounded-xl bg-thumb-soft border border-thumb-line hover:border-thumb-red/40 transition-all"
+                    className="thumb-advbtn w-full group flex items-center justify-between gap-3 pl-2 pr-4 h-[58px] rounded-2xl transition-all"
                   >
                     <span className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-3.5 h-3.5" /></span>
-                      <span className="text-[13px] font-bold text-thumb-ink">Advanced</span>
+                      <span className="w-10 h-10 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center shrink-0"><I.Sliders className="w-[18px] h-[18px]" /></span>
+                      <span className="text-left leading-tight"><span className="block text-[14px] font-bold text-thumb-ink">Advanced settings</span><span className="block text-[11px] text-thumb-sub mt-0.5">Quality, format &amp; more</span></span>
                     </span>
-                    <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 text-thumb-sub group-hover:text-thumb-red transition-all shrink-0 ${templatesAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                    <svg viewBox="0 0 24 24" className={`w-4 h-4 text-thumb-sub group-hover:text-thumb-ink transition-transform duration-300 shrink-0 ${templatesAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                   </button>
 
                   {templatesAdvanced && (
-                    <div className="mt-3 space-y-3 animate-fade-in-up">
+                    <div className="thumb-advpanel mt-3 p-3.5 sm:p-4 rounded-2xl space-y-4 animate-fade-in-up">
                       <div className="space-y-1.5">
-                        <label className="text-[13px] font-bold uppercase tracking-wider text-thumb-sub">Format</label>
+                        <label className="thumb-label">Format</label>
                         <SegmentedControl
                           value={format}
                           onChange={setFormat}
@@ -2402,7 +2402,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       </div>
                       <div className="grid grid-cols-2 gap-2.5">
                         <div className="space-y-1.5">
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Variations</label>
+                          <label className="thumb-label">Variations</label>
                           <SegmentedControl
                             value={String(genCount)}
                             onChange={(v) => setGenCount(Number(v))}
@@ -2410,7 +2410,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Quality</label>
+                          <label className="thumb-label">Quality</label>
                           <SegmentedControl
                             value={genModel}
                             onChange={setGenModel}
@@ -2418,7 +2418,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                           />
                         </div>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="thumb-optrow flex items-center justify-between gap-3">
                         <span className="text-[13px] font-bold text-thumb-ink">Creative concepts</span>
                         <button
                           type="button"
@@ -2432,7 +2432,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                         </button>
                       </div>
                       {creativeMode && (
-                        <p className="text-[11px] text-thumb-sub -mt-1">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
+                        <p className="thumb-opthint">Bolder, more visually unique and dramatic concepts — less predictable than the standard look.</p>
                       )}
                     </div>
                   )}

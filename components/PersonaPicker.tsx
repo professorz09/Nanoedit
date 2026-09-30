@@ -127,7 +127,7 @@ const PersonaPicker: React.FC<{
               <div className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
             </div>
           ) : personas.length ? (
-            <div className="grid grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pr-0.5"><div className="grid grid-cols-4 gap-3">
               {personas.map(p => (
                 <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
                   <button
@@ -149,7 +149,7 @@ const PersonaPicker: React.FC<{
                   </button>
                 </div>
               ))}
-            </div>
+            </div></div>
           ) : (
             <p className="text-sm text-thumb-sub text-center py-8">No saved faces yet — upload a photo first, then save it for reuse.</p>
           )}
@@ -226,7 +226,7 @@ const PersonaPicker: React.FC<{
                 <div className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
               </div>
             ) : personas.length ? (
-              <div className="grid grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-0.5">
+              <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pr-0.5"><div className="grid grid-cols-4 gap-3">
                 {personas.map(p => (
                   <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
                     <button
@@ -248,7 +248,7 @@ const PersonaPicker: React.FC<{
                     </button>
                   </div>
                 ))}
-              </div>
+              </div></div>
             ) : (
               <p className="text-sm text-thumb-sub text-center py-8">No saved faces yet — tap Add to save one first.</p>
             )}

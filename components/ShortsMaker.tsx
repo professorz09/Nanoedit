@@ -776,7 +776,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         </button>
 
         {/* user-requested: the project is ONE container and everything of it sits inside — its banner on top
-            (the video's picture with the title on it, violet instead of the Shorts' red), then the download-all
+            (the video's picture with the title on it, plain black/white (user-decided: no purple)), then the download-all
             and its Shorts. Nothing of the project floats outside it. */}
         <div className="project-shell relative -mx-2 sm:mx-0 rounded-[30px] overflow-hidden">
           <div className="relative aspect-[16/10] sm:aspect-[21/8] bg-black">
@@ -784,8 +784,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
             <div className="absolute inset-0 project-hero-fade" />
             {project?.status === 'finding' && <FindingOverlay top />}
             <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 space-y-2.5">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/25 border border-violet-300/30 text-violet-100 text-[10.5px] font-black uppercase tracking-[0.14em] backdrop-blur-md">
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-300" /> Project
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-[10.5px] font-black uppercase tracking-[0.14em] backdrop-blur-md">
+                <span className="w-1.5 h-1.5 rounded-full bg-thumb-red" /> Project
               </span>
               {project ? <h2 className="text-[19px] sm:text-3xl font-black text-white leading-tight line-clamp-2 drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">{project.title}</h2>
                 : <div className="h-6 w-3/4 rounded bg-white/15" />}
@@ -831,8 +831,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
 
             {project && project.status !== 'failed' && (
               <div className="flex items-center gap-3 px-1.5 sm:px-0 pt-1">
-                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-violet-300/90">Shorts in this project</span>
-                <span className="flex-1 h-px bg-gradient-to-r from-violet-400/30 to-transparent" />
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-thumb-sub">Shorts in this project</span>
+                <span className="flex-1 h-px bg-gradient-to-r from-white/15 to-transparent" />
               </div>
             )}
 
