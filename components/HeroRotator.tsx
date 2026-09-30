@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 // Home heading: the fixed promise, then what's inside it, one thing at a time (slides up every 2.2 s).
-const WORDS = ['AI B-rolls', 'PNG stickers', 'animated captions', 'bulk clipping', 'viral scores', 'full automation'];
+const WORDS = ['zero editing', 'stylish captions', 'AI auto clipping', 'speaker tracking', 'viral scores', 'bulk clipping'];
 
 const HeroRotator: React.FC = () => {
   const [i, setI] = useState(0);
@@ -23,9 +23,9 @@ const HeroRotator: React.FC = () => {
         </span>
       </h1>
       <p className="mt-5 text-thumb-sub text-[15px] sm:text-[18px] max-w-2xl mx-auto leading-relaxed">
-        Bulk clipping for <b className="text-thumb-ink">podcasters</b> and <b className="text-thumb-ink">solo creators</b> —
-        ready for <b className="text-thumb-ink">TikTok</b>, <b className="text-thumb-ink">Instagram Reels</b> and <b className="text-thumb-ink">YouTube Shorts</b>.
-        It’s all here.
+        The <b className="text-thumb-ink">free AI Shorts maker</b> that does the editing for you. Paste a link — AI clips the
+        best moments, frames the speaker and adds <b className="text-thumb-ink">the most stylish auto captions</b>. Ready for{' '}
+        <b className="text-thumb-ink">TikTok</b>, <b className="text-thumb-ink">Reels</b> and <b className="text-thumb-ink">YouTube Shorts</b>.
       </p>
     </div>
   );

@@ -5,7 +5,8 @@
 ## What it does
 - Automatic AI clipping: one long video or podcast becomes 3–20 Shorts, each with a viral score (0–100).
 - AI speaker tracking: the 9:16 frame follows whoever is talking.
-- Animated captions: word-by-word subtitles in 25+ styles, key words highlighted.
+- Zero editing: the AI trims, frames, captions and titles every clip.
+- Stylish auto captions: 80+ designed caption looks, key words picked out automatically.
 - Keyword triggers: money, numbers, times, years, percents and feelings animate as they are said.
 - Looks: Studio (video in a card, big animated words), Classic (title bar), Boxed.
 - Also: AI YouTube thumbnail maker, title generator, timestamps/chapters maker.

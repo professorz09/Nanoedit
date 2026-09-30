@@ -264,14 +264,15 @@ const Initials = ({ name }: { name: string }) => {
 };
 
 const FAQS = [
-  { q: "What is PodcastFlux?", a: "PodcastFlux is an AI Shorts maker: it turns long YouTube videos and podcasts into ready-to-post YouTube Shorts, TikToks and Instagram Reels. Paste a link and the AI finds the best clips, adds animated captions and effects, and writes the title — no editing app needed." },
-  { q: "How do I turn a YouTube video into Shorts?", a: "Paste the YouTube link into the AI Shorts Maker. The AI watches the whole video, picks the moments most likely to go viral and gives each one a viral score. Finding them takes 1 credit (you get it back if none are found). Preview them, trim the start and end if you like, then download one Short or all of them as a ZIP." },
-  { q: "Can I turn a podcast into Shorts?", a: "Yes — PodcastFlux is built for podcast clips. Long episodes are fine: the AI goes through the whole podcast, finds the best moments, and crops the video to follow whoever is speaking." },
-  { q: "Does it add captions to my Shorts automatically?", a: "Yes. Every Short gets auto captions with word-by-word animated subtitles. Choose from 25+ caption styles — Hormozi, MrBeast, karaoke, sticky notes, neon and more — or let the AI pick one." },
+  { q: "What is PodcastFlux?", a: "PodcastFlux is a free AI Shorts maker and automatic AI clipping tool. Paste a podcast or YouTube link and the AI finds the best moments, cuts them into vertical Shorts, adds stylish animated captions, effects and a title, and hands you clips that are ready to post — no editing." },
+  { q: "Is PodcastFlux free?", a: "Yes. Finding and previewing clips is free, and new accounts get free credits, so you can make your first Shorts without paying. A Short costs 1 credit the first time you download it; downloading it again is free, and a failed render gives the credit back." },
+  { q: "Do I need to edit anything?", a: "No. The AI picks the moments, trims them, crops the video to 9:16 around whoever is speaking, adds captions, effects and a title, and writes the description. If you want, you can nudge the start and end of a clip or pick another look — but you never have to open an editor." },
   { q: "What is AI clipping, and is it automatic?", a: "AI clipping means the AI cuts a long video into short clips for you. In PodcastFlux it is fully automatic: paste a podcast or YouTube link, and the AI reads the whole video, picks the best moments, crops each one to 9:16, adds captions and a title, and gives every clip a viral score." },
+  { q: "What makes the captions different?", a: "They are designed, not just typed. There are 80+ caption looks — highlighter swipes, sticky notes, neon, glass, bold key-word boxes and more — each with its own animation. Key words are picked out automatically, spoken money, numbers, times and feelings animate as they are said, and every look is matched to a background it reads well on." },
+  { q: "How do I turn a YouTube video into Shorts?", a: "Paste the YouTube link into the AI Shorts Maker. The AI watches the whole video, picks the moments most likely to go viral and gives each one a viral score. Preview them for free, then download one Short or all of them as a ZIP." },
+  { q: "Can I turn a podcast into Shorts?", a: "Yes — PodcastFlux is built for podcast clips. Long episodes are fine: the AI goes through the whole podcast, finds the best moments, and tracks every face so the 9:16 frame follows whoever is talking." },
   { q: "What effects can the AI Shorts maker add?", a: "Zooms, card moves, word highlights and sound effects, picked by the AI to fit each clip. Keyword triggers animate what is said: money counts up with a stack of notes, numbers count, a time spins a clock, a year flips a calendar, a percent fills a ring, and feelings get an animated emoji. You can also turn on AI fact cards, AI stickers and, on the Creator plan, AI B-roll." },
-  { q: "How much does a Short cost?", a: "Finding and previewing clips is free. A Short costs 1 credit the first time you download it, and downloading it again is free. If a render fails, the credit comes back. AI B-roll adds 1 credit per Short." },
-  { q: "Is PodcastFlux a free Shorts maker?", a: "Yes — new accounts start with free credits, so you can make Shorts from your own videos before picking a plan." },
+  { q: "Can I make many Shorts at once?", a: "Yes. One link gives you up to 20 Shorts in one go, each with its own title, description and viral score, and you can download them all together as a ZIP." },
   { q: "Which platforms are the Shorts for?", a: "Every Short is a vertical 9:16 video, ready for YouTube Shorts, TikTok, Instagram Reels and Facebook Reels." },
   { q: "Can I make thumbnails, titles and timestamps too?", a: "Yes. PodcastFlux also has an AI thumbnail maker for HD 16:9 YouTube thumbnails, a title generator, and a chapter maker for YouTube timestamps — all from the same video link." },
 ];
@@ -1776,9 +1777,9 @@ const ThumbnailStudio: React.FC<Props> = ({
               </button>
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-thumb-sub">
-              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> 1 credit per video</span>
-              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Pay only for what you download</span>
-              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Captions, effects & speaker tracking</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Free to start</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Zero editing</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> 80+ caption styles</span>
             </div>
           </div>
         </section>
@@ -1797,10 +1798,10 @@ const ThumbnailStudio: React.FC<Props> = ({
           {/* a swipeable row on a phone (user-requested: a shorter home page), four across on a desktop */}
           <div className="flex lg:grid lg:grid-cols-4 gap-2.5 sm:gap-4 max-w-5xl mx-auto overflow-x-auto no-scrollbar snap-x snap-mandatory -mx-5 px-5 lg:mx-auto lg:px-0">
             {[
-              { icon: '😩', title: 'No more manual editing', text: 'Hours of scrubbing, cutting, cropping and typing captions — done for you in minutes.' },
-              { icon: '🔥', title: 'Viral score for every Short', text: 'Each moment gets a score out of 100, so you know which one to post first.' },
-              { icon: '📦', title: 'Bulk: up to 20 at once', text: 'One link, many Shorts. Download them one by one or all together as a ZIP.' },
-              { icon: '✨', title: 'Ready to post', text: 'Animated captions, effects, speaker tracking, a title and description to copy.' },
+              { icon: '🪄', title: 'Zero editing', text: 'Paste a link, get finished Shorts. No timeline, no cutting, no typing captions.' },
+              { icon: '🤖', title: 'Fully automatic clipping', text: 'AI reads the whole video, picks the best moments and frames each one around the speaker.' },
+              { icon: '✨', title: 'The most stylish captions', text: '80+ designed caption looks — highlights, notes, stickers and words that animate as they are said.' },
+              { icon: '🔥', title: 'Bulk, with a viral score', text: 'Up to 20 Shorts from one link, each scored out of 100. Download them all as a ZIP.' },
             ].map(f => (
               <div key={f.title} className="thumb-glass rounded-2xl p-4 sm:p-5 text-left shrink-0 w-[68%] sm:w-[42%] lg:w-auto snap-start">
                 <div className="w-10 h-10 rounded-xl bg-thumb-redSoft flex items-center justify-center text-xl">{f.icon}</div>
