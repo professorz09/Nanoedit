@@ -444,3 +444,48 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .thumb-light ::-webkit-scrollbar-track { background: #e7e7ee; }
 .thumb-light ::-webkit-scrollbar-thumb { background: #c3c3ce; }
 .thumb-light ::-webkit-scrollbar-thumb:hover { background: #a9a9b6; }
+
+/* ── Header: a floating liquid-glass pill ──
+   Frosted and see-through, a bright glossy top edge, a soft coloured rim
+   along the bottom (the ::before border is a gradient, masked to 1px). */
+.thumb-navglass {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.03) 48%, rgba(255,255,255,0.02) 100%),
+    rgba(20,18,32,0.66);
+  backdrop-filter: blur(30px) saturate(1.8);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 -10px 24px -18px rgba(140,90,255,0.45),
+    0 18px 50px -22px rgba(0,0,0,0.9),
+    0 0 0 0.5px rgba(0,0,0,0.4);
+}
+.thumb-navglass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(170deg,
+    rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.08) 38%,
+    rgba(255,51,85,0.28) 72%, rgba(140,90,255,0.55) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.thumb-light .thumb-navglass {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.72) 100%),
+    rgba(243,244,248,0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.95),
+    inset 0 -10px 24px -18px rgba(140,90,255,0.25),
+    0 18px 44px -24px rgba(24,24,45,0.35);
+}
+.thumb-light .thumb-navglass::before {
+  background: linear-gradient(170deg,
+    rgba(255,255,255,0.9) 0%, rgba(12,12,24,0.08) 45%,
+    rgba(255,51,85,0.25) 75%, rgba(140,90,255,0.4) 100%);
+}

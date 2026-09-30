@@ -1536,13 +1536,14 @@ const ThumbnailStudio: React.FC<Props> = ({
   }[previewDevice];
 
   return (
-    <div className={`thumb-scope min-h-screen overflow-x-hidden bg-thumb-bg text-thumb-ink font-sans antialiased ${theme === 'light' ? 'thumb-light' : ''}`}>
+    <div className={`thumb-scope min-h-screen overflow-x-clip bg-thumb-bg text-thumb-ink font-sans antialiased ${theme === 'light' ? 'thumb-light' : ''}`}>
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-thumb-bg/90 backdrop-blur-xl border-b border-thumb-line">
-        <div className="max-w-6xl mx-auto px-5 h-[68px] flex items-center justify-between">
+      {/* a floating liquid-glass pill; the page scrolls by behind it */}
+      <header className="sticky top-0 z-40 px-3 sm:px-5 pt-3">
+        <div className="thumb-navglass max-w-6xl mx-auto rounded-full pl-2 pr-2 sm:pl-2.5 h-[62px] flex items-center justify-between">
           <div className="flex items-center gap-7">
             <button onClick={goHome} className="flex items-center gap-2.5 shrink-0">
-              <div className="thumb-btn w-10 h-10 rounded-[13px] flex items-center justify-center text-white shrink-0">
+              <div className="thumb-btn w-[46px] h-[46px] rounded-full flex items-center justify-center text-white shrink-0">
                 <I.Wand className="w-5 h-5" />
               </div>
               <span className="hidden sm:inline text-xl font-extrabold tracking-tight whitespace-nowrap">PodcastFlux</span>
@@ -1562,7 +1563,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <button
                   key={item.label}
                   onClick={item.on}
-                  className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-colors ${item.active ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-soft'}`}
+                  className={`px-3.5 py-2 rounded-full text-sm font-bold transition-colors ${item.active ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink hover:bg-thumb-soft'}`}
                 >
                   {item.label}
                 </button>
@@ -1572,14 +1573,14 @@ const ThumbnailStudio: React.FC<Props> = ({
           <div className="flex items-center gap-2 sm:gap-3">
             {configured && user ? (
               <>
-                <button onClick={goPricing} title="Credits — tap to top up" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-xl pl-2.5 pr-3 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
+                <button onClick={goPricing} title="Credits — tap to top up" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-3 pr-3.5 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
                   <I.Bolt className="w-4 h-4 text-thumb-red" />
                   {creditsLoading
                     ? <span className="thumb-skeleton inline-block w-5 h-4 rounded align-middle" aria-label="Loading credits" />
                     : totalCredits}
                   <span className="hidden sm:inline text-thumb-sub font-semibold">credits</span>
                 </button>
-                <button onClick={goAccount} className="w-11 h-11 rounded-2xl bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
+                <button onClick={goAccount} className="w-11 h-11 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0 hover:ring-2 hover:ring-thumb-red/40 transition-all" title={user.email ?? undefined} aria-label="Account">
                   {(user.email?.[0] || 'U').toUpperCase()}
                 </button>
               </>
