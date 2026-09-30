@@ -77,9 +77,29 @@ def simple(name: str, layout: str = "bar", sub_look: str | None = "bold_green", 
     frame(mp4, name)
 
 
+def tile(name: str, sub_look: str):
+    """A Subtitles tile: just the caption ("To / get started") on the dark tile, fully typed in, 360x180."""
+    w, h = 720, 360
+    words = [{"word": "To", "start": 0.0, "end": 0.3}, {"word": "get", "start": 0.3, "end": 0.6},
+             {"word": "started", "start": 0.6, "end": 2.0}]
+    ass = WORK / f"{name}.ass"
+    ass.write_text("[Script Info]\nScriptType: v4.00+\nPlayResX: %d\nPlayResY: %d\nScaledBorderAndShadow: yes\n\n"
+                   "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+                   "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, "
+                   "Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+                   "Style: Sub,Montserrat,60,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,5,"
+                   "0,0,0,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+                   % (w, h) + "".join(assemble._shorts_subtitle_events([words], w, h // 2, 110, sub_look)))
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c=0x2A2A2A:s={w}x{h}:d=2.2",
+                    "-vf", f"ass={ass}:fontsdir={assemble.FONTS_DIR if hasattr(assemble, 'FONTS_DIR') else shorts_split.FONTS_DIR},scale=360:-2",
+                    "-ss", "1.6", "-frames:v", "1", "-c:v", "libwebp", "-quality", "82", str(OUT / f"{name}.webp")],
+                   check=True)
+
+
 STUDIO_CAPS = ["sticky_blue", "underline_swipe", "chalkboard", "hormozi", "mrbeast", "neon_green", "glass", "red_box",
                "black_box", "karaoke", "highlighter", "comic", "fire", "ice", "gold", "typewriter", "sticker",
-               "chat_bubble", "sticky_note", "news_bar", "pop_art", "rgb_split", "minimal"]
+               "chat_bubble", "sticky_note", "news_bar", "pop_art", "rgb_split", "minimal",
+               "cine_red", "cine_green", "cine_blue"]
 BGS = [b for b in shorts_split.BG_OPTIONS if b not in ("ai", "random")]
 
 JOBS = {
@@ -95,6 +115,7 @@ JOBS = {
     "simple-animated": lambda: simple("simple-animated", sub_look="bold_green"),
     "simple-simple": lambda: simple("simple-simple", sub_look="plain"),
     "simple-off": lambda: simple("simple-off", sub_look=None),
+    **{f"simple-{k}": (lambda k=k: tile(f"simple-{k}", k)) for k in assemble.SHORTS_TYPE_LOOKS},
     **{f"fit-{f}": (lambda f=f: simple(f"fit-{f}", fit=f)) for f in ("full", "zoom", "track")},
     "fx-auto": lambda: studio("fx-auto", preset="sticky_blue.pop", fx={"marker": "swipe", "progress": "top_line", "zoom_punch": "punch"}),
     "fx-explain": lambda: studio("fx-explain", fx={"facts": "bold"}, fact_cards=FACT),

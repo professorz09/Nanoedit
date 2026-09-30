@@ -160,6 +160,10 @@ const CAPS: Cap[] = [
   { id: 'news_bar', label: 'News bar', font: IMPACT, key: { color: '#EF4444' }, wrap: { background: '#111', padding: '3px 8px' }, soft: { color: '#fff' } },
   { id: 'pop_art', label: 'Pop art', font: IMPACT, key: { color: '#FACC15', ...EDGE, textShadow: '2px 2px 0 #EC4899' } },
   { id: 'rgb_split', label: 'RGB glitch', font: IMPACT, key: { color: '#111', textShadow: '-2px 0 #EF4444, 2px 0 #3B82F6' }, tile: LIGHT_TILE },
+  // user reference (movie-edit Shorts): white spaced letters, the key words glowing in colour, typed in letter by letter
+  { id: 'cine_red', label: 'Cinematic red', font: '"Montserrat", "Inter", sans-serif', key: { color: '#E11D1D', letterSpacing: '0.06em', textTransform: 'none', textShadow: '0 0 6px #FF3B3B, 0 0 14px #FF3B3B' }, soft: { letterSpacing: '0.08em' } },
+  { id: 'cine_green', label: 'Cinematic green', font: '"Archivo Black", "Arial Black", sans-serif', key: { color: '#16A34A', letterSpacing: '0.08em', textShadow: '0 0 6px #4ADE80, 0 0 14px #4ADE80' }, soft: { letterSpacing: '0.08em' } },
+  { id: 'cine_blue', label: 'Cinematic blue', font: '"Space Grotesk", "Inter", sans-serif', key: { color: '#0284C7', letterSpacing: '0.1em', textShadow: '0 0 6px #38BDF8, 0 0 14px #38BDF8' }, soft: { letterSpacing: '0.08em' } },
   { id: 'minimal', label: 'Minimal', font: '"Inter", system-ui, sans-serif', key: { fontWeight: 600, letterSpacing: 0 }, soft: { fontWeight: 400 } },
   { id: 'poster_words', label: 'Poster words', font: IMPACT, key: { fontSize: '1.5em', lineHeight: 1 } },
   { id: 'off', label: 'No subtitles', key: {} },
@@ -186,6 +190,10 @@ const SIMPLE_CAPS: Cap[] = [
   { id: 'duo_orange_glow', label: 'Orange glow', img: true, key: {} },
   { id: 'duo_violet', label: 'Violet', img: true, key: {} },
   { id: 'duo_sky', label: 'Sky', img: true, key: {} },
+  // typed in letter by letter, the colour line glowing (pipeline/assemble.py SHORTS_TYPE_LOOKS)
+  { id: 'type_red', label: 'Cinematic red', img: true, key: {} },
+  { id: 'type_green', label: 'Cinematic green', img: true, key: {} },
+  { id: 'type_blue', label: 'Cinematic blue', img: true, key: {} },
   { id: 'off', label: 'No subtitles', key: {} },
 ]
 
@@ -298,7 +306,7 @@ const HAS_IMG = new Set([
     'wall_navy', 'wall_emerald', 'wall_purple', 'wall_teal', 'wall_charcoal'].map(b => `bg-${b}`),
   ...['sticky_blue', 'underline_swipe', 'chalkboard', 'hormozi', 'mrbeast', 'neon_green', 'glass', 'red_box', 'black_box',
     'karaoke', 'highlighter', 'comic', 'fire', 'ice', 'gold', 'typewriter', 'sticker', 'chat_bubble', 'sticky_note',
-    'news_bar', 'pop_art', 'rgb_split', 'minimal'].map(c => `cap-${c}`),
+    'news_bar', 'pop_art', 'rgb_split', 'minimal', 'cine_red', 'cine_green', 'cine_blue'].map(c => `cap-${c}`),
 ]);
 
 const RealShot: React.FC<{ name: string; className?: string; style?: React.CSSProperties; focusY?: number }> = ({ name, className = '', style, focusY }) => (
