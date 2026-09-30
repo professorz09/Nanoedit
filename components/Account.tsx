@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { YouTubeState, connectYouTube, disconnectYouTube, getYouTube, isShortsConfigured } from '../services/shortsService';
 import { supabase } from '../services/supabase';
 import { getPlan } from '../services/plans';
 import { fetchPersonas, savePersona, deletePersona, Persona } from '../services/personasService';
@@ -117,6 +118,67 @@ const SOCIALS: { id: string; name: string; bg: string; icon: React.ReactNode }[]
   { id: 'tiktok', name: 'TikTok', bg: '#000000', icon: brand(<path d="M16.6 2h-3.3v13.2a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .8.1V9a6.3 6.3 0 1 0 5.4 6.2V8.6a8 8 0 0 0 4.7 1.5V6.8a4.7 4.7 0 0 1-4.7-4.8z" />) },
   { id: 'x', name: 'X', bg: '#000000', icon: brand(<path d="M17.8 2.5h3.4l-7.4 8.5 8.7 11.5h-6.8l-5.3-7-6.1 7H1l7.9-9L.6 2.5h7l4.8 6.4 5.4-6.4zm-1.2 18h1.9L7.5 4.4h-2l11.1 16.1z" />) },
 ];
+
+// 📤 the YouTube card: connect a channel (Google sign-in on the Shorts server), see which one, disconnect
+const YouTubeCard: React.FC<{ icon: React.ReactNode; bg: string }> = ({ icon, bg }) => {
+  const [yt, setYt] = useState<YouTubeState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    // back from Google: ?youtube=connected | error | cancelled
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get('youtube');
+    if (r) {
+      setNote(r === 'connected' ? 'YouTube connected.' : r === 'cancelled' ? 'YouTube was not connected.' : (q.get('why') || 'YouTube could not be connected. Please try again.'));
+      q.delete('youtube'); q.delete('why');
+      window.history.replaceState(null, '', window.location.pathname + (q.toString() ? `?${q}` : ''));
+    }
+    if (isShortsConfigured) getYouTube().then(setYt).catch(() => setYt(null));
+  }, []);
+  const connect = async () => {
+    setBusy(true); setNote(null);
+    try { window.location.href = await connectYouTube(); } catch (e: any) { setNote(e.message); setBusy(false); }
+  };
+  const disconnect = async () => {
+    setBusy(true); setNote(null);
+    try { await disconnectYouTube(); setYt(y => y && { ...y, connected: false, channel: null }); setAsking(false); }
+    catch (e: any) { setNote(e.message); } finally { setBusy(false); }
+  };
+  const ready = !!yt?.configured && !!yt?.allowed;
+  return (
+    <div className="thumb-glass rounded-2xl p-4 sm:col-span-2">
+      <div className="flex items-center gap-3">
+        <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white overflow-hidden" style={{ background: bg }}>
+          {yt?.channel?.thumb ? <img src={yt.channel.thumb} alt="" className="w-full h-full object-cover" /> : icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-black text-thumb-ink">YouTube</p>
+          <p className="text-xs text-thumb-sub truncate">
+            {yt?.connected ? <>Connected · <b className="text-thumb-ink">{yt.channel?.title || 'your channel'}</b></> : ready ? 'Post and schedule your Shorts' : yt?.configured ? 'Available on the Enterprise plan' : 'Coming soon'}
+          </p>
+        </div>
+        {yt?.connected ? (
+          <button type="button" disabled={busy} onClick={() => setAsking(true)}
+            className="shrink-0 px-3.5 py-2 rounded-xl bg-thumb-soft border border-thumb-line text-[12.5px] font-bold text-thumb-sub hover:text-thumb-red disabled:opacity-50">Disconnect</button>
+        ) : ready ? (
+          <button type="button" disabled={busy} onClick={connect}
+            className="shrink-0 px-4 py-2 rounded-xl text-white text-[13px] font-black disabled:opacity-60" style={{ background: '#FF0000' }}>{busy ? 'Opening…' : 'Connect'}</button>
+        ) : (
+          <span className="shrink-0 px-3 py-2 rounded-xl bg-thumb-soft border border-thumb-line text-[12px] font-bold text-thumb-sub">🔒 Soon</span>
+        )}
+      </div>
+      {asking && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-thumb-soft border border-thumb-line p-3">
+          <p className="text-[12.5px] text-thumb-ink flex-1 min-w-[180px]">Disconnect this channel? Scheduled Shorts already on YouTube stay scheduled.</p>
+          <button type="button" onClick={() => setAsking(false)} className="px-3 py-1.5 rounded-lg text-[12.5px] font-bold text-thumb-sub">Cancel</button>
+          <button type="button" disabled={busy} onClick={disconnect} className="px-3 py-1.5 rounded-lg bg-thumb-red text-white text-[12.5px] font-black">Disconnect</button>
+        </div>
+      )}
+      {note && <p className="mt-2 text-[12px] text-thumb-sub">{note}</p>}
+    </div>
+  );
+};
 
 const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
   const { user, profile, totalCredits, signOut } = useAuth();
@@ -276,9 +338,10 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
       {/* user-requested: the social accounts to post Shorts to — shown, but locked until posting is ready */}
       <div className="mt-6">
         <h2 className="text-sm font-black uppercase tracking-wider text-thumb-sub mb-1">Connected accounts</h2>
-        <p className="text-xs text-thumb-sub mb-3">Post your Shorts straight to your channels. Coming soon.</p>
+        <p className="text-xs text-thumb-sub mb-3">Post your Shorts straight to your channels. Instagram, TikTok and X are coming soon.</p>
         <div className="grid sm:grid-cols-2 gap-3">
-          {SOCIALS.map(sc => (
+          <YouTubeCard icon={SOCIALS[0].icon} bg={SOCIALS[0].bg} />
+          {SOCIALS.filter(sc => sc.id !== 'youtube').map(sc => (
             <div key={sc.id} aria-disabled="true" className="thumb-glass rounded-2xl p-4 flex items-center gap-3 opacity-80 select-none">
               <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white" style={{ background: sc.bg }}>{sc.icon}</span>
               <div className="min-w-0 flex-1">

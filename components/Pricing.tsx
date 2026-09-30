@@ -182,6 +182,28 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
           );
         })}
       </div>
+      {/* user-requested: an Enterprise plan, sold by contact — the only plan with posting to YouTube (and Instagram,
+          TikTok and X as they arrive); the Creator plan doesn't get it */}
+      <div className="max-w-5xl mx-auto mt-4 lg:mt-5 px-1">
+        <div className="price-card rounded-[30px] p-6 sm:p-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
+          <div className="md:w-[34%]">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h3 className="text-[30px] leading-none font-black uppercase tracking-[-0.02em] text-thumb-ink">Enterprise</h3>
+              <span className="price-badge">For teams</span>
+            </div>
+            <p className="text-[14px] text-thumb-sub mt-2.5">For agencies, brands and creators posting every day</p>
+            <p className="mt-4 text-[34px] leading-none font-black tracking-[-0.03em] text-thumb-ink">Custom</p>
+          </div>
+          <ul className="price-box rounded-2xl px-4 py-3.5 grid sm:grid-cols-2 gap-x-5 gap-y-2.5 flex-1">
+            {['📤 Post & schedule to YouTube', 'Instagram, TikTok & X (as they arrive)', 'Credits sized to your team', '⚡ Fastest priority generation', 'Your own brand styles & fonts', 'A direct line to us'].map(f => (
+              <li key={f} className="flex items-start gap-2.5 text-[14px] text-thumb-ink/90"><Tick /> {f}</li>
+            ))}
+          </ul>
+          <a href="mailto:support@rmind.com?subject=PodcastFlux%20Enterprise" className="price-cta-plain md:w-48 shrink-0 h-14 rounded-2xl font-bold text-[16px] flex items-center justify-center">
+            Contact us
+          </a>
+        </div>
+      </div>
       <p className="text-center text-[12px] text-thumb-sub mt-5">A Short that fails to render doesn't cost a credit.</p>
 
       {/* Add-on credit packs — paid plans only */}

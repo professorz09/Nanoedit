@@ -4,6 +4,7 @@ import { extractYouTubeId } from '../services/youtubeService';
 import {
   ShortClip, ShortsProject, createProject, deleteProject, fmtTime, getProject, isShortsConfigured, listProjects,
   quickProject, quickProjects, renderAll, renderShort, startDownload, trimShort,
+  YouTubeState, YouTubeUpload, getYouTube, postToYouTube,
 } from '../services/shortsService';
 import { DEFAULT_LOOK, LookBar, ShortsLook, fixBg, lookFromProject, lookToRequest } from './ShortsStylePicker';
 import { HOME_SHORTS } from './homeShorts';
@@ -340,7 +341,10 @@ const ShortCard: React.FC<{
   brollOk?: boolean;
   onRemake: (c: ShortClip, look: ShortsLook | null, remake: boolean) => void;
   tall?: boolean;  // the Made tab: a made Short plays upright (9:16); on All moments every card stays the YouTube preview
-}> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake, tall, brollOk = true }) => {
+  yt?: YouTubeState | null;  // 📤 YouTube posting (admins now, the Enterprise plan later)
+  onSchedule?: (c: ShortClip) => void;
+}> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake, tall, brollOk = true, yt = null, onSchedule }) => {
+  const upload: YouTubeUpload | undefined = yt?.uploads.find(u => u.short_id === clip.id);
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   // how long this make has been going, counted from when the card first saw it busy
@@ -564,19 +568,38 @@ const ShortCard: React.FC<{
               {clip.status === 'ready' ? 'Download' : clip.paid ? 'Make Short · free re-make' : `Make Short · ${cost} credit${cost === 1 ? '' : 's'}`}
             </button>
           )}
-          {/* user-requested: Schedule (post it later) and Edit — shown under Download, locked until they're built */}
+          {/* user-requested: Schedule (post to YouTube now or later) and Edit (locked until the editor is built) */}
           {clip.status === 'ready' && !busy && (
             <div className="grid grid-cols-2 gap-2">
-              {([['Schedule', <Ic.Calendar className="w-4 h-4" />], ['Edit', <Ic.Edit className="w-4 h-4" />]] as const).map(([label, icon]) => (
-                <button key={label} type="button" disabled aria-disabled="true" title="Coming soon"
-                  className="h-11 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub font-bold text-[13px] inline-flex items-center justify-center gap-1.5 cursor-not-allowed">
-                  {icon} {label}
-                  <span className="inline-flex items-center gap-0.5 ml-0.5 px-1.5 py-[1px] rounded-md bg-white/5 text-[10px] font-black">
-                    <Ic.Lock className="w-2.5 h-2.5" /> Soon
-                  </span>
+              {yt?.configured && yt.allowed ? (
+                <button type="button" onClick={() => onSchedule?.(clip)}
+                  className="h-11 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-ink font-bold text-[13px] inline-flex items-center justify-center gap-1.5 hover:border-thumb-red/40 transition-colors">
+                  <Ic.Calendar className="w-4 h-4" /> Schedule
                 </button>
-              ))}
+              ) : (
+                <button type="button" onClick={() => onSchedule?.(clip)} title="Posting to YouTube is on the Enterprise plan"
+                  className="h-11 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub font-bold text-[13px] inline-flex items-center justify-center gap-1.5 hover:border-thumb-red/40 transition-colors">
+                  <Ic.Calendar className="w-4 h-4" /> Schedule
+                  <span className="inline-flex items-center gap-0.5 ml-0.5 px-1.5 py-[1px] rounded-md bg-white/5 text-[10px] font-black"><Ic.Lock className="w-2.5 h-2.5" /> Enterprise</span>
+                </button>
+              )}
+              <button type="button" disabled aria-disabled="true" title="Coming soon"
+                className="h-11 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub font-bold text-[13px] inline-flex items-center justify-center gap-1.5 cursor-not-allowed">
+                <Ic.Edit className="w-4 h-4" /> Edit
+                <span className="inline-flex items-center gap-0.5 ml-0.5 px-1.5 py-[1px] rounded-md bg-white/5 text-[10px] font-black"><Ic.Lock className="w-2.5 h-2.5" /> Soon</span>
+              </button>
             </div>
+          )}
+          {upload && (
+            <p className={`text-center text-[12px] ${upload.status === 'failed' ? 'text-thumb-red' : 'text-thumb-sub'}`}>
+              {upload.status === 'queued' || upload.status === 'uploading'
+                ? <>📤 Uploading to YouTube… <b className="text-thumb-ink tabular-nums">{upload.progress}%</b></>
+                : upload.status === 'scheduled'
+                  ? <>📅 Scheduled for <b className="text-thumb-ink">{new Date((upload.publish_at || 0) * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</b>{upload.url && <> · <a href={upload.url} target="_blank" rel="noreferrer" className="underline">view</a></>}</>
+                  : upload.status === 'posted'
+                    ? <>✅ Posted on YouTube{upload.url && <> · <a href={upload.url} target="_blank" rel="noreferrer" className="underline">view</a></>}</>
+                    : <>⚠️ {upload.error || 'The YouTube upload failed.'}</>}
+            </p>
           )}
           {/* Regenerate lives on All moments; the Made tab is for watching and downloading */}
           {remakeable && !busy && !tall && (
@@ -591,6 +614,97 @@ const ShortCard: React.FC<{
             </p>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// 📤 post a made Short to YouTube — now, or at a set time (it goes up private and YouTube publishes it then)
+const pad = (n: number) => String(n).padStart(2, '0');
+const localInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const ScheduleSheet: React.FC<{ clip: ShortClip; yt: YouTubeState | null; onClose: () => void; onPosted: () => void; onPricing: () => void }> =
+  ({ clip, yt, onClose, onPosted, onPricing }) => {
+  const [title, setTitle] = useState(() => { const t = (clip.title || '').trim(); return (/#shorts/i.test(t) ? t : `${t} #Shorts`).slice(0, 100); });
+  const [desc, setDesc] = useState(clip.description || '');
+  const [privacy, setPrivacy] = useState<'public' | 'unlisted' | 'private'>('public');
+  const [when, setWhen] = useState<'now' | 'later'>('later');  // (a scheduled Short goes public at its time)
+  const [at, setAt] = useState(() => { const d = new Date(Date.now() + 3600e3); d.setMinutes(0, 0, 0); return localInput(d); });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const allowed = !!(yt?.configured && yt.allowed);
+  const submit = async () => {
+    setErr(null);
+    const publishAt = when === 'later' ? new Date(at).getTime() / 1000 : null;
+    if (publishAt !== null && (!Number.isFinite(publishAt) || publishAt < Date.now() / 1000 + 15 * 60)) { setErr('Pick a time at least 15 minutes from now.'); return; }
+    setBusy(true);
+    try { await postToYouTube(clip.id, { title, description: desc, privacy, publish_at: publishAt }); onPosted(); }
+    catch (e: any) { setErr(e.message); setBusy(false); }
+  };
+  const field = 'w-full rounded-xl bg-thumb-soft border border-thumb-line px-3 py-2.5 text-[14px] text-thumb-ink outline-none focus:border-thumb-red/60';
+  const pill = (on: boolean) => `h-10 rounded-xl text-[13px] font-bold border transition-colors ${on ? 'bg-thumb-red border-thumb-red text-white' : 'bg-thumb-soft border-thumb-line text-thumb-sub'}`;
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 bg-black/75 backdrop-blur-sm" onClick={() => !busy && onClose()}>
+      <div className="w-full max-w-md max-h-[88vh] overflow-y-auto rounded-3xl p-5 bg-[#141417] border border-white/10 animate-fade-in-up" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#FF0000' }}>
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z" /></svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[17px] font-black text-thumb-ink">Post to YouTube</p>
+            <p className="text-[12px] text-thumb-sub truncate">{yt?.connected ? <>to <b className="text-thumb-ink">{yt.channel?.title || 'your channel'}</b></> : 'Post now or schedule it'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="w-9 h-9 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub">✕</button>
+        </div>
+
+        {!allowed ? (
+          <div className="mt-5 rounded-2xl bg-thumb-soft border border-thumb-line p-4">
+            <p className="text-[14px] font-black text-thumb-ink">Posting and scheduling is on the Enterprise plan</p>
+            <p className="text-[12.5px] text-thumb-sub mt-1 leading-snug">Post your Shorts straight to YouTube — now or at the best time — plus Instagram, TikTok and X as they arrive. Contact us to get Enterprise.</p>
+            <button type="button" onClick={() => { onClose(); onPricing(); }} className="thumb-btn mt-3 w-full h-11 rounded-xl text-white font-black text-[14px]">See Enterprise</button>
+          </div>
+        ) : !yt?.connected ? (
+          <div className="mt-5 rounded-2xl bg-thumb-soft border border-thumb-line p-4">
+            <p className="text-[14px] font-black text-thumb-ink">Connect your YouTube channel first</p>
+            <p className="text-[12.5px] text-thumb-sub mt-1">It's a one-time step in your profile.</p>
+            <a href="/account" className="thumb-btn mt-3 w-full h-11 rounded-xl text-white font-black text-[14px] inline-flex items-center justify-center">Go to profile</a>
+          </div>
+        ) : (
+          <div className="mt-5 space-y-3.5">
+            <label className="block">
+              <span className="text-[12px] font-bold text-thumb-sub">Title <span className="opacity-60">({title.length}/100)</span></span>
+              <input value={title} maxLength={100} onChange={e => setTitle(e.target.value)} className={`${field} mt-1`} />
+            </label>
+            <label className="block">
+              <span className="text-[12px] font-bold text-thumb-sub">Description</span>
+              <textarea value={desc} rows={3} maxLength={4900} onChange={e => setDesc(e.target.value)} className={`${field} mt-1 resize-none`} />
+            </label>
+            {when === 'now' && <div>
+              <span className="text-[12px] font-bold text-thumb-sub">Who can see it</span>
+              <div className="mt-1 grid grid-cols-3 gap-2">
+                {(['public', 'unlisted', 'private'] as const).map(p => (
+                  <button key={p} type="button" onClick={() => setPrivacy(p)} className={pill(privacy === p)}>{p[0].toUpperCase() + p.slice(1)}</button>
+                ))}
+              </div>
+            </div>}
+            <div>
+              <span className="text-[12px] font-bold text-thumb-sub">When</span>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setWhen('now')} className={pill(when === 'now')}>Post now</button>
+                <button type="button" onClick={() => setWhen('later')} className={pill(when === 'later')}>Schedule</button>
+              </div>
+              {when === 'later' && (
+                <>
+                  <input type="datetime-local" value={at} min={localInput(new Date(Date.now() + 15 * 60e3))} onChange={e => setAt(e.target.value)} className={`${field} mt-2 [color-scheme:dark]`} />
+                  <p className="text-[11.5px] text-thumb-sub mt-1">It uploads now as private, and YouTube makes it public at this time.</p>
+                </>
+              )}
+            </div>
+            {err && <p className="text-[12.5px] text-thumb-red">{err}</p>}
+            <button type="button" disabled={busy || !title.trim()} onClick={submit} className="thumb-btn w-full h-12 rounded-2xl text-white font-black text-[15px] disabled:opacity-60">
+              {busy ? 'Starting…' : when === 'now' ? 'Post to YouTube' : 'Schedule'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -839,6 +953,18 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
       setBusy(false);
     }
   };
+
+  // 📤 YouTube posting: the user's channel, their uploads (polled while one is going up) and the Schedule sheet
+  const [yt, setYt] = useState<YouTubeState | null>(null);
+  const loadYt = useCallback(() => { if (isShortsConfigured && user) getYouTube().then(setYt).catch(() => {}); }, [user]);
+  useEffect(() => { loadYt(); }, [loadYt]);
+  const ytBusy = !!yt?.uploads.some(u => u.status === 'queued' || u.status === 'uploading');
+  useEffect(() => {
+    if (!ytBusy) return;
+    const t = setInterval(loadYt, 4000);
+    return () => clearInterval(t);
+  }, [ytBusy, loadYt]);
+  const [sched, setSched] = useState<ShortClip | null>(null);
 
   // user-requested: a project's ⋯ menu — find new moments again (a new project, same link and look) or delete
   // it; both ask first, so a stray tap does nothing
@@ -1101,7 +1227,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
                 <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
                   {list.map(s => (
                     <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
-                      projectLook={lookFromProject(project)} onRemake={onRemake} tall={tab === 'made'} brollOk={brollOk} />
+                      projectLook={lookFromProject(project)} onRemake={onRemake} tall={tab === 'made'} brollOk={brollOk}
+                      yt={yt} onSchedule={setSched} />
                   ))}
                 </div>
                 </>
@@ -1218,6 +1345,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
       </div>
       {openId == null && (!signedIn || (projects && projects.length === 0)) && <GettingStarted />}
       {toast}
+      {sched && <ScheduleSheet clip={sched} yt={yt} onClose={() => setSched(null)} onPosted={() => { setSched(null); loadYt(); }} onPricing={onBuyCredits} />}
       {ask && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => !asking && setAsk(null)}>
           <div className="w-full max-w-sm rounded-3xl p-5 bg-[#141417] border border-white/10 animate-fade-in-up" onClick={e => e.stopPropagation()}>

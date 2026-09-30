@@ -155,3 +155,29 @@ export const fmtTime = (sec: number): string => {
   const ss = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 };
+
+// 📤 YouTube posting (shortsbot/youtube.py): connect a channel once, then post a made Short now or at a set time
+export interface YouTubeUpload {
+  id: number;
+  short_id: number;
+  title: string;
+  privacy: 'public' | 'unlisted' | 'private';
+  publish_at: number | null;
+  status: 'queued' | 'uploading' | 'posted' | 'scheduled' | 'failed';
+  progress: number;
+  error: string | null;
+  url: string | null;
+  created_at: number;
+}
+export interface YouTubeState {
+  configured: boolean;
+  connected: boolean;
+  allowed: boolean; // admins now; the Creator plan later
+  channel: { title: string | null; thumb: string | null } | null;
+  uploads: YouTubeUpload[];
+}
+export const getYouTube = () => call<YouTubeState>('/api/youtube');
+export const connectYouTube = () => call<{ url: string }>('/api/youtube/connect', {}).then(r => r.url);
+export const disconnectYouTube = () => call<{ connected: boolean }>('/api/youtube/disconnect', {});
+export const postToYouTube = (shortId: number, p: { title: string; description: string; privacy: string; publish_at: number | null }) =>
+  call<{ upload_id: number }>(`/api/shorts/${shortId}/youtube`, p);
