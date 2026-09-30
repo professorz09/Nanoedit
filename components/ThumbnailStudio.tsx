@@ -1854,7 +1854,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                 <div className="space-y-4 animate-fade-in-up">
                   <div className="space-y-2.5">
                     <label className="thumb-label">YouTube video link</label>
-                    <div className="flex items-center gap-3 bg-thumb-soft border border-thumb-line rounded-2xl px-4 transition-all focus-within:border-thumb-red/50 focus-within:ring-4 focus-within:ring-thumb-red/10">
+                    <div className="flex items-center gap-3 thumb-field rounded-2xl px-4">
                       <I.Youtube className="w-5 h-5 text-thumb-red shrink-0" />
                       <input
                         value={youtubeUrl}
@@ -1888,7 +1888,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                             onChange={e => setPromptText(e.target.value)}
                             rows={3}
                             placeholder="e.g. Keep it bold and cinematic, red/black colors, show a shocked face and the text 'GONE WRONG'…"
-                            className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                            className="thumb-field w-full rounded-2xl px-4 py-3.5 outline-none text-[15px] leading-relaxed placeholder-thumb-sub/50 resize-none no-scrollbar"
                           />
                         </div>
                         <div className="space-y-2">
@@ -2068,8 +2068,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                       value={promptText}
                       onChange={e => setPromptText(e.target.value)}
                       rows={4}
-                      placeholder="Tell us about your video and the thumbnail you want — e.g. A gaming video about a crazy comeback; I want a shocked gamer with a glowing headset, explosion behind, neon RGB lighting, and the text 'INSANE COMEBACK'."
-                      className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                      placeholder="e.g. A shocked gamer with a glowing headset, an explosion behind, neon lights and the text 'INSANE COMEBACK'"
+                      className="thumb-field w-full rounded-2xl px-4 py-3.5 outline-none text-[15px] leading-relaxed placeholder-thumb-sub/50 resize-none no-scrollbar"
                     />
                   </div>
 
@@ -2138,11 +2138,14 @@ const ThumbnailStudio: React.FC<Props> = ({
                     onClick={triggerUpload}
                     onDragOver={e => e.preventDefault()}
                     onDrop={e => { e.preventDefault(); dropFiles(Array.from(e.dataTransfer.files)); }}
-                    className="border-2 border-dashed border-white/12 rounded-2xl p-7 flex flex-col items-center justify-center gap-2.5 text-thumb-sub hover:border-thumb-red hover:text-thumb-red cursor-pointer transition-all bg-black/20"
+                    className="thumb-drop h-[76px] rounded-2xl px-3.5 flex items-center gap-3.5 cursor-pointer"
                   >
-                    <div className="w-11 h-11 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center"><I.Upload className="w-5 h-5" /></div>
-                    <span className="text-sm font-bold">Click or drag to upload</span>
-                    <span className="text-xs text-thumb-sub/80">Up to 4 images · PNG or JPG</span>
+                    {/* compact (user-requested: the big dashed box was too big) */}
+                    <div className="w-12 h-12 shrink-0 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center"><I.Upload className="w-5 h-5" /></div>
+                    <div className="min-w-0 text-left">
+                      <span className="block text-[14px] font-bold text-thumb-ink">Tap to upload a photo</span>
+                      <span className="block text-[12px] text-thumb-sub">Up to 4 · PNG or JPG · or drop here</span>
+                    </div>
                   </div>
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
 
@@ -2197,7 +2200,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       onChange={e => setPromptText(e.target.value)}
                       rows={2}
                       placeholder="e.g. 'gaming video, shocked player, explosion behind, neon colors, text: INSANE COMEBACK'"
-                      className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-3.5 outline-none text-sm placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10 resize-none"
+                      className="thumb-field w-full rounded-2xl px-4 py-3.5 outline-none text-[15px] leading-relaxed placeholder-thumb-sub/50 resize-none no-scrollbar"
                     />
                   </div>
 
@@ -2317,8 +2320,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
-                    placeholder={mode === 'templates' ? "e.g. A gaming video about a crazy comeback" : "e.g. Replace the face with my photo · change the title to 'MODI JI'"}
-                    className="w-full bg-thumb-soft border border-thumb-line rounded-2xl px-4 py-4 outline-none text-[15px] placeholder-thumb-sub/50 transition-all focus:border-thumb-red/50 focus:ring-4 focus:ring-thumb-red/10"
+                    placeholder={mode === 'templates' ? "e.g. A gaming video about a crazy comeback" : "e.g. Put my face in · title 'MODI JI'"}
+                    className="thumb-field w-full h-[52px] rounded-2xl px-4 outline-none text-[15px] placeholder-thumb-sub/50"
                   />
                 </div>
               )}
