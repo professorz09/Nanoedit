@@ -214,7 +214,7 @@ const ShortCard: React.FC<{
   onDownload: (c: ShortClip) => void;
   cost: number;
   projectLook: ShortsLook;
-  onRemake: (c: ShortClip, look: ShortsLook) => void;
+  onRemake: (c: ShortClip, look: ShortsLook | null) => void;
 }> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake }) => {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -386,6 +386,17 @@ const ShortCard: React.FC<{
               </button>
             )}
           </div>
+          {/* user-requested: a made Short can simply be made again (same moment, same style) — free, it's paid */}
+          {clip.status === 'ready' && clip.paid && !customLook && (
+            <div className="pt-2.5 mt-1 border-t border-thumb-line space-y-2">
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Remake</span>
+              <button type="button" disabled={busy} onClick={() => onRemake(clip, null)}
+                className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-1.5">
+                <Ic.Reset className="w-3.5 h-3.5" /> Make this Short again · free
+              </button>
+              <p className="text-[11px] text-thumb-sub text-center">Not happy with it? It's made again from the start, in the same style.</p>
+            </div>
+          )}
           </div>
           )}
         </div>
@@ -707,13 +718,18 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     }
   };
 
-  const onRemake = async (clip: ShortClip, l: ShortsLook) => {
+  // l: the one-off style to make it in; null: make it again as it is (a made Short's "Remake")
+  const onRemake = async (clip: ShortClip, l: ShortsLook | null) => {
     setNote(null);
     if (configured && !clip.paid && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
     try {
       await flushTrim(clip);
-      const r = lookToRequest(l);
-      await renderShort(clip.id, { style: r.style, subtitles: r.subtitles, bg: r.bg, caption_look: r.caption_look, fx: r.fx, sfx: r.sfx, fit: r.fit });
+      if (l) {
+        const r = lookToRequest(l);
+        await renderShort(clip.id, { style: r.style, subtitles: r.subtitles, bg: r.bg, caption_look: r.caption_look, fx: r.fx, sfx: r.sfx, fit: r.fit });
+      } else {
+        await renderShort(clip.id, undefined, true);
+      }
       updateClip(clip.id, { status: 'queued', stage: 'In line', error: null });
       refreshProfile();
       poke();

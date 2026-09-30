@@ -85,8 +85,9 @@ export const trimShort = (id: number, start: number, end: number) =>
 // look: a one-off style for this make only (the Short's "Video style") — it's made again in it even when already
 // made; nothing is saved, so its next make is the project's style again
 export interface OneOffLook { style: string; subtitles: string; bg: string; caption_look: string; fx: string[]; sfx: boolean; fit: string }
-export const renderShort = (id: number, look?: OneOffLook) =>
-  call<{ queued: number[] }>(`/api/shorts/${id}/render`, look ? { look } : {});
+/** look: a one-off style for this make; remake: make an already made Short again as it is */
+export const renderShort = (id: number, look?: OneOffLook, remake = false) =>
+  call<{ queued: number[] }>(`/api/shorts/${id}/render`, { ...(look ? { look } : {}), ...(remake ? { remake: true } : {}) });
 export const renderAll = (projectId: number) => call<{ queued: number[] }>(`/api/projects/${projectId}/render_all`, {});
 
 // user-requested ("user ko turant kholne me bhi asani hogi"): the projects and their Shorts are kept in Supabase
