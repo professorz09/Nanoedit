@@ -221,10 +221,32 @@ const TABS: { id: ThumbInputMode; label: string; icon: (p: any) => React.ReactEl
 ];
 
 const TESTIMONIALS = [
-  { name: 'Rico Griek', loc: 'Netherlands', avatar: 'https://randomuser.me/api/portraits/men/32.jpg', title: 'Thumbnails that finally match my vision', body: 'It was always hard to make thumbnails that fit what I pictured. Now I paste a link, pick a style, and get click-worthy results in seconds.' },
-  { name: 'Sidharth Das', loc: 'United States', avatar: 'https://randomuser.me/api/portraits/men/75.jpg', title: 'A time & money saver for a small YouTuber', body: 'A total godsend. I\'ve used it for a month now and the results are super impressive — it saves me the whole design headache.' },
-  { name: 'Dan Kieft', loc: 'United Kingdom', avatar: 'https://randomuser.me/api/portraits/men/18.jpg', title: 'Great for thumbnail ideation', body: 'Even when I want to design myself, it gives me strong directions fast. My CTR is noticeably up since I started.' },
+  { name: 'Rico Griek', loc: 'Netherlands', title: 'Thumbnails that finally match my vision', body: 'It was always hard to make thumbnails that fit what I pictured. Now I paste a link, pick a style, and get click-worthy results in seconds.' },
+  { name: 'Sidharth Das', loc: 'United States', title: 'A time & money saver for a small YouTuber', body: 'A total godsend. I\'ve used it for a month now and the results are super impressive — it saves me the whole design headache.' },
+  { name: 'Dan Kieft', loc: 'United Kingdom', title: 'Great for thumbnail ideation', body: 'Even when I want to design myself, it gives me strong directions fast. My CTR is noticeably up since I started.' },
 ];
+
+// Creators' own YouTube videos about PodcastFlux, shown between the reviews: { id: the YouTube video id,
+// title, channel }. Only real videos about this app.
+const VIDEO_REVIEWS: { id: string; title: string; channel: string }[] = [];
+
+// the reviews with a video after every second one, in order
+function wallItems() {
+  const items: ({ kind: 'review'; t: typeof TESTIMONIALS[number] } | { kind: 'video'; v: typeof VIDEO_REVIEWS[number] })[] = [];
+  let v = 0;
+  TESTIMONIALS.forEach((t, i) => {
+    items.push({ kind: 'review', t });
+    if (i % 2 === 1 && v < VIDEO_REVIEWS.length) items.push({ kind: 'video', v: VIDEO_REVIEWS[v++] });
+  });
+  while (v < VIDEO_REVIEWS.length) items.push({ kind: 'video', v: VIDEO_REVIEWS[v++] });
+  return items;
+}
+
+const Initials = ({ name }: { name: string }) => (
+  <span className="w-12 h-12 rounded-full bg-thumb-card ring-2 ring-thumb-red/40 flex items-center justify-center font-black text-sm shrink-0">
+    {name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+  </span>
+);
 
 const FAQS = [
   { q: "What is PodcastFlux?", a: "PodcastFlux is an AI Shorts maker: it turns long YouTube videos and podcasts into ready-to-post YouTube Shorts, TikToks and Instagram Reels. Paste a link and the AI finds the best clips, adds animated captions and effects, and writes the title — no editing app needed." },
@@ -3110,36 +3132,54 @@ const ThumbnailStudio: React.FC<Props> = ({
           </div>
         </section>
 
-        {/* ── Testimonials ── */}
-        <section className="pb-6">
-          <p className="text-center text-thumb-green font-black tracking-widest text-xs uppercase">Loved by creators</p>
-          <h2 className="text-center text-3xl sm:text-4xl font-black mt-3 mb-10">What creators are saying</h2>
-          <div className="grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto px-1">
-            {TESTIMONIALS.map(t => (
-              <div key={t.name} className="thumb-glass thumb-float-green rounded-3xl p-6 flex flex-col">
-                {/* red stars + green verified */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex gap-0.5 text-thumb-red">{[0,1,2,3,4].map(k => <I.Star key={k} className="w-4 h-4" />)}</div>
-                  <span className="flex items-center gap-1 text-[11px] font-bold text-thumb-green bg-thumb-greenSoft border border-thumb-green/25 rounded-full px-2 py-0.5">
-                    <I.Check className="w-3.5 h-3.5" /> Verified
-                  </span>
-                </div>
-                <h3 className="font-black text-lg leading-snug mb-2">{t.title}</h3>
-                <p className="text-sm text-thumb-sub leading-relaxed mb-5 flex-1">{t.body}</p>
-                <div className="flex items-center gap-3 pt-4 border-t border-white/10">
-                  <img
-                    src={t.avatar}
-                    alt={t.name}
-                    loading="lazy"
-                    className="w-11 h-11 rounded-full object-cover ring-2 ring-thumb-green/40 shrink-0"
-                  />
-                  <div>
-                    <div className="font-bold text-sm">{t.name}</div>
-                    <div className="text-xs text-thumb-sub">{t.loc}</div>
+        {/* ── Testimonials: review cards (and creators' YouTube reviews, when there are some) in one masonry wall,
+             a soft red glow rising from the bottom ── */}
+        <section className="relative pb-10 pt-2">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-3/4 rounded-[40px] bg-gradient-to-t from-thumb-red/20 via-thumb-red/5 to-transparent blur-2xl" />
+          <div className="relative">
+            <p className="text-center text-thumb-green font-black tracking-widest text-xs uppercase">Loved by creators</p>
+            <h2 className="text-center text-3xl sm:text-4xl font-black mt-3 mb-10">What creators are saying</h2>
+            <div className="max-w-5xl mx-auto px-1 columns-1 sm:columns-2 lg:columns-3 gap-6">
+              {wallItems().map(item => item.kind === 'video' ? (
+                <a
+                  key={item.v.id}
+                  href={`https://www.youtube.com/watch?v=${item.v.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="thumb-glass thumb-float-green block rounded-[28px] p-3 mb-6 break-inside-avoid group"
+                >
+                  <div className="relative rounded-2xl overflow-hidden aspect-video bg-thumb-soft">
+                    <img src={`https://i.ytimg.com/vi/${item.v.id}/hqdefault.jpg`} alt={item.v.title} loading="lazy" className="w-full h-full object-cover" />
+                    <span className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-black/60 group-hover:bg-thumb-red flex items-center justify-center transition-colors">
+                      <I.Play className="w-6 h-6 text-white translate-x-0.5" />
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-3 px-2 pt-4 pb-2">
+                    <Initials name={item.v.channel} />
+                    <div className="min-w-0">
+                      <div className="font-bold leading-snug">{item.v.title}</div>
+                      <div className="text-xs text-thumb-sub mt-0.5">{item.v.channel}</div>
+                    </div>
+                  </div>
+                </a>
+              ) : (
+                <div key={item.t.name} className="thumb-glass thumb-float-green rounded-[28px] p-6 mb-6 break-inside-avoid">
+                  <div className="flex gap-1 text-thumb-red mb-4">{[0,1,2,3,4].map(k => <I.Star key={k} className="w-5 h-5" />)}</div>
+                  <h3 className="font-black text-lg leading-snug mb-3">{item.t.title}</h3>
+                  <p className="text-sm text-thumb-sub leading-relaxed mb-6">{item.t.body}</p>
+                  <div className="flex items-center gap-3">
+                    <Initials name={item.t.name} />
+                    <div>
+                      <div className="font-bold">{item.t.name}</div>
+                      <div className="flex items-center gap-1 text-xs text-thumb-sub mt-0.5">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>
+                        {item.t.loc}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 
