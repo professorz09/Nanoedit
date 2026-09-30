@@ -152,6 +152,57 @@ const projectFromUrl = (): number | null => {
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
+// user-requested: while a Short is being made, its steps show right on its picture — like the thumbnail
+// maker's canvas while an image is made — with its place in line while it waits; a tap on it plays the
+// YouTube preview instead, and the chip on that player brings the steps back
+const MAKE_STEPS = ['In line', 'Getting the video', 'Adding captions', 'Rendering', 'Finishing up'];
+
+const makeSteps = (clip: ShortClip) => {
+  const steps = clip.stage === 'Adding AI visuals' ? [...MAKE_STEPS.slice(0, 2), 'Adding AI visuals', ...MAKE_STEPS.slice(2)] : MAKE_STEPS;
+  const found = steps.indexOf(clip.stage || '');
+  const at = clip.status === 'queued' ? 0 : found > 0 ? found : steps.indexOf('Rendering');
+  return { steps, at };
+};
+
+const MakingOverlay: React.FC<{ clip: ShortClip; picture?: string; elapsed: number; onPreview: () => void }> = ({ clip, picture, elapsed, onPreview }) => {
+  const { steps, at } = makeSteps(clip);
+  const waiting = clip.status === 'queued';
+  return (
+    <button type="button" onClick={onPreview} className="group absolute inset-0 w-full h-full text-left" aria-label={`Watch the preview of ${clip.title}`}>
+      {picture && <img src={picture} alt="" className="absolute inset-0 w-full h-full object-cover scale-110 blur-[6px] opacity-60" />}
+      <span className="absolute inset-0 bg-black/60" />
+      <span className="absolute inset-0 overflow-hidden"><span className="finding-scan absolute top-0 bottom-0 left-0 w-[12%] bg-gradient-to-r from-transparent via-thumb-red/35 to-transparent" /></span>
+      <span className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-4">
+        <span className="flex items-center gap-2">
+          <span className="w-5 h-5 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
+          {waiting && clip.position
+            ? <span className="text-white font-black text-[15px]">#{clip.position} in line</span>
+            : <span className="text-thumb-red font-mono text-[13px] font-bold">{fmtTime(elapsed)}</span>}
+        </span>
+        <span className="space-y-1 max-w-[220px] w-full">
+          {steps.map((s, i) => {
+            const done = i < at;
+            const active = i === at;
+            return (
+              <span key={s} className={`flex items-center gap-2 text-[12px] ${done ? 'text-white/60' : active ? 'text-white font-bold' : 'text-white/30'}`}>
+                <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+                  {done ? <Ic.Check className="w-4 h-4 text-thumb-red" />
+                    : active ? <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
+                    : <span className="w-2 h-2 bg-white/25 rounded-full" />}
+                </span>
+                {s === 'In line' && waiting && clip.position ? `In line — ${clip.position === 1 ? 'next up' : `${clip.position - 1} ahead`}` : s}
+              </span>
+            );
+          })}
+        </span>
+        <span className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-white/80 bg-white/10 border border-white/15 rounded-full px-2.5 py-1 group-hover:bg-white/20 transition-colors">
+          <Ic.Play className="w-3 h-3" /> Tap to watch the preview
+        </span>
+      </span>
+    </button>
+  );
+};
+
 // user-reported: two Shorts could play at once — starting one (a YouTube preview or a made Short) now stops
 // every other card's
 const PLAY_EVENT = 'pf-short-play';
@@ -167,6 +218,8 @@ const ShortCard: React.FC<{
 }> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake }) => {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // how long this make has been going, counted from when the card first saw it busy
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const onOtherPlay = (e: Event) => {
       if ((e as CustomEvent<number>).detail === clip.id) return;
@@ -189,6 +242,12 @@ const ShortCard: React.FC<{
   const ytThumb = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : undefined;
   const picture = clip.frame && frameFailed !== clip.frame ? clip.frame : ytThumb;
   const busy = clip.status === 'queued' || clip.status === 'rendering';
+  useEffect(() => {
+    if (!busy) { setElapsed(0); return; }
+    const since = Date.now();
+    const t = setInterval(() => setElapsed((Date.now() - since) / 1000), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
   const len = clip.end - clip.start;
   const trimmed = clip.start !== clip.orig_start || clip.end !== clip.orig_end;
   const nudge = (which: 'start' | 'end', d: number) => {
@@ -223,7 +282,18 @@ const ShortCard: React.FC<{
             className="absolute inset-0 w-full h-full object-contain bg-black"
           />
         ) : playing && videoId ? (
-          <ClipPlayer key={`${clip.start}-${clip.end}`} videoId={videoId} start={clip.start} end={clip.end} onPlay={() => announcePlay(clip.id)} />
+          <>
+            <ClipPlayer key={`${clip.start}-${clip.end}`} videoId={videoId} start={clip.start} end={clip.end} onPlay={() => announcePlay(clip.id)} />
+            {busy && (
+              <button type="button" onClick={() => setPlaying(false)}
+                className="absolute top-2.5 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1.5 bg-black/75 backdrop-blur-md border border-white/15 text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+                <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
+                {clip.status === 'queued' && clip.position ? `#${clip.position} in line` : clip.stage || 'Making'} · see progress
+              </button>
+            )}
+          </>
+        ) : busy ? (
+          <MakingOverlay clip={clip} picture={picture} elapsed={elapsed} onPreview={() => { announcePlay(clip.id); setPlaying(true); }} />
         ) : (
           <button type="button" onClick={() => { announcePlay(clip.id); setPlaying(true); }} className="group absolute inset-0 w-full h-full" aria-label={`Preview ${clip.title}`}>
             {picture && <img key={picture} src={picture} alt="" className="w-full h-full object-cover opacity-90" loading="lazy"
@@ -325,8 +395,9 @@ const ShortCard: React.FC<{
             <p className="text-[12px] bg-thumb-redSoft text-thumb-red border border-thumb-red/20 rounded-xl px-3 py-2">{clip.error}</p>
           )}
           {busy ? (
-            <div className="relative w-full h-[52px] rounded-2xl overflow-hidden thumb-skeleton flex items-center justify-center">
-              <span className="relative text-[14px] font-black text-thumb-ink">{clip.stage || 'Making your Short'}…</span>
+            <div className="w-full h-[52px] rounded-2xl bg-thumb-soft border border-thumb-line flex items-center justify-center gap-2 text-[13px] font-bold text-thumb-sub">
+              <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
+              Making your Short — progress is on the video
             </div>
           ) : (
             <button type="button" onClick={() => onDownload(clip)}
