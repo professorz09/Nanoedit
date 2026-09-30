@@ -501,7 +501,7 @@ const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?
   );
 };
 
-// brollOk: the user's plan has 🔬 AI B-roll (the Creator plan); onUpgrade: where a locked B-roll tap goes;
+// brollOk: the user's plan has the Creator extras (🔬 AI B-roll, 🎨 AI stickers); onUpgrade: where a locked tap goes;
 // perShort: one Short's own style (ShortsMaker's "Video style") — only the look itself: no Shorts count, no
 // length, and no AI B-roll (that stays the project's, it has its own price)
 export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void; thumb?: string | null; brollOk?: boolean; onUpgrade?: () => void; perShort?: boolean }> =
@@ -549,7 +549,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           icon={<span className="block w-4 h-4 rounded-full ring-1 ring-black/15" style={bg.css} />} />
       : <Chip key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} icon={ICONS.fit} />,
     <Chip key="caption" panel="caption" label="Subtitles" value={cap.label} icon={ICONS.caption} />,
-    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = fxSwitches.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length + MOTION_FX.length - (look.fxOff || []).filter(k => MOTION_FX.includes(k)).length; return n ? `${n} on` : 'Basic'; })()} icon={ICONS.fx} />] : []),
+    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = fxSwitches.filter(f => look[f.key] && ((f.key !== 'broll' && f.key !== 'stickers') || brollOk)).length + MOTION_FX.length - (look.fxOff || []).filter(k => MOTION_FX.includes(k)).length; return n ? `${n} on` : 'Basic'; })()} icon={ICONS.fx} />] : []),
     ...(perShort ? [] : [
       <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
       <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
@@ -628,7 +628,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           {/* clean rows — an icon, what it does, and the app's own switch; no photos (user-requested) */}
           <div className="flex flex-col gap-2">
             {fxSwitches.map(f => {
-              const locked = f.key === 'broll' && !brollOk;
+              const locked = (f.key === 'broll' || f.key === 'stickers') && !brollOk;  // both are Creator-plan extras
               const on = look[f.key] && !locked;
               const toggle = () => (locked ? onUpgrade?.() : set({ [f.key]: !look[f.key] } as Partial<ShortsLook>));
               return (
@@ -638,9 +638,9 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] font-bold text-thumb-ink leading-tight flex items-center gap-1.5 flex-wrap">
                       {f.label}
-                      {f.key === 'broll' && (
+                      {(f.key === 'broll' || f.key === 'stickers') && (
                         <span className="px-1.5 py-[1px] rounded-md bg-thumb-card border border-thumb-line text-[10px] font-black text-thumb-sub">
-                          {locked ? '🔒 Creator plan' : 'Creator · +1 credit'}
+                          {locked ? '🔒 Creator plan' : f.key === 'broll' ? 'Creator · +1 credit' : 'Creator'}
                         </span>
                       )}
                     </p>

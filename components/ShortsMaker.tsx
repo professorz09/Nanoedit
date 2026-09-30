@@ -332,9 +332,10 @@ const ShortCard: React.FC<{
   onDownload: (c: ShortClip) => void;
   cost: number;
   projectLook: ShortsLook;
+  brollOk?: boolean;
   onRemake: (c: ShortClip, look: ShortsLook | null, remake: boolean) => void;
   tall?: boolean;  // the Made tab: a made Short plays upright (9:16); on All moments every card stays the YouTube preview
-}> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake, tall }) => {
+}> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake, tall, brollOk = true }) => {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   // how long this make has been going, counted from when the card first saw it busy
@@ -511,7 +512,7 @@ const ShortCard: React.FC<{
                 : <span className="text-[12px] font-bold text-thumb-sub">{remakeable ? 'Style: same as project' : 'Same as project'}</span>}
             </div>
             {customLook
-              ? <LookBar look={customLook} onChange={setCustomLook} thumb={videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null} perShort />
+              ? <LookBar look={customLook} onChange={setCustomLook} brollOk={brollOk} thumb={videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null} perShort />
               : (
                 <button type="button" disabled={busy} onClick={() => setCustomLook(projectLook)}
                   className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors">
@@ -807,7 +808,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     if (configured && totalCredits < FIND_CREDITS) { setNote(`You need ${credits(FIND_CREDITS)} to find the Shorts in a video.`); onBuyCredits(); return; }
     setBusy(true);
     try {
-      const id = await createProject({ url: link.trim(), ...lookToRequest({ ...look, broll: look.broll && brollOk }) });
+      const id = await createProject({ url: link.trim(), ...lookToRequest({ ...look, broll: look.broll && brollOk, stickers: look.stickers && brollOk }) });
       setUrl('');
       setOpenId(id);
       loadProjects();
@@ -1045,7 +1046,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
                 <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
                   {list.map(s => (
                     <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
-                      projectLook={lookFromProject(project)} onRemake={onRemake} tall={tab === 'made'} />
+                      projectLook={lookFromProject(project)} onRemake={onRemake} tall={tab === 'made'} brollOk={brollOk} />
                   ))}
                 </div>
                 </>
