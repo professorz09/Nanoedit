@@ -41,7 +41,7 @@ export interface ShortsProject {
   length: string | null;
   created_at: number | null;
   count: number | null;
-  options?: { real_images?: boolean };
+  options?: { real_images?: boolean; bg?: string; caption_look?: string; fx?: string[] | null; sfx?: boolean; fit?: string };
   shorts?: ShortClip[];
   zip?: string;
 }
@@ -80,7 +80,11 @@ export const getProject = (id: number) => call<ShortsProject>(`/api/projects/${i
 export const createProject = (p: NewProject) => call<{ id: number }>('/api/projects', p).then(r => r.id);
 export const trimShort = (id: number, start: number, end: number) =>
   call<{ start: number; end: number }>(`/api/shorts/${id}/trim`, { start, end });
-export const renderShort = (id: number) => call<{ queued: number[] }>(`/api/shorts/${id}/render`, {});
+// look: a one-off style for this make only (the Short's "Video style") — it's made again in it even when already
+// made; nothing is saved, so its next make is the project's style again
+export interface OneOffLook { style: string; subtitles: string; bg: string; caption_look: string; fx: string[]; sfx: boolean; fit: string }
+export const renderShort = (id: number, look?: OneOffLook) =>
+  call<{ queued: number[] }>(`/api/shorts/${id}/render`, look ? { look } : {});
 export const renderAll = (projectId: number) => call<{ queued: number[] }>(`/api/projects/${projectId}/render_all`, {});
 
 // user-requested ("user ko turant kholne me bhi asani hogi"): the projects and their Shorts are kept in Supabase

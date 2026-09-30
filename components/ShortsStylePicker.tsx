@@ -25,6 +25,26 @@ export const DEFAULT_LOOK: ShortsLook = {
   style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
 };
 
+// a project's own picks (the server's project JSON) as a ShortsLook — where one Short's own style starts from
+export const lookFromProject = (p: { style?: string | null; subtitles?: string | null; options?: any }): ShortsLook => {
+  const o = p.options || {};
+  const style = p.style || 'split';
+  const studio = style === 'split';
+  const fx: string[] | null = Array.isArray(o.fx) ? o.fx : null; // null = every effect (Auto)
+  return {
+    ...DEFAULT_LOOK,
+    style,
+    bg: o.bg || DEFAULT_LOOK.bg,
+    caption: studio ? (p.subtitles === 'off' ? 'off' : (o.caption_look || 'auto')) : (p.subtitles || 'auto'),
+    fxMode: 'auto',
+    explain: fx ? fx.includes('facts') : true,
+    stickers: fx ? fx.includes('stickers') : true,
+    broll: false,
+    sfx: o.sfx !== false,
+    fit: o.fit || 'full',
+  };
+};
+
 // what the server gets for this look
 export const lookToRequest = (l: ShortsLook) => {
   const studio = l.style === 'split';
@@ -448,9 +468,12 @@ const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?
   );
 };
 
-// brollOk: the user's plan has 🔬 AI B-roll (the Creator plan); onUpgrade: where a locked B-roll tap goes
-export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void; thumb?: string | null; brollOk?: boolean; onUpgrade?: () => void }> =
-  ({ look, onChange, thumb = null, brollOk = true, onUpgrade }) => {
+// brollOk: the user's plan has 🔬 AI B-roll (the Creator plan); onUpgrade: where a locked B-roll tap goes;
+// perShort: one Short's own style (ShortsMaker's "Video style") — only the look itself: no Shorts count, no
+// length, and no AI B-roll (that stays the project's, it has its own price)
+export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => void; thumb?: string | null; brollOk?: boolean; onUpgrade?: () => void; perShort?: boolean }> =
+  ({ look, onChange, thumb = null, brollOk = true, onUpgrade, perShort = false }) => {
+  const fxSwitches = perShort ? FX_SWITCHES.filter(f => f.key !== 'broll') : FX_SWITCHES;
   const [open, setOpen] = React.useState<Panel | null>(null);
   const set = (patch: Partial<ShortsLook>) => onChange({ ...look, ...patch });
   const pickOne = (patch: Partial<ShortsLook>) => { set(patch); setOpen(null); };
@@ -493,9 +516,11 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           icon={<span className="block w-4 h-4 rounded-full ring-1 ring-black/15" style={bg.css} />} />
       : <Chip key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} icon={ICONS.fit} />,
     <Chip key="caption" panel="caption" label="Subtitles" value={cap.label} icon={ICONS.caption} />,
-    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = FX_SWITCHES.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length; return n ? `Auto + ${n}` : 'Auto'; })()} icon={ICONS.fx} />] : []),
-    <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
-    <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
+    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = fxSwitches.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length; return n ? `Auto + ${n}` : 'Auto'; })()} icon={ICONS.fx} />] : []),
+    ...(perShort ? [] : [
+      <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
+      <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
+    ]),
   ];
 
   return (
@@ -571,7 +596,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
             <span className="shrink-0 px-2 py-1 rounded-lg bg-thumb-card border border-thumb-line text-[10.5px] font-black text-thumb-sub uppercase tracking-wide">Always on</span>
           </div>
           <div className="grid grid-cols-2 gap-2.5 mt-2.5">
-            {FX_SWITCHES.map(f => {
+            {fxSwitches.map(f => {
               const locked = f.key === 'broll' && !brollOk;
               const on = look[f.key] && !locked;
               return (

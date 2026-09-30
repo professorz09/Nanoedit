@@ -5,7 +5,7 @@ import {
   ShortClip, ShortsProject, createProject, fmtTime, getProject, isShortsConfigured, listProjects,
   quickProject, quickProjects, renderAll, renderShort, startDownload, trimShort,
 } from '../services/shortsService';
-import { DEFAULT_LOOK, LookBar, ShortsLook, lookToRequest } from './ShortsStylePicker';
+import { DEFAULT_LOOK, LookBar, ShortsLook, lookFromProject, lookToRequest } from './ShortsStylePicker';
 import { HOME_SHORTS } from './homeShorts';
 import VideoPhone from './VideoPhone';
 
@@ -152,12 +152,17 @@ const ShortCard: React.FC<{
   onTrim: (c: ShortClip, start: number, end: number) => void;
   onDownload: (c: ShortClip) => void;
   cost: number;
-}> = ({ clip, videoId, duration, onTrim, onDownload, cost }) => {
+  projectLook: ShortsLook;
+  onRemake: (c: ShortClip, look: ShortsLook) => void;
+}> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake }) => {
   const [playing, setPlaying] = useState(false);
   const [showTrim, setShowTrim] = useState(false); // start/end live under "Advanced settings" (user-requested)
   // user-requested: once made, the card plays the real Short, same size as the preview; when its file expires (no
   // view link any more) or the link stops working, it's the YouTube preview of that part again
   const [viewFailed, setViewFailed] = useState<string | null>(null);
+  // user-requested: a Short can be made in its own style — starts from the project's, used for that one make only
+  // (not saved: once it's sent, this goes back to "Same as project")
+  const [customLook, setCustomLook] = useState<ShortsLook | null>(null);
   const made = clip.status === 'ready' && !!clip.view && viewFailed !== clip.view;
   const busy = clip.status === 'queued' || clip.status === 'rendering';
   const len = clip.end - clip.start;
@@ -257,6 +262,33 @@ const ShortCard: React.FC<{
               <Nudge which={which} d={5} text="+5" />
             </div>
           ))}
+          <div className="pt-2.5 mt-1 border-t border-thumb-line space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Video style</span>
+              {customLook
+                ? <button type="button" onClick={() => setCustomLook(null)} className="inline-flex items-center gap-1 text-[11px] font-bold text-thumb-red hover:underline">
+                    <Ic.Reset className="w-3 h-3" /> Same as project
+                  </button>
+                : <span className="text-[12px] font-bold text-thumb-sub">Same as project</span>}
+            </div>
+            {customLook ? (
+              <>
+                <LookBar look={customLook} onChange={setCustomLook} thumb={videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null} perShort />
+                <button type="button" disabled={busy} onClick={() => { onRemake(clip, customLook); setCustomLook(null); }}
+                  className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px] disabled:opacity-50">
+                  {clip.paid
+                    ? `${clip.status === 'ready' ? 'Remake' : 'Make'} in this style · free`
+                    : `Make in this style · ${cost} credit${cost === 1 ? '' : 's'}`}
+                </button>
+                <p className="text-[11px] text-thumb-sub text-center">Only for this make — next time it's the project's style again.</p>
+              </>
+            ) : (
+              <button type="button" disabled={busy} onClick={() => setCustomLook(projectLook)}
+                className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors">
+                Change style for this Short
+              </button>
+            )}
+          </div>
           </div>
           )}
         </div>
@@ -296,8 +328,9 @@ const ShortSkeleton = () => (
 );
 
 // user-requested ("shorts ban rahe hai to niche skeleton kyu... kuch aur animations"): while a project's moments
-// are being found, a live panel instead of empty skeleton cards — the video's own thumbnail being scanned, a voice
-// wave, the steps the server works through (paced by time: the server only reports "finding") and the time so far.
+// are being found, a live panel instead of empty skeleton cards — the steps the server works through (paced by time:
+// the server only reports "finding") and the time so far; the project's own thumbnail above gets the scan and the
+// voice wave (FindingOverlay), so the thumbnail isn't shown twice (user-requested).
 const FINDING_STEPS = [
   'Reading the video’s transcript',
   'Finding the strongest moments',
@@ -307,7 +340,7 @@ const FINDING_STEPS = [
 ];
 const FINDING_STEP_SEC = 12; // the last step stays until the Shorts arrive
 
-const FindingMoments: React.FC<{ thumb?: string | null; since?: number | null }> = ({ thumb, since }) => {
+const FindingMoments: React.FC<{ since?: number | null }> = ({ since }) => {
   const [now, setNow] = useState(() => Date.now());
   const [openedAt] = useState(() => Date.now());
   useEffect(() => {
@@ -319,41 +352,40 @@ const FindingMoments: React.FC<{ thumb?: string | null; since?: number | null }>
   const elapsed = Math.max(0, Math.floor((now - startedMs) / 1000));
   const step = Math.min(FINDING_STEPS.length - 1, Math.floor(elapsed / FINDING_STEP_SEC));
   return (
-    <div className="thumb-glass rounded-3xl overflow-hidden sm:col-span-2 2xl:col-span-3">
-      <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="relative aspect-video bg-thumb-soft overflow-hidden">
-          {thumb && <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <div className="finding-scan absolute top-0 bottom-0 left-0 w-[10%] bg-gradient-to-r from-transparent via-thumb-red/50 to-transparent" />
-          <div className="absolute bottom-4 left-4 right-4 flex items-end gap-1 h-10" aria-hidden="true">
-            {Array.from({ length: 28 }, (_, i) => (
-              <span key={i} className="finding-wave flex-1 rounded-full bg-white/80"
-                style={{ height: `${30 + ((i * 37) % 70)}%`, animationDelay: `${(i % 7) * 0.12}s` }} />
-            ))}
-          </div>
-        </div>
-        <div className="p-5 sm:p-6 flex flex-col justify-center gap-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-base font-black text-thumb-ink">Finding your Shorts</p>
-            <span className="text-[13px] font-bold text-thumb-sub tabular-nums">{fmtTime(elapsed)}</span>
-          </div>
-          <ol className="space-y-2.5">
-            {FINDING_STEPS.map((label, i) => (
-              <li key={label} className={`flex items-center gap-3 text-[14px] font-semibold ${i <= step ? 'text-thumb-ink' : 'text-thumb-sub/60'}`}>
-                <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[12px] font-black ${
-                  i < step ? 'bg-thumb-red text-white finding-pop' : i === step ? 'border-2 border-thumb-red text-thumb-red' : 'border border-thumb-line'}`}>
-                  {i < step ? '✓' : i === step ? <span className="w-2 h-2 rounded-full bg-thumb-red animate-pulse" /> : ''}
-                </span>
-                {label}
-              </li>
-            ))}
-          </ol>
-          <p className="text-[12px] text-thumb-sub">Usually 1–3 minutes, longer for long videos. You can leave this page — the project keeps going.</p>
-        </div>
+    <div className="thumb-glass rounded-3xl p-5 sm:p-6 flex flex-col gap-4 sm:col-span-2 2xl:col-span-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-base font-black text-thumb-ink">Finding your Shorts</p>
+        <span className="text-[13px] font-bold text-thumb-sub tabular-nums">{fmtTime(elapsed)}</span>
       </div>
+      <ol className="space-y-2.5">
+        {FINDING_STEPS.map((label, i) => (
+          <li key={label} className={`flex items-center gap-3 text-[14px] font-semibold ${i <= step ? 'text-thumb-ink' : 'text-thumb-sub/60'}`}>
+            <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[12px] font-black ${
+              i < step ? 'bg-thumb-red text-white finding-pop' : i === step ? 'border-2 border-thumb-red text-thumb-red' : 'border border-thumb-line'}`}>
+              {i < step ? '✓' : i === step ? <span className="w-2 h-2 rounded-full bg-thumb-red animate-pulse" /> : ''}
+            </span>
+            {label}
+          </li>
+        ))}
+      </ol>
+      <p className="text-[12px] text-thumb-sub">Usually 1–3 minutes, longer for long videos. You can leave this page — the project keeps going.</p>
     </div>
   );
 };
+
+// the header thumbnail while the moments are found: a scan line and a voice wave over it
+const FindingOverlay = () => (
+  <>
+    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+    <div className="finding-scan absolute top-0 bottom-0 left-0 w-[10%] bg-gradient-to-r from-transparent via-thumb-red/50 to-transparent" />
+    <div className="absolute bottom-3 left-3 right-3 flex items-end gap-1 h-8" aria-hidden="true">
+      {Array.from({ length: 28 }, (_, i) => (
+        <span key={i} className="finding-wave flex-1 rounded-full bg-white/80"
+          style={{ height: `${30 + ((i * 37) % 70)}%`, animationDelay: `${(i % 7) * 0.12}s` }} />
+      ))}
+    </div>
+  </>
+);
 
 // ── the start page's side: a real finished Short playing, a new one every 10 s ─────────────────────
 const ExamplePhone: React.FC = () => {
@@ -555,6 +587,21 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     }
   };
 
+  const onRemake = async (clip: ShortClip, l: ShortsLook) => {
+    setNote(null);
+    if (configured && !clip.paid && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
+    try {
+      await flushTrim(clip);
+      const r = lookToRequest(l);
+      await renderShort(clip.id, { style: r.style, subtitles: r.subtitles, bg: r.bg, caption_look: r.caption_look, fx: r.fx, sfx: r.sfx, fit: r.fit });
+      updateClip(clip.id, { status: 'queued', stage: 'In line', error: null });
+      refreshProfile();
+      poke();
+    } catch (e: any) {
+      setNote(e.message);
+    }
+  };
+
   const onDownloadAll = async () => {
     if (!project?.shorts) return;
     setNote(null);
@@ -591,8 +638,9 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
 
         {/* header */}
         <div className="thumb-glass rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:items-center">
-          <div className="w-full sm:w-56 aspect-video rounded-2xl overflow-hidden shrink-0 bg-thumb-soft">
+          <div className="relative w-full sm:w-56 aspect-video rounded-2xl overflow-hidden shrink-0 bg-thumb-soft">
             {project?.thumb ? <img src={project.thumb} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full thumb-skeleton" />}
+            {project?.status === 'finding' && <FindingOverlay />}
           </div>
           <div className="flex-1 min-w-0 space-y-1.5">
             {project ? <h2 className="text-lg sm:text-xl font-black text-thumb-ink leading-snug line-clamp-2">{project.title}</h2>
@@ -634,9 +682,10 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           {!project
             ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
             : project.status === 'finding'
-            ? <FindingMoments thumb={project.thumb} since={project.created_at} />
+            ? <FindingMoments since={project.created_at} />
             : shorts.map(s => (
-              <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost} />
+              <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
+                projectLook={lookFromProject(project)} onRemake={onRemake} />
             ))}
         </div>
       </div>
