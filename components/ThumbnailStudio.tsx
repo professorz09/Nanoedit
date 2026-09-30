@@ -14,6 +14,7 @@ import SketchCanvas from './SketchCanvas';
 import PersonaPicker from './PersonaPicker';
 import StylePickerModal from './StylePickerModal';
 import SegmentedControl from './SegmentedControl';
+import ThumbDemo from './ThumbDemo';
 import { savePersona } from '../services/personasService';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
 // the user opens that tab, so the initial studio view stays lean.
@@ -2572,11 +2573,8 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center text-center rounded-[28px] border-2 border-dashed border-thumb-line bg-thumb-soft min-h-[280px] lg:min-h-[440px] px-8">
-                <div className="w-14 h-14 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center mb-4"><I.Image className="w-7 h-7" /></div>
-                <h3 className="text-lg font-black">Your thumbnails will appear here</h3>
-                <p className="text-sm text-thumb-sub mt-2 max-w-xs">Fill in the details on the left and hit <span className="font-bold text-thumb-ink">Generate</span> — your results show up right here.</p>
-              </div>
+              // nothing made yet: an animation of a YouTube video becoming thumbnails (user-requested)
+              <ThumbDemo images={SHOWCASE_IMAGES.length ? SHOWCASE_IMAGES : REFERENCE_IMAGES} />
             )}
           </div>
           </div>
