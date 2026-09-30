@@ -147,6 +147,11 @@ const ClipPlayer: React.FC<{ videoId: string; start: number; end: number }> = ({
   );
 };
 
+const projectFromUrl = (): number | null => {
+  const n = Number(new URLSearchParams(window.location.search).get('project'));
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
 const ShortCard: React.FC<{
   clip: ShortClip; videoId: string | null; duration: number | null;
   onTrim: (c: ShortClip, start: number, end: number) => void;
@@ -164,6 +169,10 @@ const ShortCard: React.FC<{
   // (not saved: once it's sent, this goes back to "Same as project")
   const [customLook, setCustomLook] = useState<ShortsLook | null>(null);
   const made = clip.status === 'ready' && !!clip.view && viewFailed !== clip.view;
+  // user-requested: each card shows a frame from its own moment; the video's thumbnail until that's taken
+  const [frameFailed, setFrameFailed] = useState<string | null>(null);
+  const ytThumb = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : undefined;
+  const picture = clip.frame && frameFailed !== clip.frame ? clip.frame : ytThumb;
   const busy = clip.status === 'queued' || clip.status === 'rendering';
   const len = clip.end - clip.start;
   const trimmed = clip.start !== clip.orig_start || clip.end !== clip.orig_end;
@@ -189,7 +198,7 @@ const ShortCard: React.FC<{
           <video
             key={clip.view!}
             src={clip.view!}
-            poster={videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : undefined}
+            poster={picture}
             controls
             playsInline
             preload="metadata"
@@ -200,7 +209,8 @@ const ShortCard: React.FC<{
           <ClipPlayer key={`${clip.start}-${clip.end}`} videoId={videoId} start={clip.start} end={clip.end} />
         ) : (
           <button type="button" onClick={() => setPlaying(true)} className="group absolute inset-0 w-full h-full" aria-label={`Preview ${clip.title}`}>
-            {videoId && <img src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`} alt="" className="w-full h-full object-cover opacity-90" loading="lazy" />}
+            {picture && <img key={picture} src={picture} alt="" className="w-full h-full object-cover opacity-90" loading="lazy"
+              onError={() => { if (clip.frame && picture === clip.frame) setFrameFailed(clip.frame); }} />}
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="thumb-btn w-14 h-14 rounded-full flex items-center justify-center text-white group-hover:scale-105 transition-transform">
                 <Ic.Play className="w-6 h-6 ml-0.5" />
@@ -374,11 +384,11 @@ const FindingMoments: React.FC<{ since?: number | null }> = ({ since }) => {
 };
 
 // the header thumbnail while the moments are found: a scan line and a voice wave over it
-const FindingOverlay = () => (
+const FindingOverlay: React.FC<{ top?: boolean }> = ({ top }) => (
   <>
-    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+    {!top && <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />}
     <div className="finding-scan absolute top-0 bottom-0 left-0 w-[10%] bg-gradient-to-r from-transparent via-thumb-red/50 to-transparent" />
-    <div className="absolute bottom-3 left-3 right-3 flex items-end gap-1 h-8" aria-hidden="true">
+    <div className={`absolute left-3 right-3 flex items-end gap-1 h-8 ${top ? 'top-3' : 'bottom-3'}`} aria-hidden="true">
       {Array.from({ length: 28 }, (_, i) => (
         <span key={i} className="finding-wave flex-1 rounded-full bg-white/80"
           style={{ height: `${30 + ((i * 37) % 70)}%`, animationDelay: `${(i % 7) * 0.12}s` }} />
@@ -455,7 +465,29 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [projects, setProjects] = useState<ShortsProject[] | null>(null);
-  const [openId, setOpenId] = useState<number | null>(null);
+  // the open project is in the address (?project=<id>), so a refresh or a shared tab opens it again and the
+  // phone's back button goes back to the list (user-reported: a refresh inside a project went back out)
+  const [openId, setOpenIdState] = useState<number | null>(projectFromUrl);
+  const setOpenId = useCallback((id: number | null) => {
+    setOpenIdState(id);
+    if (projectFromUrl() === id) return;
+    const u = new URL(window.location.href);
+    if (id == null) u.searchParams.delete('project'); else u.searchParams.set('project', String(id));
+    window.history.pushState(window.history.state, '', u.pathname + u.search + u.hash);
+  }, []);
+  useEffect(() => {
+    const onBack = () => setOpenIdState(projectFromUrl());
+    window.addEventListener('popstate', onBack);
+    return () => {
+      window.removeEventListener('popstate', onBack);
+      // leaving the Shorts Maker: the next page's address doesn't carry the project along
+      const u = new URL(window.location.href);
+      if (u.searchParams.has('project')) {
+        u.searchParams.delete('project');
+        window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash);
+      }
+    };
+  }, []);
   const [project, setProject] = useState<ShortsProject | null>(null);
   const cost = project?.options?.real_images && brollOk ? 2 : 1;  // credits for a Short the first time
   const credits = (n: number) => `${n} credit${n === 1 ? '' : 's'}`;
@@ -483,7 +515,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
 
   // the open project, kept fresh while anything in it is still being made
   useEffect(() => {
-    if (openId == null) { setProject(null); return; }
+    if (openId == null || !signedIn) { setProject(null); return; }  // a ?project= link opens once signed in
     let stop = false;
     let fromServer = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -520,7 +552,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     };
     tick();
     return () => { stop = true; clearTimeout(timer); };
-  }, [openId, refreshProfile, pollCount]);
+  }, [openId, signedIn, refreshProfile, pollCount]);
 
   const generate = async (link: string = url) => {
     setNote(null);
@@ -632,24 +664,43 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     const unpaid = shorts.filter(s => !s.paid).length * cost;
     return (
       <div className="space-y-6">
-        <button type="button" onClick={() => { setOpenId(null); loadProjects(); }} className="inline-flex items-center gap-1.5 text-sm font-bold text-thumb-sub hover:text-thumb-ink">
-          <Ic.Back className="w-4 h-4" /> All projects
+        {/* back to the list: a clear pill button (user-requested), close under the header */}
+        <button type="button" onClick={() => { setOpenId(null); loadProjects(); }}
+          className="thumb-backpill -mt-4 sm:-mt-6 inline-flex items-center gap-2 h-10 pl-1.5 pr-4 rounded-full text-[13px] font-bold text-thumb-ink">
+          <span className="w-7 h-7 rounded-full bg-thumb-soft border border-thumb-line flex items-center justify-center"><Ic.Back className="w-3.5 h-3.5" /></span>
+          All projects
         </button>
 
-        {/* header */}
-        <div className="thumb-glass rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:items-center">
-          <div className="relative w-full sm:w-56 aspect-video rounded-2xl overflow-hidden shrink-0 bg-thumb-soft">
-            {project?.thumb ? <img src={project.thumb} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full thumb-skeleton" />}
-            {project?.status === 'finding' && <FindingOverlay />}
-          </div>
-          <div className="flex-1 min-w-0 space-y-1.5">
-            {project ? <h2 className="text-lg sm:text-xl font-black text-thumb-ink leading-snug line-clamp-2">{project.title}</h2>
-              : <div className="h-6 w-3/4 rounded thumb-skeleton" />}
-            <p className="text-[13px] text-thumb-sub font-semibold">
-              {project?.status === 'finding' ? 'Finding the best moments…'
-                : project?.status === 'failed' ? 'Could not make Shorts from this video'
-                : project ? `${shorts.length} Shorts${project.duration ? ` · from a ${fmtTime(project.duration)} video` : ''}${made ? ` · ${made} ready` : ''}` : ''}
-            </p>
+        {/* the project itself: a wide cinematic banner, not another card (user-requested: it looked like one
+            more Short) — the video's picture edge to edge with its title on it, violet instead of the Shorts' red,
+            and a soft glow of the picture behind */}
+        <div className="relative">
+          {project?.thumb && (
+            <img src={project.thumb} alt="" aria-hidden="true"
+              className="absolute inset-x-4 top-6 bottom-0 w-[calc(100%-2rem)] h-[calc(100%-1.5rem)] object-cover blur-3xl opacity-50 saturate-150 pointer-events-none" />
+          )}
+          <div className="project-hero relative aspect-[4/3] sm:aspect-[21/9] rounded-[28px] overflow-hidden bg-black">
+            {project?.thumb ? <img src={project.thumb} alt="" className="absolute inset-0 w-full h-full object-cover" /> : <div className="absolute inset-0 thumb-skeleton" />}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0718] via-[#0b0718]/55 to-transparent" />
+            {project?.status === 'finding' && <FindingOverlay top />}
+            <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 space-y-2.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/25 border border-violet-300/30 text-violet-100 text-[10.5px] font-black uppercase tracking-[0.14em] backdrop-blur-md">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-300" /> Project
+              </span>
+              {project ? <h2 className="text-[19px] sm:text-3xl font-black text-white leading-tight line-clamp-2 drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">{project.title}</h2>
+                : <div className="h-6 w-3/4 rounded bg-white/15" />}
+              <div className="flex flex-wrap gap-1.5 text-[12px] font-bold text-white/90">
+                {project?.status === 'finding' ? <span className="project-chip">Finding the best moments…</span>
+                  : project?.status === 'failed' ? <span className="project-chip">Could not make Shorts from this video</span>
+                  : project ? (
+                    <>
+                      <span className="project-chip">✂️ {shorts.length} Shorts</span>
+                      {project.duration ? <span className="project-chip">🎬 {fmtTime(project.duration)} video</span> : null}
+                      {made ? <span className="project-chip">✅ {made} ready</span> : null}
+                    </>
+                  ) : null}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -760,8 +811,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   return (
     <div className="max-w-7xl mx-auto space-y-10">
       <div className="lg:grid lg:grid-cols-[400px_minmax(0,1fr)] gap-8 items-start space-y-8 lg:space-y-0">
-        <div className={`lg:sticky lg:top-24 ${openId != null ? 'hidden lg:block' : ''}`}>{formPanel}</div>
-        <div className="min-w-0">{openId != null ? renderProject() : projectsPanel}</div>
+        <div className={`lg:sticky lg:top-24 ${openId != null && signedIn ? 'hidden lg:block' : ''}`}>{formPanel}</div>
+        <div className="min-w-0">{openId != null && signedIn ? renderProject() : projectsPanel}</div>
       </div>
       {openId == null && (!signedIn || (projects && projects.length === 0)) && <GettingStarted />}
     </div>

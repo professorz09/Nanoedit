@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  background-color: #0f0f11;
+  background-color: #050508;
   color: #f4f4f5;
   font-family: 'Inter', sans-serif;
 }
@@ -50,7 +50,7 @@ body {
 }
 .animate-shimmer,
 .thumb-skeleton {
-  background-color: #16161f;
+  background-color: #101016;
   background-image: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.09) 50%, transparent 100%);
   background-size: 60% 100%;
   background-repeat: no-repeat;
@@ -216,20 +216,21 @@ button:active:not(:disabled) { transform: scale(0.97); }
 
 /* ── Living background glow (kills the flat "dull dark" look) ── */
 .thumb-scope {
+  /* near-black with a violet glow up top (like a stage light) and the brand red warming it from the side */
   background:
-    radial-gradient(1100px 480px at 50% -8%, rgba(255,51,85,0.11), transparent 60%),
-    radial-gradient(900px 520px at 92% 6%, rgba(140,70,255,0.07), transparent 58%),
-    radial-gradient(760px 480px at 4% 22%, rgba(0,120,255,0.05), transparent 60%),
-    #0c0c12;
+    radial-gradient(900px 520px at 50% -12%, rgba(124,58,237,0.28), transparent 62%),
+    radial-gradient(700px 420px at 100% 4%, rgba(255,51,85,0.10), transparent 60%),
+    radial-gradient(640px 420px at 0% 18%, rgba(79,70,229,0.08), transparent 60%),
+    #050508;
   background-attachment: fixed;
 }
 
 /* ── Liquid-glass surface (frosted, translucent, luminous edge) ── */
 .thumb-glass {
-  background: linear-gradient(180deg, rgba(38,38,52,0.72), rgba(20,20,30,0.66));
+  background: linear-gradient(180deg, rgba(26,26,36,0.72), rgba(12,12,18,0.7));
   backdrop-filter: blur(22px) saturate(1.4);
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.07);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.10),
     inset 0 -1px 0 rgba(0,0,0,0.30),
@@ -241,7 +242,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
    in front of whatever's scrolled behind it, not just more of the same
    translucent surface. ── */
 .thumb-glass-footer {
-  background: linear-gradient(180deg, rgba(38,38,52,0.94), rgba(20,20,30,0.92));
+  background: linear-gradient(180deg, rgba(24,24,34,0.95), rgba(12,12,18,0.94));
   backdrop-filter: blur(22px) saturate(1.4);
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
   border-top: 1px solid rgba(255,255,255,0.08);
@@ -452,7 +453,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
   position: relative;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.03) 48%, rgba(255,255,255,0.02) 100%),
-    rgba(20,18,32,0.66);
+    rgba(10,9,18,0.62);
   backdrop-filter: blur(30px) saturate(1.8);
   -webkit-backdrop-filter: blur(30px) saturate(1.8);
   box-shadow:
@@ -488,4 +489,38 @@ button:active:not(:disabled) { transform: scale(0.97); }
   background: linear-gradient(170deg,
     rgba(255,255,255,0.9) 0%, rgba(12,12,24,0.08) 45%,
     rgba(255,51,85,0.25) 75%, rgba(140,90,255,0.4) 100%);
+}
+
+/* ── Shorts Maker: a project's banner and its back button ── */
+.project-hero {
+  box-shadow:
+    0 0 0 1px rgba(167,139,250,0.28),
+    0 30px 70px -30px rgba(76,29,149,0.75),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.16);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.thumb-backpill {
+  background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03)), rgba(20,18,32,0.5);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 8px 24px -14px rgba(0,0,0,0.8);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transition: border-color .2s ease, transform .12s ease;
+}
+.thumb-backpill:hover { border-color: rgba(167,139,250,0.5); }
+.thumb-backpill:active { transform: scale(0.97); }
+.thumb-light .thumb-backpill {
+  background: rgba(255,255,255,0.85);
+  border-color: rgba(12,12,24,0.1);
+  box-shadow: inset 0 1px 0 #fff, 0 8px 22px -14px rgba(24,24,45,0.35);
 }
