@@ -49,11 +49,16 @@ export const lemonCheckout = async (opts: {
           receipt_link_url: opts.appUrl,
           enabled_variants: [Number(variantId)],
         },
-        // user-requested: one clean page — on a phone LS paints background_color only on the order summary at
-        // the top (the payment form below stays white), so no dark colours: its own light page, with the
-        // button, links and checks in the brand red
+        // user-requested: one clean white page. The order summary at the top takes background_color (left out,
+        // it came up black from the store's own setting, with dark text lost on it), so it's set white here,
+        // text dark, and the button, links and checks in the brand red.
         checkout_options: {
           embed: false, media: false, logo: true, desc: true, discount: false,
+          background_color: '#ffffff',
+          headings_color: '#111114',
+          primary_text_color: '#30313d',
+          secondary_text_color: '#6a7383',
+          borders_color: '#e3e8ee',
           links_color: '#ff3355',
           checkbox_color: '#ff3355',
           active_state_color: '#ff3355',
