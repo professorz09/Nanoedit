@@ -68,10 +68,20 @@ export const lookToRequest = (l: ShortsLook) => {
 // the Effects popup is one Auto (these, picked per clip) plus four switches
 const MOTION_FX = ['hook_freeze', 'card_drop', 'card_move', 'push_in', 'zoom_punch', 'cascade', 'marker', 'scribble', 'burst', 'audio_react', 'progress'];
 const EXPLAIN_FX = ['facts', 'counter', 'scramble', 'money_stack'];
-const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; img?: string; label: string; note: string }[] = [
-  { key: 'explain', img: 'fx-explain', label: 'AI explainer designs', note: 'Fact cards, counting numbers, money stacks' },
-  { key: 'broll', img: 'fx-broll', label: 'AI B-roll', note: 'A real picture of what is being explained' },
-  { key: 'stickers', img: 'fx-stickers', label: 'AI stickers', note: 'A drawn sticker of what is said' },
+const fxIcon = (d: React.ReactNode) => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+);
+const FX_ICONS: Record<string, React.ReactNode> = {
+  auto: fxIcon(<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z" />),
+  explain: fxIcon(<><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></>),
+  broll: fxIcon(<><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></>),
+  stickers: fxIcon(<><path d="M15.5 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h7l8-8V6a3 3 0 0 0-3-3z" /><path d="M13 21v-5a3 3 0 0 1 3-3h5" /><path d="M8.5 10h.01M13.5 10h.01" /></>),
+  sfx: fxIcon(<><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></>),
+};
+const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; label: string; note: string }[] = [
+  { key: 'explain', label: 'AI explainer designs', note: 'Fact cards, counting numbers, money stacks' },
+  { key: 'broll', label: 'AI B-roll', note: 'A real picture of what is being explained' },
+  { key: 'stickers', label: 'AI stickers', note: 'A drawn sticker of what is said' },
   { key: 'sfx', label: 'Sound effects', note: 'Whooshes and pops on the big moments' },
 ];
 
@@ -212,6 +222,11 @@ const KEYFRAMES = `
 `;
 
 // ── small parts ───────────────────────────────────────────────────────────────────────────────────
+// the small red "AI" mark on the AI picks
+const AiBadge = () => (
+  <span className="px-1.5 py-[1px] rounded-md bg-thumb-red text-white text-[10px] font-black tracking-wide leading-[16px]">AI</span>
+);
+
 const Tick: React.FC<{ on: boolean }> = ({ on }) => (
   <span className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white transition-all ${on ? 'bg-thumb-red scale-100' : 'scale-0'}`}>
     <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3.4}><path d="M20 6 9 17l-5-5" /></svg>
@@ -570,11 +585,15 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
               <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} overflow-hidden`}>
                 <Tick on={look.bg === b.id} />
                 {b.id === 'ai'
-                  ? <div className="aspect-video bg-[#262626] flex flex-col items-center justify-center gap-1 text-center px-4">
-                      <span className="text-[30px] leading-none">✨</span>
-                      <span className="text-[15px] font-black text-white">AI</span>
-                      <span className="text-[12px] text-white/60">picks a background that fits each Short</span>
+                  ? (
+                    // the real backgrounds side by side — AI picks one of these for each Short
+                    <div className="aspect-video relative flex">
+                      {BGS.filter(x => x.id !== 'ai').slice(0, 8).map(x => <div key={x.id} className="flex-1" style={x.css} />)}
+                      <span className="absolute inset-0 m-auto h-fit w-fit px-3.5 py-2 rounded-full bg-black/80 text-white text-[13px] font-bold inline-flex items-center gap-1.5 shadow-lg">
+                        <AiBadge /> picks one for each Short
+                      </span>
                     </div>
+                  )
                   : <div className="aspect-video" style={b.css} />}
                 <p className="px-3 py-2 text-[13px] font-bold text-thumb-ink bg-thumb-card">{b.label}</p>
               </button>
@@ -589,20 +608,13 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
             {caps.map(c => (
               <button key={c.id} type="button" onClick={() => pickOne({ caption: c.id })} className={`${cardCls(look.caption === c.id)} overflow-hidden`}>
                 <Tick on={look.caption === c.id} />
-                {c.id === 'auto'
-                  ? (
-                    <div className="h-[64px] bg-[#262626] flex flex-col items-center justify-center gap-0.5 px-2 text-center">
-                      <span className="text-[20px] leading-none">✨</span>
-                      <span className="text-[10px] leading-tight text-white/60">picks for each Short</span>
-                    </div>
-                  )
-                  : (
-                    // just the words on a plain card — no photo behind them (user-requested)
-                    <div className="h-[64px] overflow-hidden flex items-center justify-center px-1" style={{ background: c.tile?.bg || '#262626' }}>
-                      <CaptionSample cap={c} dark={c.tile ? !!c.tile.dark : true} size={small ? 11 : 13} animate={look.caption === c.id} />
-                    </div>
-                  )}
-                <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">{c.label}</p>
+                {/* just the words on a plain card — no photo behind them (user-requested) */}
+                <div className="h-[64px] overflow-hidden flex items-center justify-center px-1" style={{ background: c.tile?.bg || '#262626' }}>
+                  <CaptionSample cap={c} dark={c.tile ? !!c.tile.dark : true} size={small ? 11 : 13} animate={look.caption === c.id} />
+                </div>
+                <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">
+                  {c.id === 'auto' ? <span className="inline-flex items-center gap-1.5"><AiBadge /> Best fit</span> : c.label}
+                </p>
               </button>
             ))}
           </div>
@@ -612,47 +624,40 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
       {open === 'fx' && (
         <Popup title={TITLES.fx} hint="Auto effects are always on — add the extras you want" onClose={() => setOpen(null)}
           footer={<button type="button" onClick={() => setOpen(null)} className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px]">Done</button>}>
-          <div className="flex items-center gap-3 p-2 pr-3 rounded-2xl border-2 border-thumb-line bg-thumb-soft">
-            <RealShot name="fx-auto" className="rounded-xl shrink-0" style={{ width: 64, aspectRatio: '9 / 16' }} focusY={40} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-black text-thumb-ink">Auto effects</p>
-              <p className="text-[12px] text-thumb-sub leading-snug">Zooms, card moves and word highlights, picked to fit each clip</p>
+          {/* clean rows — an icon, what it does, and the app's own switch; no photos (user-requested) */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3 p-3 rounded-2xl border border-thumb-line bg-thumb-soft">
+              <span className="w-10 h-10 shrink-0 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center">{FX_ICONS.auto}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-bold text-thumb-ink leading-tight">Auto effects</p>
+                <p className="text-[12px] text-thumb-sub leading-snug mt-0.5">Zooms, card moves and word highlights</p>
+              </div>
+              <span className="shrink-0 px-2 py-1 rounded-lg bg-thumb-card border border-thumb-line text-[10px] font-black text-thumb-sub uppercase tracking-wide">Always on</span>
             </div>
-            <span className="shrink-0 px-2 py-1 rounded-lg bg-thumb-card border border-thumb-line text-[10.5px] font-black text-thumb-sub uppercase tracking-wide">Always on</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 mt-2.5">
             {fxSwitches.map(f => {
               const locked = f.key === 'broll' && !brollOk;
               const on = look[f.key] && !locked;
+              const toggle = () => (locked ? onUpgrade?.() : set({ [f.key]: !look[f.key] } as Partial<ShortsLook>));
               return (
-                <button key={f.key} type="button" role="switch" aria-checked={on}
-                  onClick={() => locked ? onUpgrade?.() : set({ [f.key]: !look[f.key] } as Partial<ShortsLook>)}
-                  className={`switch-card ${cardCls(on)} overflow-hidden bg-thumb-soft flex flex-col`}>
-                  <div className="relative h-[112px] overflow-hidden">
-                    {f.img
-                      ? <RealShot name={f.img} className="w-full h-full" focusY={f.key === 'explain' ? 72 : f.key === 'stickers' ? 80 : 50} />
-                      : (
-                        <div className="absolute inset-0 flex items-center justify-center bg-thumb-card">
-                          <svg viewBox="0 0 64 32" className="w-24 h-12 text-thumb-red" fill="currentColor">
-                            {[6, 14, 22, 12, 28, 18, 10, 24, 16, 8, 20, 12].map((v, n) => <rect key={n} x={2 + n * 5} y={16 - v / 2} width="3" height={v} rx="1.5" />)}
-                          </svg>
-                        </div>
+                <div key={f.key} onClick={toggle}
+                  className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-colors ${on ? 'border-thumb-red/40 bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/30'}`}>
+                  <span className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-colors ${on ? 'bg-thumb-red text-white' : 'bg-thumb-card text-thumb-sub'}`}>{FX_ICONS[f.key]}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-bold text-thumb-ink leading-tight flex items-center gap-1.5 flex-wrap">
+                      {f.label}
+                      {f.key === 'broll' && (
+                        <span className="px-1.5 py-[1px] rounded-md bg-thumb-card border border-thumb-line text-[10px] font-black text-thumb-sub">
+                          {locked ? '🔒 Creator plan' : 'Creator · +1 credit'}
+                        </span>
                       )}
-                    {locked && <div className="absolute inset-0 bg-black/45" />}
-                    <span className={`absolute top-1.5 right-1.5 w-9 h-5 rounded-full transition-colors ${on ? 'bg-thumb-red' : 'bg-black/35'}`}>
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
-                    </span>
-                    {f.key === 'broll' && (
-                      <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-black">
-                        {locked ? '🔒 Creator plan' : 'Creator · +1 credit'}
-                      </span>
-                    )}
+                    </p>
+                    <p className="text-[12px] text-thumb-sub leading-snug mt-0.5">{locked ? 'Upgrade to the Creator plan to use it' : f.note}</p>
                   </div>
-                  <div className="px-2.5 py-2 bg-thumb-card flex-1">
-                    <p className="text-[12.5px] font-black text-thumb-ink leading-tight">{f.label}</p>
-                    <p className="text-[11px] text-thumb-sub leading-snug mt-0.5">{locked ? 'Upgrade to the Creator plan to use it' : f.note}</p>
-                  </div>
-                </button>
+                  <button type="button" role="switch" aria-checked={on} aria-label={f.label}
+                    onClick={e => { e.stopPropagation(); toggle(); }} className="shrink-0">
+                    <span className={`block rounded-full ${on ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
+                  </button>
+                </div>
               );
             })}
           </div>
