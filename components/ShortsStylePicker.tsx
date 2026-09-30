@@ -87,10 +87,53 @@ const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; label: strin
 ];
 
 const STYLES = [
-  { id: 'split', label: 'Studio', note: 'Video in a card, animated words, effects' },
-  { id: 'classic', label: 'Classic', note: 'Title bar on top, full video' },
-  { id: 'boxed', label: 'Boxed', note: 'Dark page, video in a rounded box' },
+  { id: 'split', label: 'Studio', note: 'Video in a card, animated words, effects', tags: ['Animated words', 'Effects', 'Backgrounds'], best: true },
+  { id: 'classic', label: 'Classic', note: 'Title bar on top, full video', tags: ['Title bar', 'Full video'] },
+  { id: 'boxed', label: 'Boxed', note: 'Dark page, video in a rounded box', tags: ['Dark page', 'Rounded video'] },
 ];
+
+// user-requested: a clean drawing of each layout (no photos, no tiny text) — where the title, the video and the
+// words sit on the 9:16 page
+const StyleThumb: React.FC<{ id: string; w: number }> = ({ id, w }) => {
+  const video = (x: number, y: number, vw: number, vh: number, r: number) => (
+    <g>
+      <clipPath id={`stClip-${id}`}><rect x={x} y={y} width={vw} height={vh} rx={r} /></clipPath>
+      <rect x={x} y={y} width={vw} height={vh} rx={r} fill="url(#stVid)" />
+      <g clipPath={`url(#stClip-${id})`} fill="#fff" opacity=".8">
+        <circle cx={x + vw / 2} cy={y + vh * 0.4} r={Math.min(vw, vh) * 0.13} />
+        <ellipse cx={x + vw / 2} cy={y + vh * 1.02} rx={Math.min(vw, vh) * 0.32} ry={vh * 0.3} />
+      </g>
+    </g>
+  );
+  const bar = (x: number, y: number, bw: number, c: string, h = 4) => <rect x={x} y={y} width={bw} height={h} rx={h / 2} fill={c} />;
+  return (
+    <svg viewBox="0 0 90 160" width={w} height={w * 16 / 9} className="block rounded-[12px] shrink-0">
+      <defs>
+        <linearGradient id="stVid" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ff4d6d" /><stop offset="1" stopColor="#7c3aed" /></linearGradient>
+      </defs>
+      {id === 'split' && (<>
+        <rect width="90" height="160" fill="#fafaf7" />
+        {bar(14, 24, 62, '#111')}{bar(22, 32, 30, '#ef4444')}{bar(55, 32, 14, '#111')}
+        {video(48, 62, 32, 48, 5)}
+        <rect x="10" y="76" width="32" height="7" rx="2" fill="#ef4444" />
+        {bar(13, 88, 26, '#111', 3.5)}{bar(16, 96, 20, '#111', 3.5)}
+      </>)}
+      {id === 'classic' && (<>
+        <rect width="90" height="160" fill="#0b0b0d" />
+        <rect x="0" y="44" width="90" height="20" fill="#fff" />
+        {bar(8, 49, 56, '#111', 3.5)}{bar(8, 56, 24, '#ef4444', 3.5)}{bar(35, 56, 30, '#111', 3.5)}
+        {video(0, 64, 90, 52, 0)}
+        {bar(22, 106, 26, '#fff', 3.5)}{bar(51, 106, 18, '#4ade80', 3.5)}
+      </>)}
+      {id === 'boxed' && (<>
+        <rect width="90" height="160" fill="#16161a" />
+        {bar(12, 42, 60, '#fff', 3.5)}{bar(12, 49, 22, '#4ade80', 3.5)}{bar(37, 49, 34, '#fff', 3.5)}
+        {video(10, 60, 70, 46, 8)}
+        {bar(22, 96, 26, '#fff', 3.5)}{bar(51, 96, 18, '#4ade80', 3.5)}
+      </>)}
+    </svg>
+  );
+};
 
 type Bg = { id: string; label: string; css: React.CSSProperties; dark?: boolean };
 const grid = (line: string, base: string): React.CSSProperties => ({
@@ -562,18 +605,31 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
 
       {open === 'style' && (
         <Popup title={TITLES.style} onClose={() => setOpen(null)}>
-          <div className="grid grid-cols-3 gap-3">
-            {STYLES.map(s => (
-              <button key={s.id} type="button" className={`${cardCls(look.style === s.id)} p-2 sm:p-3 bg-thumb-soft flex flex-col items-center`}
-                onClick={() => pickOne({ style: s.id, caption: (s.id === 'split' ? CAPS : SIMPLE_CAPS).some(c => c.id === look.caption) ? look.caption : 'auto' })}>
-                <Tick on={look.style === s.id} />
-                {HAS_IMG.has(`style-${s.id}`)
-                  ? <RealShot name={`style-${s.id}`} className="rounded-[14px] shadow-md" style={{ width: small ? 88 : 128, aspectRatio: '9 / 16' }} />
-                  : <PhonePreview look={{ ...look, style: s.id, fxMode: 'auto' }} width={small ? 88 : 128} />}
-                <p className="mt-2 text-[13px] font-black text-thumb-ink text-center">{s.label}</p>
-                <p className="text-[10.5px] text-thumb-sub text-center leading-tight mt-0.5">{s.note}</p>
-              </button>
-            ))}
+          {/* one style to a row: a clean drawing of the layout, its name, what it gives (user-requested) */}
+          <div className="flex flex-col gap-2.5">
+            {STYLES.map(s => {
+              const on = look.style === s.id;
+              return (
+                <button key={s.id} type="button"
+                  className={`relative flex items-center gap-4 p-3 rounded-2xl border-2 text-left transition-colors ${on ? 'border-thumb-red bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/40'}`}
+                  onClick={() => pickOne({ style: s.id, caption: (s.id === 'split' ? CAPS : SIMPLE_CAPS).some(c => c.id === look.caption) ? look.caption : 'auto' })}>
+                  <span className="rounded-[14px] p-[3px] bg-black/40 border border-white/10 shrink-0"><StyleThumb id={s.id} w={small ? 62 : 72} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="text-[16px] font-black text-thumb-ink">{s.label}</span>
+                      {s.best && <span className="px-1.5 py-[1px] rounded-md bg-thumb-red text-white text-[10px] font-black">Best</span>}
+                    </span>
+                    <span className="block text-[12.5px] text-thumb-sub leading-snug mt-0.5">{s.note}</span>
+                    <span className="flex flex-wrap gap-1 mt-2">
+                      {s.tags.map(t => <span key={t} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10.5px] font-bold text-thumb-sub">{t}</span>)}
+                    </span>
+                  </span>
+                  <span className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center ${on ? 'bg-thumb-red border-thumb-red text-white' : 'border-white/20'}`}>
+                    {on && <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={3.4}><path d="M20 6 9 17l-5-5" /></svg>}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </Popup>
       )}
