@@ -37,6 +37,7 @@ const TAG_MODEL = Deno.env.get('TAG_MODEL') || 'gemini-3.5-flash-lite';
 const EMBED_DIMS = 768; // must match style_images.embedding vector(768)
 const BUCKET = 'styles';
 const MAX_PER_USER = 20; // per-user cap on custom styles (quota / abuse guard)
+const INDEX_PER_HOUR = 15;
 const MAX_IMAGE_BYTES = 9_000_000; // matches admin-styles' ~9MB decoded cap
 
 // Same schema tag-styles.mjs asks for — kept in sync so custom + global styles
@@ -161,6 +162,23 @@ Deno.serve(async (req) => {
   const { data: already } = await admin.from('style_images').select('id, path, name, meta').eq('path', path).single();
   if (already) {
     return json(200, { style: { ...already, url: await signedUrl(path) } });
+  }
+
+  // user-reported: the per-user cap alone let someone upload, delete and upload again, each a paid vision +
+  // embedding call — at most INDEX_PER_HOUR new indexings an hour (tool_usage, like the other free tools; an
+  // unreadable count blocks rather than lets it through)
+  {
+    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recent, error: recentErr } = await admin
+      .from('tool_usage')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+      .eq('tool', 'index-style')
+      .gte('created_at', since);
+    if (recentErr || (recent ?? 0) >= INDEX_PER_HOUR) {
+      return json(429, { error: 'You\'ve added a lot of styles this hour. Please try again a bit later.' });
+    }
+    try { await admin.from('tool_usage').insert({ user_id: uid, tool: 'index-style' }); } catch (_) { /* best-effort */ }
   }
 
   // Per-user cap.
