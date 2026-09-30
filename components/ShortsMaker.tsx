@@ -455,7 +455,7 @@ const ShortCard: React.FC<{
               A Short not made yet (or whose file expired) just gets "Video style" for its next make. */}
           <div className="pt-2.5 mt-1 border-t border-thumb-line space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">{remakeable ? 'Remake' : 'Video style'}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">{remakeable ? 'Remake in a new style' : 'Video style'}</span>
               {customLook
                 ? <button type="button" onClick={() => setCustomLook(null)} className="inline-flex items-center gap-1 text-[11px] font-bold text-thumb-red hover:underline">
                     <Ic.Reset className="w-3 h-3" /> Same as project
@@ -467,18 +467,18 @@ const ShortCard: React.FC<{
               : (
                 <button type="button" disabled={busy} onClick={() => setCustomLook(projectLook)}
                   className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors">
-                  {remakeable ? 'Change the style first (optional)' : 'Change style for this Short'}
+                  {remakeable ? 'Pick a new style' : 'Change style for this Short'}
                 </button>
               )}
-            {remakeable ? (
+            {/* no plain "Remake this Short": the same style again gave near the same video for a credit. A trim
+                or an expired file already brings back a free "Make Short"; a new style is the remake that matters. */}
+            {remakeable ? customLook && (
               <>
                 <button type="button" disabled={busy} onClick={() => { onRemake(clip, customLook, true); setCustomLook(null); }}
                   className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px] disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
-                  <Ic.Reset className="w-4 h-4" /> {customLook ? 'Remake in this style' : 'Remake this Short'} · {cost} credit{cost === 1 ? '' : 's'}
+                  <Ic.Reset className="w-4 h-4" /> Remake in this style · {cost} credit{cost === 1 ? '' : 's'}
                 </button>
-                <p className="text-[11px] text-thumb-sub text-center">
-                  The whole video is made again from the start{customLook ? ' — this style is only for this make' : ', in the same style'}.
-                </p>
+                <p className="text-[11px] text-thumb-sub text-center">The whole video is made again in this style — only for this make.</p>
               </>
             ) : customLook && (
               <>
@@ -510,6 +510,7 @@ const ShortCard: React.FC<{
               {clip.status === 'ready' ? 'Download' : clip.paid ? 'Make Short · free re-make' : `Make Short · ${cost} credit${cost === 1 ? '' : 's'}`}
             </button>
           )}
+          {made && <p className="text-center text-[11.5px] text-thumb-sub">Deleted 24 hours after it's made — download it before then. Making it again is free.</p>}
         </div>
       </div>
     </div>
@@ -981,12 +982,20 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
                 </div>
               );
               return (
+                <>
+                {tab === 'made' && (
+                  <p className="flex items-start gap-2 rounded-2xl bg-thumb-soft border border-thumb-line px-3.5 py-2.5 text-[12.5px] text-thumb-sub leading-snug">
+                    <span aria-hidden="true">⏳</span>
+                    <span>Made Shorts are <b className="text-thumb-ink">deleted after 24 hours</b>. Download them before then — making one again later is free.</span>
+                  </p>
+                )}
                 <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
                   {list.map(s => (
                     <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
                       projectLook={lookFromProject(project)} onRemake={onRemake} tall={tab === 'made'} />
                   ))}
                 </div>
+                </>
               );
             })()}
           </div>
