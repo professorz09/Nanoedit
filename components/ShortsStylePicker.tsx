@@ -92,8 +92,8 @@ const wall = (c: string): React.CSSProperties => ({
   backgroundImage: `radial-gradient(circle at 30% 20%, rgba(255,255,255,.16), transparent 55%), repeating-linear-gradient(45deg, rgba(0,0,0,.10) 0 2px, transparent 2px 5px)`,
 });
 const BGS: Bg[] = [
-  { id: 'white', label: 'White', css: { background: '#FFFFFF' } },
   { id: 'ai', label: 'AI', css: { background: 'conic-gradient(from 200deg, #FDE047, #F9A8D4, #93C5FD, #86EFAC, #FDE047)' } },
+  { id: 'white', label: 'White', css: { background: '#FFFFFF' } },
   { id: 'white_grid', label: 'White grid', css: grid('rgba(0,0,0,.08)', '#FFFFFF') },
   { id: 'yellow', label: 'Yellow', css: { background: '#FDE047' } },
   { id: 'blue', label: 'Blue', css: { background: '#93C5FD' } },
@@ -115,7 +115,8 @@ const BGS: Bg[] = [
 // tile: the picker card's colour when a look doesn't show on the usual dark card (dark: draw the other words white)
 type Cap = { id: string; label: string; key: React.CSSProperties; soft?: React.CSSProperties; wrap?: React.CSSProperties; font?: string; tile?: { bg: string; dark?: boolean } };
 const LIGHT_TILE = { bg: '#FFFFFF' };
-const GREY_TILE = { bg: '#52525B', dark: true };  // black-outlined words vanish on the dark card
+// a thick black edge drawn under the letters (not over them) — a thin one smudges the words at preview size
+const EDGE: React.CSSProperties = { WebkitTextStroke: '3px #111', paintOrder: 'stroke fill' };
 const IMPACT = '"Anton", "Bebas Neue", Impact, "Arial Black", sans-serif';
 const ROUND = '"Fredoka", "Poppins", "Arial Rounded MT Bold", sans-serif';
 const SERIF = '"DM Serif Display", Georgia, serif';
@@ -126,15 +127,15 @@ const CAPS: Cap[] = [
   { id: 'sticky_blue', label: 'Blue sticky notes', font: HAND, key: { color: '#111', background: '#7DD3FC', padding: '0 6px', transform: 'rotate(-3deg)', display: 'inline-block' } },
   { id: 'underline_swipe', label: 'Underline swipe', font: '"Inter", system-ui, sans-serif', key: { color: '#111', borderBottom: '3px solid #84CC16' }, tile: LIGHT_TILE },
   { id: 'chalkboard', label: 'Chalkboard', font: HAND, key: { color: '#fff' }, wrap: { background: '#123524', padding: '4px 8px' }, soft: { color: '#d1fae5' } },
-  { id: 'hormozi', label: 'Hormozi', font: ROUND, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '0 2px 0 #111' }, tile: GREY_TILE },
-  { id: 'mrbeast', label: 'MrBeast', font: IMPACT, key: { color: '#22C55E', WebkitTextStroke: '1px #111', textShadow: '0 2px 0 #111' }, tile: GREY_TILE },
+  { id: 'hormozi', label: 'Hormozi', font: ROUND, key: { color: '#FACC15', ...EDGE, textShadow: '0 2px 0 #111' } },
+  { id: 'mrbeast', label: 'MrBeast', font: IMPACT, key: { color: '#22C55E', ...EDGE, textShadow: '0 2px 0 #111' } },
   { id: 'neon_green', label: 'Neon glow', font: IMPACT, key: { color: '#4ADE80', textShadow: '0 0 6px #39FF14, 0 0 14px #39FF14' } },
   { id: 'glass', label: 'Liquid glass', font: ROUND, key: { color: '#111', background: 'rgba(255,255,255,.55)', border: '1px solid rgba(255,255,255,.9)', borderRadius: 10, padding: '0 6px', backdropFilter: 'blur(4px)', boxShadow: '0 4px 14px rgba(0,0,0,.15)' } },
   { id: 'red_box', label: 'Red box', font: IMPACT, key: { color: '#fff', background: '#DC2626', padding: '0 6px', borderRadius: 4 } },
   { id: 'black_box', label: 'Black blocks', font: IMPACT, key: { color: '#fff', background: '#111', padding: '0 6px' }, soft: { color: '#fff', background: '#111', padding: '0 4px' } },
-  { id: 'karaoke', label: 'Karaoke fill', font: IMPACT, key: { background: 'linear-gradient(90deg,#FACC15 55%,#fff 55%)', WebkitBackgroundClip: 'text', color: 'transparent', WebkitTextStroke: '1px #111' }, tile: GREY_TILE },
+  { id: 'karaoke', label: 'Karaoke fill', font: IMPACT, key: { background: 'linear-gradient(90deg,#FACC15 55%,#fff 55%)', WebkitBackgroundClip: 'text', color: 'transparent' } },
   { id: 'highlighter', label: 'Highlighter', font: IMPACT, key: { color: '#111', background: 'linear-gradient(100deg,transparent 4%,#FDE047 4% 96%,transparent 96%)', padding: '0 4px', transform: 'rotate(-2deg)', display: 'inline-block' } },
-  { id: 'comic', label: 'Comic', font: ROUND, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '2px 2px 0 #EC4899', transform: 'rotate(-3deg)', display: 'inline-block' }, tile: GREY_TILE },
+  { id: 'comic', label: 'Comic', font: ROUND, key: { color: '#FACC15', ...EDGE, textShadow: '2px 2px 0 #EC4899', transform: 'rotate(-3deg)', display: 'inline-block' } },
   { id: 'fire', label: 'Fire', font: IMPACT, key: { background: 'linear-gradient(0deg,#DC2626,#F97316,#FACC15)', WebkitBackgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 4px rgba(249,115,22,.7))' } },
   { id: 'ice', label: 'Ice', font: IMPACT, key: { background: 'linear-gradient(0deg,#0EA5E9,#A5F3FC,#fff)', WebkitBackgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 4px rgba(14,165,233,.7))' } },
   { id: 'gold', label: 'Luxury gold', font: SERIF, key: { background: 'linear-gradient(180deg,#FDE68A,#CA8A04,#FDE68A)', WebkitBackgroundClip: 'text', color: 'transparent' } },
@@ -143,7 +144,7 @@ const CAPS: Cap[] = [
   { id: 'chat_bubble', label: 'Chat bubble', font: ROUND, key: { color: '#fff', background: '#3B82F6', borderRadius: 14, padding: '0 8px' }, soft: { color: '#fff', background: '#3B82F6', borderRadius: 14, padding: '0 6px' } },
   { id: 'sticky_note', label: 'Sticky note', font: HAND, key: { color: '#DC2626' }, wrap: { background: '#FDE68A', padding: '4px 8px', transform: 'rotate(-2deg)', boxShadow: '0 4px 10px rgba(0,0,0,.18)' } },
   { id: 'news_bar', label: 'News bar', font: IMPACT, key: { color: '#EF4444' }, wrap: { background: '#111', padding: '3px 8px' }, soft: { color: '#fff' } },
-  { id: 'pop_art', label: 'Pop art', font: IMPACT, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '2px 2px 0 #EC4899' }, tile: GREY_TILE },
+  { id: 'pop_art', label: 'Pop art', font: IMPACT, key: { color: '#FACC15', ...EDGE, textShadow: '2px 2px 0 #EC4899' } },
   { id: 'rgb_split', label: 'RGB glitch', font: IMPACT, key: { color: '#111', textShadow: '-2px 0 #EF4444, 2px 0 #3B82F6' }, tile: LIGHT_TILE },
   { id: 'minimal', label: 'Minimal', font: '"Inter", system-ui, sans-serif', key: { fontWeight: 600, letterSpacing: 0 }, soft: { fontWeight: 400 } },
   { id: 'poster_words', label: 'Poster words', font: IMPACT, key: { fontSize: '1.5em', lineHeight: 1 } },
@@ -310,7 +311,7 @@ export const PhonePreview: React.FC<{ look: ShortsLook; width?: number; fxOnly?:
   head?: [string, string, string]; words?: [string, string] }> =
   ({ look, width = 150, fxOnly, still, frame = true, head = ['HE LOST', 'EVERYTHING', 'IN ONE DAY'], words }) => {
     const studio = look.style === 'split';
-    const bg = BGS.find(b => b.id === look.bg) || BGS[0];
+    const bg = BGS.find(b => b.id === look.bg) || BGS.find(b => b.id === 'white')!;
     const dark = studio ? !!bg.dark : look.style === 'boxed';
     const caps = studio ? CAPS : SIMPLE_CAPS;
     const cap = caps.find(c => c.id === look.caption) || caps[0];
@@ -439,12 +440,23 @@ const TITLES: Record<Panel, string> = {
   style: 'Pick a style', bg: 'Pick a background', caption: 'Pick a subtitle look', fx: 'Effects', fit: 'Video fit', length: 'Length of each Short', count: 'How many Shorts',
 };
 
+// the fonts the caption looks are drawn in (the site itself only loads Inter) — fetched once, the first time a
+// picker opens, so the previews aren't drawn in whatever fallback the phone has
+const CAPTION_FONTS = 'https://fonts.googleapis.com/css2?family=Anton&family=Caveat:wght@700&family=DM+Serif+Display&family=Fredoka:wght@600;700&display=swap';
+const useCaptionFonts = () => React.useEffect(() => {
+  if (document.getElementById('caption-fonts')) return;
+  const l = document.createElement('link');
+  l.id = 'caption-fonts'; l.rel = 'stylesheet'; l.href = CAPTION_FONTS;
+  document.head.appendChild(l);
+}, []);
+
 const Popup: React.FC<{ title: string; hint?: string; onClose: () => void; wide?: boolean; footer?: React.ReactNode; children: React.ReactNode }> =
   ({ title, hint, onClose, wide, footer, children }) => {
   // the page behind stays put while the popup is open (no scrolling it on phones either); Esc closes it
   const closeRef = React.useRef(onClose);
   closeRef.current = onClose;
   useScrollLock();
+  useCaptionFonts();
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
@@ -483,7 +495,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
   const set = (patch: Partial<ShortsLook>) => onChange({ ...look, ...patch });
   const pickOne = (patch: Partial<ShortsLook>) => { set(patch); setOpen(null); };
   const studio = look.style === 'split';
-  const bg = BGS.find(b => b.id === look.bg) || BGS[0];
+  const bg = BGS.find(b => b.id === look.bg) || BGS.find(b => b.id === 'white')!;
   const caps = studio ? CAPS : SIMPLE_CAPS;
   const cap = caps.find(c => c.id === look.caption) || caps[0];
   const style = STYLES.find(s => s.id === look.style) || STYLES[0];
@@ -551,23 +563,20 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
       )}
 
       {open === 'bg' && (
-        <Popup title={TITLES.bg} hint="AI: picks a background that fits each Short" onClose={() => setOpen(null)}>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+        <Popup title={TITLES.bg} onClose={() => setOpen(null)}>
+          {/* just the background itself, big and one to a row — no photo or words on it (user-requested) */}
+          <div className="grid grid-cols-1 gap-2.5">
             {BGS.map(b => (
-              <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} p-1.5 bg-thumb-soft flex flex-col items-center`}>
+              <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} overflow-hidden`}>
                 <Tick on={look.bg === b.id} />
-                <div className="relative">
-                  {b.id === 'ai'
-                    ? <div className="rounded-[12px] bg-thumb-card border border-thumb-line flex flex-col items-center justify-center gap-1.5 text-center px-2" style={{ width: small ? 82 : 104, aspectRatio: '9 / 16' }}>
-                        <span className="text-[26px] leading-none">✨</span>
-                        <span className="text-[13px] font-black text-thumb-ink">AI</span>
-                        <span className="text-[10px] leading-tight text-thumb-sub">picks one for each Short</span>
-                      </div>
-                    : HAS_IMG.has(`bg-${b.id}`)
-                    ? <RealShot name={`bg-${b.id}`} className="rounded-[12px]" style={{ width: small ? 82 : 104, aspectRatio: '9 / 16' }} />
-                    : <PhonePreview look={{ ...look, style: 'split', bg: b.id, fxMode: 'auto' }} width={small ? 82 : 104} still frame={false} />}
-                </div>
-                <p className="mt-1.5 text-[11.5px] font-bold text-thumb-ink truncate max-w-full">{b.label}</p>
+                {b.id === 'ai'
+                  ? <div className="aspect-video bg-[#262626] flex flex-col items-center justify-center gap-1 text-center px-4">
+                      <span className="text-[30px] leading-none">✨</span>
+                      <span className="text-[15px] font-black text-white">AI</span>
+                      <span className="text-[12px] text-white/60">picks a background that fits each Short</span>
+                    </div>
+                  : <div className="aspect-video" style={b.css} />}
+                <p className="px-3 py-2 text-[13px] font-bold text-thumb-ink bg-thumb-card">{b.label}</p>
               </button>
             ))}
           </div>
