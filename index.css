@@ -795,3 +795,29 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .mk-wave { transform-origin: center; animation: mkWave .9s ease-in-out infinite; }
 .mk-draw { stroke-dasharray: 30; animation: mkDraw 1.6s ease-out infinite alternate; }
 .mk-ring { animation: mkRing 1.6s ease-out infinite; }
+
+/* ── Thumbnail maker: the "taking shape" loader (components/ThumbLoader.tsx) ── */
+.tl-root { background: #0d0d10; }
+.tl-wash {
+  background: radial-gradient(120% 90% at 20% 20%, rgba(255,45,82,.35), transparent 60%),
+              radial-gradient(100% 80% at 85% 80%, rgba(99,102,241,.28), transparent 60%);
+  animation: tlWash 6s ease-in-out infinite alternate;
+}
+@keyframes tlWash { from { opacity: .55; transform: scale(1); } to { opacity: 1; transform: scale(1.08); } }
+.tl-person, .tl-bar, .tl-sticker { opacity: 0; animation-duration: 5.4s; animation-iteration-count: infinite; animation-fill-mode: both; }
+.tl-person { animation-name: tlRise; }
+.tl-bar { animation-name: tlGrow; transform-origin: left center; }
+.tl-sticker { animation-name: tlPop; }
+@keyframes tlRise { 0%, 8% { opacity: 0; transform: translateY(14%); } 20%, 88% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes tlGrow { 0%, 6% { opacity: 0; transform: scaleX(0); } 18%, 88% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; } }
+@keyframes tlPop { 0%, 4% { opacity: 0; transform: scale(.4) rotate(6deg); } 12% { opacity: 1; transform: scale(1.12) rotate(6deg); } 16%, 88% { opacity: 1; transform: scale(1) rotate(6deg); } 100% { opacity: 0; } }
+.tl-sweep {
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.14), transparent);
+  animation: tlSweep 2.4s ease-in-out infinite;
+}
+@keyframes tlSweep { from { transform: translateX(0); } to { transform: translateX(400%); } }
+.tl-step { animation: tlStep .35s ease-out both; }
+@keyframes tlStep { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .tl-wash, .tl-sweep, .tl-person, .tl-bar, .tl-sticker { animation: none; opacity: 1; }
+}

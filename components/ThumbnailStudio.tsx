@@ -15,6 +15,7 @@ import PersonaPicker from './PersonaPicker';
 import StylePickerModal from './StylePickerModal';
 import SegmentedControl from './SegmentedControl';
 import ThumbDemo from './ThumbDemo';
+import ThumbLoader from './ThumbLoader';
 import { savePersona } from '../services/personasService';
 // Secondary tabs load on demand — each becomes its own chunk, fetched only when
 // the user opens that tab, so the initial studio view stays lean.
@@ -2579,38 +2580,9 @@ const ThumbnailStudio: React.FC<Props> = ({
               <div className="thumb-glass rounded-[28px] p-4 sm:p-6 min-h-[60vh] lg:min-h-[calc(100vh-3rem)]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {sortedQueue.map(item => (
-                    <div key={item.id} className="aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
+                    <div key={item.id} className="relative aspect-video rounded-2xl bg-thumb-soft border border-thumb-line flex flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center">
                       {item.status === 'processing' ? (
-                        (() => {
-                          const t = itemTimers[item.id] || 0;
-                          const stepIndex = Math.min(GEN_STEPS.length - 1, Math.floor(t / 4));
-                          return (
-                            <div className="w-full px-2">
-                              <div className="flex items-center justify-center gap-2 mb-3">
-                                <span className="w-5 h-5 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
-                                <span className="text-thumb-red font-mono text-sm">{t.toFixed(1)}s</span>
-                              </div>
-                              <div className="space-y-1.5 text-left max-w-[210px] mx-auto">
-                                {GEN_STEPS.map((s, i) => {
-                                  const done = i < stepIndex;
-                                  const active = i === stepIndex;
-                                  return (
-                                    <div key={i} className={`flex items-center gap-2 text-[11px] transition-colors ${done ? 'text-thumb-sub' : active ? 'text-thumb-ink font-semibold' : 'text-thumb-sub/40'}`}>
-                                      <span className="w-4 h-4 shrink-0 flex items-center justify-center">
-                                        {done
-                                          ? <I.Check className="w-4 h-4 text-thumb-red" />
-                                          : active
-                                            ? <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
-                                            : <span className="w-2 h-2 bg-thumb-sub/30 rounded-full" />}
-                                      </span>
-                                      {s}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })()
+                        <ThumbLoader seconds={itemTimers[item.id] || 0} steps={GEN_STEPS} />
                       ) : item.status === 'failed' ? (
                         <>
                           <div className="w-10 h-10 rounded-full bg-thumb-redSoft text-thumb-red flex items-center justify-center text-xl">!</div>
