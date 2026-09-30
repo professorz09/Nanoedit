@@ -290,6 +290,21 @@ const FIND_CREDITS = 1;
 const PLAY_EVENT = 'pf-short-play';
 const announcePlay = (id: number) => window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: id }));
 
+// how long until a made Short's file is deleted, ticking once a minute ("18h 20m")
+const useTimeLeft = (expiresAt?: number | null) => {
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    if (!expiresAt) return;
+    const t = setInterval(() => setNow(Date.now() / 1000), 60_000);
+    return () => clearInterval(t);
+  }, [expiresAt]);
+  if (!expiresAt) return null;
+  const left = Math.max(0, expiresAt - now);
+  if (left < 60) return 'soon';
+  const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+};
+
 const ShortCard: React.FC<{
   clip: ShortClip; videoId: string | null; duration: number | null;
   onTrim: (c: ShortClip, start: number, end: number) => void;
@@ -297,7 +312,7 @@ const ShortCard: React.FC<{
   cost: number;
   projectLook: ShortsLook;
   onRemake: (c: ShortClip, look: ShortsLook | null, remake: boolean) => void;
-  tall?: boolean;  // the Made tab: a made Short plays upright (9:16), like a real Short
+  tall?: boolean;  // the Made tab: a made Short plays upright (9:16); on All moments every card stays the YouTube preview
 }> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake, tall }) => {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -322,6 +337,8 @@ const ShortCard: React.FC<{
   const [customLook, setCustomLook] = useState<ShortsLook | null>(null);
   const made = clip.status === 'ready' && !!clip.view && viewFailed !== clip.view;
   const remakeable = clip.status === 'ready' && clip.paid;  // made and still kept: the Remake section
+  const timeLeft = useTimeLeft(clip.status === 'ready' ? clip.expires_at : null);
+  const playMade = made && tall;  // user-requested: made ones stay YouTube previews on All moments
   // user-requested: each card shows a frame from its own moment; the video's thumbnail until that's taken
   const [frameFailed, setFrameFailed] = useState<string | null>(null);
   const ytThumb = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : undefined;
@@ -352,8 +369,8 @@ const ShortCard: React.FC<{
 
   return (
     <div className="thumb-glass rounded-3xl overflow-hidden flex flex-col animate-fade-in-up">
-      <div className={`relative bg-black ${made && tall ? 'flex justify-center' : 'aspect-video'}`}>
-        {made ? (
+      <div className={`relative bg-black ${playMade ? 'flex justify-center' : 'aspect-video'}`}>
+        {playMade ? (
           <video
             ref={videoRef}
             onPlay={() => announcePlay(clip.id)}
@@ -364,7 +381,7 @@ const ShortCard: React.FC<{
             playsInline
             preload="metadata"
             onError={() => setViewFailed(clip.view!)}
-            className={made && tall ? 'block h-[min(70vh,560px)] aspect-[9/16] max-w-full object-contain bg-black' : 'absolute inset-0 w-full h-full object-contain bg-black'}
+            className={playMade ? 'block h-[min(70vh,560px)] aspect-[9/16] max-w-full object-contain bg-black' : 'absolute inset-0 w-full h-full object-contain bg-black'}
           />
         ) : playing && videoId ? (
           <>
@@ -398,7 +415,14 @@ const ShortCard: React.FC<{
             <Ic.Fire className="w-3.5 h-3.5" /> {clip.score}
           </span>
         )}
-        <span className="absolute top-2.5 right-2.5 bg-black/70 text-white text-[11px] font-bold px-2 py-1 rounded-lg">#{clip.idx + 1}{made ? ' · Made' : ''}</span>
+        <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5">
+          {clip.status === 'ready' && (
+            <span className="inline-flex items-center gap-1 bg-emerald-500 text-white text-[11px] font-black px-2 py-1 rounded-lg shadow-lg">
+              <Ic.Check className="w-3.5 h-3.5" /> Made
+            </span>
+          )}
+          <span className="bg-black/70 text-white text-[11px] font-bold px-2 py-1 rounded-lg">#{clip.idx + 1}</span>
+        </span>
       </div>
 
       <div className="p-4 sm:p-5 flex flex-col gap-3.5 flex-1">
@@ -470,8 +494,7 @@ const ShortCard: React.FC<{
                   {remakeable ? 'Pick a new style' : 'Change style for this Short'}
                 </button>
               )}
-            {/* no plain "Remake this Short": the same style again gave near the same video for a credit. A trim
-                or an expired file already brings back a free "Make Short"; a new style is the remake that matters. */}
+            {/* the same style again is the Regenerate button under Download; here it's a new style */}
             {remakeable ? customLook && (
               <>
                 <button type="button" disabled={busy} onClick={() => { onRemake(clip, customLook, true); setCustomLook(null); }}
@@ -510,7 +533,17 @@ const ShortCard: React.FC<{
               {clip.status === 'ready' ? 'Download' : clip.paid ? 'Make Short · free re-make' : `Make Short · ${cost} credit${cost === 1 ? '' : 's'}`}
             </button>
           )}
-          {made && <p className="text-center text-[11.5px] text-thumb-sub">Deleted 24 hours after it's made — download it before then. Making it again is free.</p>}
+          {remakeable && !busy && (
+            <button type="button" onClick={() => onRemake(clip, null, true)}
+              className="w-full h-10 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-ink font-bold text-[13px] inline-flex items-center justify-center gap-1.5 hover:border-thumb-red/40 transition-colors">
+              <Ic.Reset className="w-4 h-4" /> Regenerate · {cost} credit{cost === 1 ? '' : 's'}
+            </button>
+          )}
+          {timeLeft && (
+            <p className="text-center text-[12px] text-thumb-sub">
+              ⏳ {timeLeft === 'soon' ? <>Being <b className="text-thumb-ink">deleted soon</b></> : <>Deleted in <b className="text-thumb-ink tabular-nums">{timeLeft}</b></>} — download it before then
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -948,7 +981,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
                   </button>
                 )}
                 <p className="text-center text-[12px] text-thumb-sub">
-                  {unpaid ? `${credits(unpaid)} for the Shorts not made yet · ` : ''}Each Short is made when you tap Make Short and kept for 24 hours.
+                  {unpaid ? `${credits(unpaid)} for the Shorts not made yet · ` : ''}Each Short is made when you tap Make Short.
                 </p>
               </div>
             )}
@@ -983,12 +1016,6 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
               );
               return (
                 <>
-                {tab === 'made' && (
-                  <p className="flex items-start gap-2 rounded-2xl bg-thumb-soft border border-thumb-line px-3.5 py-2.5 text-[12.5px] text-thumb-sub leading-snug">
-                    <span aria-hidden="true">⏳</span>
-                    <span>Made Shorts are <b className="text-thumb-ink">deleted after 24 hours</b>. Download them before then — making one again later is free.</span>
-                  </p>
-                )}
                 <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
                   {list.map(s => (
                     <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}

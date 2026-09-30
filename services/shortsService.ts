@@ -27,6 +27,7 @@ export interface ShortClip {
   view?: string | null; // the made Short, streamed for the card's player (only while its file is kept)
   position?: number | null; // while waiting to be made: its place in line (1 = next)
   frame?: string | null; // a picture from this Short's own moment (until it's taken, the video's thumbnail)
+  expires_at?: number | null; // a made Short: when its file is deleted (unix seconds)
 }
 
 export interface ShortsProject {
