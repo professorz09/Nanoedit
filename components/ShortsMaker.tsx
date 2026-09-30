@@ -875,7 +875,9 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     };
   }, []);
   const [project, setProject] = useState<ShortsProject | null>(null);
-  const cost = project?.options?.real_images && brollOk ? 2 : 1;  // credits for a Short the first time
+  // credits for a Short the first time: 1, +1 with AI B-roll, +1 with AI stickers (both Creator extras)
+  const stickersOn = Array.isArray(project?.options?.fx) ? project!.options!.fx!.includes('stickers') : true;
+  const cost = 1 + (project?.options?.real_images && brollOk ? 1 : 0) + (stickersOn && brollOk ? 1 : 0);
   const credits = (n: number) => `${n} credit${n === 1 ? '' : 's'}`;
   const [wantZip, setWantZip] = useState(false);
   const trimTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});

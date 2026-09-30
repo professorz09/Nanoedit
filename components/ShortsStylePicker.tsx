@@ -82,7 +82,7 @@ const FX_ICONS: Record<string, React.ReactNode> = {
 const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; label: string; note: string }[] = [
   { key: 'explain', label: 'AI explainer designs', note: 'Fact cards, counting numbers, money stacks' },
   { key: 'broll', label: 'AI B-roll', note: 'A real picture of what is being explained' },
-  { key: 'stickers', label: 'AI stickers', note: 'A drawn sticker of what is said' },
+  { key: 'stickers', label: 'AI stickers', note: 'A drawn sticker of what is said, in every Short' },
   { key: 'sfx', label: 'Sound effects', note: 'Whooshes and pops on the big moments' },
 ];
 
@@ -665,7 +665,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
                       {f.label}
                       {(f.key === 'broll' || f.key === 'stickers') && (
                         <span className="px-1.5 py-[1px] rounded-md bg-thumb-card border border-thumb-line text-[10px] font-black text-thumb-sub">
-                          {locked ? '🔒 Creator plan' : f.key === 'broll' ? 'Creator · +1 credit' : 'Creator'}
+                          {locked ? '🔒 Creator plan' : 'Creator · +1 credit'}
                         </span>
                       )}
                     </p>
