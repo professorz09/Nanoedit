@@ -243,39 +243,25 @@ const makeSteps = (clip: ShortClip) => {
   return { steps, at };
 };
 
-const MakingOverlay: React.FC<{ clip: ShortClip; picture?: string; elapsed: number; onPreview: () => void }> = ({ clip, picture, elapsed, onPreview }) => {
+// user-requested: a plain black screen (no blurred picture, no score in the corners), one clear line for the
+// step it's on, a bar for how far along it is; a tap anywhere plays the preview (no label for it, user-requested)
+const MakingOverlay: React.FC<{ clip: ShortClip; elapsed: number; onPreview: () => void }> = ({ clip, elapsed, onPreview }) => {
   const { steps, at } = makeSteps(clip);
   const waiting = clip.status === 'queued';
+  const pct = Math.round(((at + (waiting ? 0.15 : 0.5)) / steps.length) * 100);
   return (
-    <button type="button" onClick={onPreview} className="group absolute inset-0 w-full h-full text-left" aria-label={`Watch the preview of ${clip.title}`}>
-      {picture && <img src={picture} alt="" className="absolute inset-0 w-full h-full object-cover scale-110 blur-[6px] opacity-60" />}
-      <span className="absolute inset-0 bg-black/60" />
-      <span className="absolute inset-0 overflow-hidden"><span className="finding-scan absolute top-0 bottom-0 left-0 w-[12%] bg-gradient-to-r from-transparent via-thumb-red/35 to-transparent" /></span>
-      <span className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-4">
-        <span className="flex items-center gap-2">
-          <span className="w-5 h-5 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
-          {waiting && clip.position
-            ? <span className="text-white font-black text-[15px]">#{clip.position} in line</span>
-            : <span className="text-thumb-red font-mono text-[13px] font-bold">{fmtTime(elapsed)}</span>}
+    <button type="button" onClick={onPreview} className="absolute inset-0 w-full h-full bg-black" aria-label={`Watch the preview of ${clip.title}`}>
+      <span className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <span className="w-8 h-8 border-[3px] border-thumb-red border-t-transparent rounded-full animate-spin" />
+        <span className="text-white font-black text-[16px] leading-tight">
+          {waiting ? (clip.position ? `#${clip.position} in line` : 'In line') : steps[at]}
         </span>
-        <span className="space-y-1 max-w-[220px] w-full">
-          {steps.map((s, i) => {
-            const done = i < at;
-            const active = i === at;
-            return (
-              <span key={s} className={`flex items-center gap-2 text-[12px] ${done ? 'text-white/60' : active ? 'text-white font-bold' : 'text-white/30'}`}>
-                <span className="w-4 h-4 shrink-0 flex items-center justify-center">
-                  {done ? <Ic.Check className="w-4 h-4 text-thumb-red" />
-                    : active ? <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
-                    : <span className="w-2 h-2 bg-white/25 rounded-full" />}
-                </span>
-                {s === 'In line' && waiting && clip.position ? `In line — ${clip.position === 1 ? 'next up' : `${clip.position - 1} ahead`}` : s}
-              </span>
-            );
-          })}
+        <span className="w-full max-w-[240px] h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <span className="block h-full rounded-full bg-thumb-red transition-[width] duration-700" style={{ width: `${pct}%` }} />
         </span>
-        <span className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-white/80 bg-white/10 border border-white/15 rounded-full px-2.5 py-1 group-hover:bg-white/20 transition-colors">
-          <Ic.Play className="w-3 h-3" /> Tap to watch the preview
+        <span className="text-[12px] text-white/50 tabular-nums">
+          {waiting ? (clip.position === 1 ? 'Next up' : clip.position ? `${clip.position - 1} ahead of it` : 'Starting soon')
+            : `Step ${at + 1} of ${steps.length} · ${fmtTime(elapsed)}`}
         </span>
       </span>
     </button>
@@ -395,7 +381,7 @@ const ShortCard: React.FC<{
             )}
           </>
         ) : busy ? (
-          <MakingOverlay clip={clip} picture={picture} elapsed={elapsed} onPreview={() => { announcePlay(clip.id); setPlaying(true); }} />
+          <MakingOverlay clip={clip} elapsed={elapsed} onPreview={() => { announcePlay(clip.id); setPlaying(true); }} />
         ) : (
           <button type="button" onClick={() => { announcePlay(clip.id); setPlaying(true); }} className="group absolute inset-0 w-full h-full" aria-label={`Preview ${clip.title}`}>
             {picture && <img key={picture} src={picture} alt="" className="w-full h-full object-cover opacity-90" loading="lazy"
@@ -410,19 +396,19 @@ const ShortCard: React.FC<{
             </span>
           </button>
         )}
-        {clip.score != null && (
+        {clip.score != null && !(busy && !playing) && (
           <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 bg-thumb-red text-white text-[12px] font-black px-2.5 py-1 rounded-lg shadow-lg">
             <Ic.Fire className="w-3.5 h-3.5" /> {clip.score}
           </span>
         )}
-        <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5">
+        {!(busy && !playing) && <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5">
           {clip.status === 'ready' && (
             <span className="inline-flex items-center gap-1 bg-emerald-500 text-white text-[11px] font-black px-2 py-1 rounded-lg shadow-lg">
               <Ic.Check className="w-3.5 h-3.5" /> Made
             </span>
           )}
           <span className="bg-black/70 text-white text-[11px] font-bold px-2 py-1 rounded-lg">#{clip.idx + 1}</span>
-        </span>
+        </span>}
       </div>
 
       <div className="p-4 sm:p-5 flex flex-col gap-3.5 flex-1">
@@ -522,9 +508,9 @@ const ShortCard: React.FC<{
             <p className="text-[12px] bg-thumb-redSoft text-thumb-red border border-thumb-red/20 rounded-xl px-3 py-2">{clip.error}</p>
           )}
           {busy ? (
-            <div className="w-full h-[52px] rounded-2xl bg-thumb-soft border border-thumb-line flex items-center justify-center gap-2 text-[13px] font-bold text-thumb-sub">
-              <span className="w-2 h-2 bg-thumb-red rounded-full animate-pulse" />
-              Making your Short — progress is on the video
+            <div className="w-full h-[52px] rounded-2xl bg-thumb-soft border border-thumb-line flex items-center justify-center gap-2 px-3 text-[13px] font-bold text-thumb-sub">
+              <span className="w-2 h-2 shrink-0 bg-thumb-red rounded-full animate-pulse" />
+              Making your Short…
             </div>
           ) : (
             <button type="button" onClick={() => onDownload(clip)}
