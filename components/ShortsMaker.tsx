@@ -558,7 +558,8 @@ const ShortCard: React.FC<{
               {clip.status === 'ready' ? 'Download' : clip.paid ? 'Make Short · free re-make' : `Make Short · ${cost} credit${cost === 1 ? '' : 's'}`}
             </button>
           )}
-          {remakeable && !busy && (
+          {/* Regenerate lives on All moments; the Made tab is for watching and downloading */}
+          {remakeable && !busy && !tall && (
             <button type="button" onClick={() => onRemake(clip, null, true)}
               className="w-full h-10 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-ink font-bold text-[13px] inline-flex items-center justify-center gap-1.5 hover:border-thumb-red/40 transition-colors">
               <Ic.Reset className="w-4 h-4" /> Regenerate · {cost} credit{cost === 1 ? '' : 's'}
