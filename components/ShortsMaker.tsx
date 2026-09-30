@@ -177,6 +177,66 @@ const ShortSkeleton = () => (
   </div>
 );
 
+// user-requested ("shorts ban rahe hai to niche skeleton kyu... kuch aur animations"): while a project's moments
+// are being found, a live panel instead of empty skeleton cards — the video's own thumbnail being scanned, a voice
+// wave, the steps the server works through (paced by time: the server only reports "finding") and the time so far.
+const FINDING_STEPS = [
+  'Reading the video’s transcript',
+  'Finding the strongest moments',
+  'Scoring each one for virality',
+  'Writing titles and descriptions',
+  'Picking the best cut points',
+];
+const FINDING_STEP_SEC = 12; // the last step stays until the Shorts arrive
+
+const FindingMoments: React.FC<{ thumb?: string | null; since?: number | null }> = ({ thumb, since }) => {
+  const [now, setNow] = useState(() => Date.now());
+  const [openedAt] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  // the project's own start (unix seconds) when known, so reopening a project doesn't restart the clock
+  const startedMs = since && since * 1000 <= now ? since * 1000 : openedAt;
+  const elapsed = Math.max(0, Math.floor((now - startedMs) / 1000));
+  const step = Math.min(FINDING_STEPS.length - 1, Math.floor(elapsed / FINDING_STEP_SEC));
+  return (
+    <div className="thumb-glass rounded-3xl overflow-hidden sm:col-span-2 2xl:col-span-3">
+      <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="relative aspect-video bg-thumb-soft overflow-hidden">
+          {thumb && <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="finding-scan absolute top-0 bottom-0 left-0 w-[10%] bg-gradient-to-r from-transparent via-thumb-red/50 to-transparent" />
+          <div className="absolute bottom-4 left-4 right-4 flex items-end gap-1 h-10" aria-hidden="true">
+            {Array.from({ length: 28 }, (_, i) => (
+              <span key={i} className="finding-wave flex-1 rounded-full bg-white/80"
+                style={{ height: `${30 + ((i * 37) % 70)}%`, animationDelay: `${(i % 7) * 0.12}s` }} />
+            ))}
+          </div>
+        </div>
+        <div className="p-5 sm:p-6 flex flex-col justify-center gap-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-base font-black text-thumb-ink">Finding your Shorts</p>
+            <span className="text-[13px] font-bold text-thumb-sub tabular-nums">{fmtTime(elapsed)}</span>
+          </div>
+          <ol className="space-y-2.5">
+            {FINDING_STEPS.map((label, i) => (
+              <li key={label} className={`flex items-center gap-3 text-[14px] font-semibold ${i <= step ? 'text-thumb-ink' : 'text-thumb-sub/60'}`}>
+                <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[12px] font-black ${
+                  i < step ? 'bg-thumb-red text-white finding-pop' : i === step ? 'border-2 border-thumb-red text-thumb-red' : 'border border-thumb-line'}`}>
+                  {i < step ? '✓' : i === step ? <span className="w-2 h-2 rounded-full bg-thumb-red animate-pulse" /> : ''}
+                </span>
+                {label}
+              </li>
+            ))}
+          </ol>
+          <p className="text-[12px] text-thumb-sub">Usually 1–3 minutes, longer for long videos. You can leave this page — the project keeps going.</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── the start page's side: a real finished Short playing, a new one every 10 s ─────────────────────
 const ExamplePhone: React.FC = () => {
   const [i, setI] = useState(0);
@@ -442,8 +502,10 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         )}
 
         <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-5">
-          {!project || project.status === 'finding'
+          {!project
             ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
+            : project.status === 'finding'
+            ? <FindingMoments thumb={project.thumb} since={project.created_at} />
             : shorts.map(s => (
               <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost} />
             ))}
