@@ -775,6 +775,22 @@ const ThumbnailStudio: React.FC<Props> = ({
     return false;
   })();
 
+  // user-requested: the Generate button says what it will cost — per thumbnail 3 credits from a YouTube link, 1
+  // otherwise, +RES_SURCHARGE_4K at 4K, times the variations (the server's IMAGE_COST / RES_SURCHARGE decide)
+  const generateCost = ((mode === 'youtube' ? YOUTUBE_IMAGE_COST : 1) + (genModel === '4k' ? RES_SURCHARGE_4K : 0))
+    * Math.max(1, Math.min(4, genCount));
+
+  // the YouTube link's video (thumbnail + title), shown under the link box
+  const [linkPreview, setLinkPreview] = useState<{ id: string; title: string | null } | null>(null);
+  useEffect(() => {
+    const id = mode === 'youtube' ? extractYouTubeId(youtubeUrl) : null;
+    if (!id) { setLinkPreview(null); return; }
+    let alive = true;
+    setLinkPreview(prev => (prev?.id === id ? prev : { id, title: null }));
+    fetchYouTubeTitle(id).then(title => { if (alive) setLinkPreview({ id, title: title || 'YouTube video' }); });
+    return () => { alive = false; };
+  }, [youtubeUrl, mode]);
+
   const scrollToResults = () =>
     setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
 
@@ -1863,6 +1879,18 @@ const ThumbnailStudio: React.FC<Props> = ({
                         className="w-full bg-transparent py-4 outline-none text-[15px] placeholder-thumb-sub/50"
                       />
                     </div>
+                    {/* user-requested: the video the link points to, so it's clear the right one was picked up */}
+                    {linkPreview && (
+                      <div className="flex items-center gap-3 p-2 pr-3 rounded-2xl bg-white/[0.04] border border-white/[0.07] animate-fade-in-up">
+                        <img src={`https://i.ytimg.com/vi/${linkPreview.id}/mqdefault.jpg`} alt="" className="w-24 aspect-video rounded-xl object-cover shrink-0 bg-black" />
+                        <div className="min-w-0">
+                          {linkPreview.title
+                            ? <p className="text-[13px] font-bold text-thumb-ink leading-snug line-clamp-2">{linkPreview.title}</p>
+                            : <div className="h-3.5 w-40 rounded thumb-skeleton" />}
+                          <p className="text-[11px] font-bold text-thumb-green mt-1">✓ Video found</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Advanced (optional) */}
@@ -1896,7 +1924,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                             <label className="thumb-label">Extras (optional)</label>
                             {selectedYtStyle && (
                               <button type="button" onClick={() => setSelectedYtStyle(null)} className="text-[11px] font-bold text-thumb-red hover:underline">
-                                Auto-match style instead
+                                Auto-match
                               </button>
                             )}
                           </div>
@@ -1924,9 +1952,16 @@ const ThumbnailStudio: React.FC<Props> = ({
                             <button
                               type="button"
                               onClick={() => setStyleModalOpen('youtube')}
-                              className={`thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold ${selectedYtStyle ? 'thumb-tile-on' : ''}`}
+                              className={`thumb-tile relative overflow-hidden h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold ${selectedYtStyle ? 'thumb-tile-on' : ''}`}
                             >
-                              <I.Image className="w-4 h-4" /> Style
+                              {/* the picked style shows on the tile itself */}
+                              {selectedYtStyle ? (
+                                <>
+                                  <img src={selectedYtStyle} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                                  <span className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                                  <span className="absolute bottom-1.5 inset-x-0 text-center text-white text-[11px] font-black">✓ Style</span>
+                                </>
+                              ) : <><I.Image className="w-4 h-4" /> Style</>}
                             </button>
                             <button
                               type="button"
@@ -2252,9 +2287,16 @@ const ThumbnailStudio: React.FC<Props> = ({
                             <button
                               type="button"
                               onClick={() => setStyleModalOpen('sketch')}
-                              className={`thumb-tile h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold ${selectedSketchStyle ? 'thumb-tile-on' : ''}`}
+                              className={`thumb-tile relative overflow-hidden h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[12px] font-bold ${selectedSketchStyle ? 'thumb-tile-on' : ''}`}
                             >
-                              <I.Image className="w-4 h-4" /> Style
+                              {/* the picked style shows on the tile itself */}
+                              {selectedSketchStyle ? (
+                                <>
+                                  <img src={selectedSketchStyle} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                                  <span className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                                  <span className="absolute bottom-1.5 inset-x-0 text-center text-white text-[11px] font-black">✓ Style</span>
+                                </>
+                              ) : <><I.Image className="w-4 h-4" /> Style</>}
                             </button>
                             <button
                               type="button"
@@ -2475,7 +2517,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                     Fetching…
                   </>
                 ) : (
-                  <><I.Wand className="w-5 h-5" /> Generate Thumbnails</>
+                  <><I.Wand className="w-5 h-5" /> Generate <span className="text-[14px] font-bold opacity-80">· {generateCost} credit{generateCost === 1 ? '' : 's'}</span></>
                 )}
               </button>
             </div>
@@ -2556,6 +2598,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                       onOpenEditor={onOpenEditor}
                       onChangeFace={setChangeFaceTarget}
                       onDelete={onDelete}
+                      onFeedTest={url => { setPreviewImage(url); goPreview(); }}
                     />
                   ))}
 
