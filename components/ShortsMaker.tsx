@@ -918,8 +918,10 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         setProject(prev => {
           // keep a trim the user just made on screen until the server has it
           if (!prev?.shorts || !p.shorts) return p;
+          // (and a Make Short just tapped, until the server has queued it)
           const pending = trimTimers.current;
-          return { ...p, shorts: p.shorts.map(s => (pending[s.id] ? prev.shorts!.find(x => x.id === s.id) || s : s)) };
+          const keep = (id: number) => pending[id] || starting.current.has(id);
+          return { ...p, shorts: p.shorts.map(s => (keep(s.id) ? prev.shorts!.find(x => x.id === s.id) || s : s)) };
         });
         const working = p.status === 'finding' || (p.shorts || []).some(s => s.status === 'queued' || s.status === 'rendering');
         if (p.zip && wantZipRef.current) { wantZipRef.current = false; setWantZip(false); startDownload(p.zip); }
@@ -1034,19 +1036,31 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     }
   };
 
+  // user-reported: "Make Short" showed nothing for a while after the tap (the card only changed once the
+  // server answered) — the card goes to "Making your Short…" at once, and back if the server says no
+  const starting = useRef<Set<number>>(new Set());
+  const startMake = async (clip: ShortClip, send: () => Promise<unknown>) => {
+    starting.current.add(clip.id);
+    updateClip(clip.id, { status: 'queued', stage: 'Starting…', error: null });
+    try {
+      await flushTrim(clip);
+      await send();
+      updateClip(clip.id, { status: 'queued', stage: 'In line', error: null });
+      refreshProfile();
+    } catch (e: any) {
+      updateClip(clip.id, { status: clip.status, stage: clip.stage, error: clip.error });
+      setNote(e.message);
+    } finally {
+      starting.current.delete(clip.id);
+      poke();
+    }
+  };
+
   const onDownload = async (clip: ShortClip) => {
     setNote(null);
     if (clip.status === 'ready' && clip.download) { startDownload(clip.download); return; }
     if (configured && !clip.paid && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
-    try {
-      await flushTrim(clip);
-      await renderShort(clip.id);
-      updateClip(clip.id, { status: 'queued', stage: 'In line', error: null });
-      refreshProfile();
-      poke();
-    } catch (e: any) {
-      setNote(e.message);
-    }
+    await startMake(clip, () => renderShort(clip.id));
   };
 
   // l: a one-off style for this make (null: the project's); remake: a made Short made again, paid again
@@ -1054,16 +1068,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     setNote(null);
     // a first make, and every Remake (user-decided: a remake is paid like a first make), takes credits
     if (configured && (!clip.paid || remake) && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
-    try {
-      await flushTrim(clip);
-      const r = l ? lookToRequest(l) : null;
-      await renderShort(clip.id, r ? { style: r.style, subtitles: r.subtitles, bg: r.bg, caption_look: r.caption_look, fx: r.fx, sfx: r.sfx, fit: r.fit } : undefined, remake);
-      updateClip(clip.id, { status: 'queued', stage: 'In line', error: null });
-      refreshProfile();
-      poke();
-    } catch (e: any) {
-      setNote(e.message);
-    }
+    const r = l ? lookToRequest(l) : null;
+    await startMake(clip, () => renderShort(clip.id, r ? { style: r.style, subtitles: r.subtitles, bg: r.bg, caption_look: r.caption_look, fx: r.fx, sfx: r.sfx, fit: r.fit } : undefined, remake));
   };
 
   const onDownloadAll = async () => {
