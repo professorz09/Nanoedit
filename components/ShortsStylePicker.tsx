@@ -16,13 +16,14 @@ export interface ShortsLook {
   explain: boolean;     // 📊 AI explainer designs: fact cards, number counters, money stacks
   broll: boolean;       // 🔬 AI B-roll: a real, labelled picture of what is explained
   stickers: boolean;    // 🎨 AI stickers
+  fxOff?: string[];     // motion effects switched off (all of MOTION_FX are on unless listed here)
   fit: string;          // full | zoom | track (Classic & Boxed)
   length: string;
   count: string;        // how many Shorts: auto | 3 | 5 | 10 | 15 | 20
 }
 
 export const DEFAULT_LOOK: ShortsLook = {
-  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
+  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], fxOff: [], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
 };
 
 // "Mix" (random) was folded into the one AI background — an old pick of it shows as AI
@@ -42,6 +43,7 @@ export const lookFromProject = (p: { style?: string | null; subtitles?: string |
     fxMode: 'auto',
     explain: fx ? fx.includes('facts') : true,
     stickers: fx ? fx.includes('stickers') : true,
+    fxOff: fx ? MOTION_FX.filter(k => !fx.includes(k)) : [],
     broll: false,
     sfx: o.sfx !== false,
     fit: o.fit || 'full',
@@ -57,15 +59,15 @@ export const lookToRequest = (l: ShortsLook) => {
     subtitles: studio ? (l.caption === 'off' ? 'off' : 'auto') : l.caption,
     bg: l.bg,
     caption_look: studio && l.caption !== 'off' ? l.caption : 'auto',
-    // the motion effects are always the AI's pick; the four switches add their own groups
-    fx: [...MOTION_FX, ...(l.explain ? EXPLAIN_FX : []), ...(l.stickers ? ['stickers'] : []), ...(l.broll ? ['real_images'] : [])],
+    // the motion effects the user left on (the AI picks among them per clip); the four switches add their own groups
+    fx: [...MOTION_FX.filter(k => !(l.fxOff || []).includes(k)), ...(l.explain ? EXPLAIN_FX : []), ...(l.stickers ? ['stickers'] : []), ...(l.broll ? ['real_images'] : [])],
     sfx: l.sfx,
     fit: studio ? 'full' : l.fit,
     count: l.count === 'auto' ? undefined : Number(l.count),
   };
 };
 
-// the Effects popup is one Auto (these, picked per clip) plus four switches
+// the Effects popup: four extras, then each motion effect (on by default, the AI picks among them per clip)
 const MOTION_FX = ['hook_freeze', 'card_drop', 'card_move', 'push_in', 'zoom_punch', 'cascade', 'marker', 'scribble', 'burst', 'audio_react', 'progress'];
 const EXPLAIN_FX = ['facts', 'counter', 'scramble', 'money_stack'];
 const fxIcon = (d: React.ReactNode) => (
@@ -547,7 +549,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           icon={<span className="block w-4 h-4 rounded-full ring-1 ring-black/15" style={bg.css} />} />
       : <Chip key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} icon={ICONS.fit} />,
     <Chip key="caption" panel="caption" label="Subtitles" value={cap.label} icon={ICONS.caption} />,
-    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = fxSwitches.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length; return n ? `${n} extra${n === 1 ? '' : 's'}` : 'Basic'; })()} icon={ICONS.fx} />] : []),
+    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = fxSwitches.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length + MOTION_FX.length - (look.fxOff || []).filter(k => MOTION_FX.includes(k)).length; return n ? `${n} on` : 'Basic'; })()} icon={ICONS.fx} />] : []),
     ...(perShort ? [] : [
       <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
       <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
@@ -621,7 +623,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
       )}
 
       {open === 'fx' && (
-        <Popup title={TITLES.fx} hint="Zooms and word highlights are added to every Short. Turn on the extras you want." onClose={() => setOpen(null)}
+        <Popup title={TITLES.fx} hint="Turn on only the effects you want. The AI uses the ones that are on where they fit." onClose={() => setOpen(null)}
           footer={<button type="button" onClick={() => setOpen(null)} className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px]">Done</button>}>
           {/* clean rows — an icon, what it does, and the app's own switch; no photos (user-requested) */}
           <div className="flex flex-col gap-2">
@@ -647,6 +649,29 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
                   <button type="button" role="switch" aria-checked={on} aria-label={f.label}
                     onClick={e => { e.stopPropagation(); toggle(); }} className="shrink-0">
                     <span className={`block rounded-full ${on ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {/* user-requested: each motion effect with its own switch */}
+          <p className="mt-4 mb-2 text-[11px] font-black uppercase tracking-wider text-thumb-sub">Motion & highlights</p>
+          <div className="flex flex-col gap-1.5">
+            {MOTION_FX.map(k => {
+              const f = FX.find(x => x.id === k)!;
+              const off = (look.fxOff || []).includes(k);
+              const toggle = () => set({ fxOff: off ? (look.fxOff || []).filter(x => x !== k) : [...(look.fxOff || []), k] });
+              return (
+                <div key={k} onClick={toggle}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl border cursor-pointer transition-colors ${!off ? 'border-thumb-red/40 bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/30'}`}>
+                  <span className="w-8 h-8 shrink-0 rounded-lg bg-thumb-card flex items-center justify-center text-[16px]">{f.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-bold text-thumb-ink leading-tight">{f.label}</p>
+                    <p className="text-[11.5px] text-thumb-sub leading-snug mt-0.5">{f.note}</p>
+                  </div>
+                  <button type="button" role="switch" aria-checked={!off} aria-label={f.label}
+                    onClick={e => { e.stopPropagation(); toggle(); }} className="shrink-0">
+                    <span className={`block rounded-full ${!off ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
                   </button>
                 </div>
               );
