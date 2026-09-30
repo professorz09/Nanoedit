@@ -120,7 +120,7 @@ const BGS: Bg[] = [
 
 // a caption look: how the key word and the other words are drawn
 // tile: the picker card's colour when a look doesn't show on the usual dark card (dark: draw the other words white)
-type Cap = { id: string; label: string; key: React.CSSProperties; soft?: React.CSSProperties; wrap?: React.CSSProperties; font?: string; tile?: { bg: string; dark?: boolean } };
+type Cap = { id: string; label: string; img?: boolean; key: React.CSSProperties; soft?: React.CSSProperties; wrap?: React.CSSProperties; font?: string; tile?: { bg: string; dark?: boolean } };
 const LIGHT_TILE = { bg: '#FFFFFF' };
 // a thick black edge drawn under the letters (not over them) — a thin one smudges the words at preview size
 const EDGE: React.CSSProperties = { WebkitTextStroke: '3px #111', paintOrder: 'stroke fill' };
@@ -162,6 +162,23 @@ const SIMPLE_CAPS: Cap[] = [
   { id: 'auto', label: 'AI', font: IMPACT, key: { color: '#FACC15', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
   { id: 'animated', label: 'Animated', font: IMPACT, key: { color: '#4ADE80', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
   { id: 'simple', label: 'Simple', font: '"Arial Black", sans-serif', key: { color: '#fff', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
+  // user-requested two-line looks (the first words white, the rest bigger in colour) — each tile is a picture
+  // drawn by the render server itself (pipeline/assemble.py SHORTS_DUO_LOOKS), so its fonts are the real ones
+  { id: 'duo_blue', label: 'Blue', img: true, key: {} },
+  { id: 'duo_orange', label: 'Orange', img: true, key: {} },
+  { id: 'duo_purple', label: 'Purple', img: true, key: {} },
+  { id: 'duo_green_glow', label: 'Green glow', img: true, key: {} },
+  { id: 'duo_yellow_glow', label: 'Yellow glow', img: true, key: {} },
+  { id: 'duo_cyan_neon', label: 'Cyan neon', img: true, key: {} },
+  { id: 'duo_serif_gold', label: 'Serif gold', img: true, key: {} },
+  { id: 'duo_green_bold', label: 'Green bold', img: true, key: {} },
+  { id: 'duo_pink', label: 'Pink', img: true, key: {} },
+  { id: 'duo_marker', label: 'Marker', img: true, key: {} },
+  { id: 'duo_gold_glow', label: 'Gold glow', img: true, key: {} },
+  { id: 'duo_mint', label: 'Mint', img: true, key: {} },
+  { id: 'duo_orange_glow', label: 'Orange glow', img: true, key: {} },
+  { id: 'duo_violet', label: 'Violet', img: true, key: {} },
+  { id: 'duo_sky', label: 'Sky', img: true, key: {} },
   { id: 'off', label: 'No subtitles', key: {} },
 ]
 
@@ -236,6 +253,8 @@ const cardCls = (on: boolean) =>
 // a caption sample: "THIS CHANGED EVERYTHING", the key word in the look
 const CaptionSample: React.FC<{ cap: Cap; dark: boolean; size?: number; animate?: boolean; marker?: boolean; circle?: boolean; words?: [string, string] }> =
   ({ cap, dark, size = 13, animate, marker, circle, words = ['THIS CHANGED', 'EVERYTHING'] }) => {
+    // a two-line look is its real picture (dark tile keyed out so it sits on the video)
+    if (cap.img) return <img src={LOOK_IMG(`simple-${cap.id}`)} alt="" style={{ height: size * 3.4, mixBlendMode: 'lighten' }} />;
     if (cap.id === 'off') return <span className="text-[11px] font-bold" style={{ color: dark ? '#fff8' : '#0006' }}>— no words —</span>;
     const ink = dark ? '#fff' : '#111';
     const keyStyle: React.CSSProperties = {
@@ -615,7 +634,9 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
                 <Tick on={look.caption === c.id} />
                 {/* just the words on a plain card — no photo behind them (user-requested) */}
                 <div className="h-[64px] overflow-hidden flex items-center justify-center px-1" style={{ background: c.tile?.bg || '#262626' }}>
-                  <CaptionSample cap={c} dark={c.tile ? !!c.tile.dark : true} size={small ? 11 : 13} animate={look.caption === c.id} />
+                  {c.img
+                    ? <img src={LOOK_IMG(`simple-${c.id}`)} alt="" loading="lazy" className="h-full w-full object-contain" />
+                    : <CaptionSample cap={c} dark={c.tile ? !!c.tile.dark : true} size={small ? 11 : 13} animate={look.caption === c.id} />}
                 </div>
                 <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">
                   {c.id === 'auto' ? <span className="inline-flex items-center gap-1.5"><AiBadge /> Best fit</span> : c.label}
