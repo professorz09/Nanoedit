@@ -618,7 +618,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
               return (
                 <button key={f.key} type="button" role="switch" aria-checked={on}
                   onClick={() => locked ? onUpgrade?.() : set({ [f.key]: !look[f.key] } as Partial<ShortsLook>)}
-                  className={`${cardCls(on)} overflow-hidden bg-thumb-soft flex flex-col`}>
+                  className={`switch-card ${cardCls(on)} overflow-hidden bg-thumb-soft flex flex-col`}>
                   <div className="relative h-[112px] overflow-hidden">
                     {f.img
                       ? <RealShot name={f.img} className="w-full h-full" focusY={f.key === 'explain' ? 72 : f.key === 'stickers' ? 80 : 50} />

@@ -581,7 +581,8 @@ button:active:not(:disabled) { transform: scale(0.97); }
 }
 
 /* switches: a recessed track, a glossy red one when on, a white knob that springs */
-.thumb-scope button[role="switch"] {
+/* the small pill toggles — a whole card that works as a switch (.switch-card) keeps its own look */
+.thumb-scope button[role="switch"]:not(.switch-card) {
   display: flex;
   align-items: center;
   width: 46px;
@@ -592,12 +593,12 @@ button:active:not(:disabled) { transform: scale(0.97); }
   box-shadow: inset 0 2px 5px rgba(0,0,0,0.7);
   transition: background .25s ease, box-shadow .25s ease, border-color .25s ease;
 }
-.thumb-scope button[role="switch"][aria-checked="true"] {
+.thumb-scope button[role="switch"]:not(.switch-card)[aria-checked="true"] {
   background: linear-gradient(180deg, #ff4d6a, #d9153b);
   border-color: rgba(255,130,150,0.55);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 16px -3px rgba(255,51,85,0.7);
 }
-.thumb-scope button[role="switch"] > span {
+.thumb-scope button[role="switch"]:not(.switch-card) > span {
   width: 20px;
   height: 20px;
   background: linear-gradient(180deg, #ffffff, #e6e6ec);
