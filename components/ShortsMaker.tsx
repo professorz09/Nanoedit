@@ -396,8 +396,9 @@ const ShortCard: React.FC<{
             ref={videoRef}
             onPlay={() => announcePlay(clip.id)}
             key={clip.view!}
-            src={clip.view!}
-            poster={picture}
+            // user-reported: before it plays, show the made Short's own first frame — not the YouTube picture.
+            // No poster; "#t=0.1" makes phone browsers load and show that frame.
+            src={`${clip.view!}#t=0.1`}
             controls
             playsInline
             preload="metadata"
@@ -438,8 +439,8 @@ const ShortCard: React.FC<{
             <Ic.Fire className="w-3 h-3 text-thumb-red" /> {clip.score}
           </span>
         )}
-        {/* no "#2": the time already says where it is in the video */}
-        {clip.status === 'ready' && !(busy && !playing) && (
+        {/* no "#2": the time already says where it is in the video; no Made tick on the Made tab itself */}
+        {clip.status === 'ready' && !tall && !(busy && !playing) && (
           <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 bg-emerald-500/90 backdrop-blur-md text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
             <Ic.Check className="w-3 h-3" /> Made
           </span>
