@@ -663,25 +663,21 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     const working = shorts.filter(s => s.status === 'queued' || s.status === 'rendering').length;
     const unpaid = shorts.filter(s => !s.paid).length * cost;
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* back to the list: a clear pill button (user-requested), close under the header */}
         <button type="button" onClick={() => { setOpenId(null); loadProjects(); }}
-          className="thumb-backpill -mt-4 sm:-mt-6 inline-flex items-center gap-2 h-10 pl-1.5 pr-4 rounded-full text-[13px] font-bold text-thumb-ink">
+          className="thumb-backpill -mt-7 sm:-mt-8 inline-flex items-center gap-2 h-10 pl-1.5 pr-4 rounded-full text-[13px] font-bold text-thumb-ink">
           <span className="w-7 h-7 rounded-full bg-thumb-soft border border-thumb-line flex items-center justify-center"><Ic.Back className="w-3.5 h-3.5" /></span>
           All projects
         </button>
 
-        {/* the project itself: a wide cinematic banner, not another card (user-requested: it looked like one
-            more Short) — the video's picture edge to edge with its title on it, violet instead of the Shorts' red,
-            and a soft glow of the picture behind */}
-        <div className="relative">
-          {project?.thumb && (
-            <img src={project.thumb} alt="" aria-hidden="true"
-              className="absolute inset-x-4 top-6 bottom-0 w-[calc(100%-2rem)] h-[calc(100%-1.5rem)] object-cover blur-3xl opacity-50 saturate-150 pointer-events-none" />
-          )}
-          <div className="project-hero relative aspect-[4/3] sm:aspect-[21/9] rounded-[28px] overflow-hidden bg-black">
+        {/* user-requested: the project is ONE container and everything of it sits inside — its banner on top
+            (the video's picture with the title on it, violet instead of the Shorts' red), then the download-all
+            and its Shorts. Nothing of the project floats outside it. */}
+        <div className="project-shell relative -mx-2 sm:mx-0 rounded-[30px] overflow-hidden">
+          <div className="relative aspect-[16/10] sm:aspect-[21/8] bg-black">
             {project?.thumb ? <img src={project.thumb} alt="" className="absolute inset-0 w-full h-full object-cover" /> : <div className="absolute inset-0 thumb-skeleton" />}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0718] via-[#0b0718]/55 to-transparent" />
+            <div className="absolute inset-0 project-hero-fade" />
             {project?.status === 'finding' && <FindingOverlay top />}
             <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 space-y-2.5">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/25 border border-violet-300/30 text-violet-100 text-[10.5px] font-black uppercase tracking-[0.14em] backdrop-blur-md">
@@ -702,42 +698,51 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
               </div>
             </div>
           </div>
-        </div>
 
-        {noteBox}
-        {project?.status === 'failed' && project.error && (
-          <div className="thumb-glass rounded-3xl p-8 text-center">
-            <p className="text-base font-bold text-thumb-ink">{project.error}</p>
-          </div>
-        )}
-
-        {/* download all */}
-        {project?.status === 'ready' && shorts.length > 0 && (
-          <div className="space-y-1.5">
-            {wantZip ? (
-              <div className="w-full h-[60px] rounded-2xl thumb-skeleton flex items-center justify-center">
-                <span className="text-[15px] font-black text-thumb-ink">Making your Shorts… {made}/{shorts.length} ready</span>
+          <div className="relative p-2.5 sm:p-5 pt-4 sm:pt-5 space-y-5">
+            {noteBox}
+            {project?.status === 'failed' && project.error && (
+              <div className="rounded-3xl bg-thumb-soft border border-thumb-line p-8 text-center">
+                <p className="text-base font-bold text-thumb-ink">{project.error}</p>
               </div>
-            ) : (
-              <button type="button" onClick={onDownloadAll} className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[17px] flex items-center justify-center gap-2.5">
-                <Ic.Zip className="w-5 h-5" /> Download all ({shorts.length}) as ZIP
-              </button>
             )}
-            <p className="text-center text-[12px] text-thumb-sub">
-              {unpaid ? `${credits(unpaid)} for the Shorts not made yet · ` : ''}Each Short is made when you download it and kept for 24 hours.
-            </p>
-          </div>
-        )}
 
-        <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-5">
-          {!project
-            ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
-            : project.status === 'finding'
-            ? <FindingMoments since={project.created_at} />
-            : shorts.map(s => (
-              <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
-                projectLook={lookFromProject(project)} onRemake={onRemake} />
-            ))}
+            {/* download all */}
+            {project?.status === 'ready' && shorts.length > 0 && (
+              <div className="space-y-1.5 px-1 sm:px-0">
+                {wantZip ? (
+                  <div className="w-full h-[56px] rounded-2xl thumb-skeleton flex items-center justify-center">
+                    <span className="text-[15px] font-black text-thumb-ink">Making your Shorts… {made}/{shorts.length} ready</span>
+                  </div>
+                ) : (
+                  <button type="button" onClick={onDownloadAll} className="thumb-btn w-full h-[56px] rounded-2xl text-white font-black text-[16px] flex items-center justify-center gap-2.5">
+                    <Ic.Zip className="w-5 h-5" /> Download all ({shorts.length}) as ZIP
+                  </button>
+                )}
+                <p className="text-center text-[12px] text-thumb-sub">
+                  {unpaid ? `${credits(unpaid)} for the Shorts not made yet · ` : ''}Each Short is made when you download it and kept for 24 hours.
+                </p>
+              </div>
+            )}
+
+            {project && project.status !== 'failed' && (
+              <div className="flex items-center gap-3 px-1.5 sm:px-0 pt-1">
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-violet-300/90">Shorts in this project</span>
+                <span className="flex-1 h-px bg-gradient-to-r from-violet-400/30 to-transparent" />
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
+              {!project
+                ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
+                : project.status === 'finding'
+                ? <FindingMoments since={project.created_at} />
+                : shorts.map(s => (
+                  <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
+                    projectLook={lookFromProject(project)} onRemake={onRemake} />
+                ))}
+            </div>
+          </div>
         </div>
       </div>
     );

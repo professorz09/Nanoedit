@@ -492,11 +492,27 @@ button:active:not(:disabled) { transform: scale(0.97); }
 }
 
 /* ── Shorts Maker: a project's banner and its back button ── */
-.project-hero {
+.project-shell {
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(124,58,237,0.16), transparent 70%),
+    linear-gradient(180deg, rgba(22,18,40,0.92), rgba(10,9,18,0.94));
   box-shadow:
-    0 0 0 1px rgba(167,139,250,0.28),
-    0 30px 70px -30px rgba(76,29,149,0.75),
-    inset 0 1px 0 rgba(255,255,255,0.12);
+    0 0 0 1px rgba(167,139,250,0.26),
+    0 40px 90px -40px rgba(76,29,149,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.10);
+}
+/* the banner melts into the container below it */
+.project-hero-fade {
+  background: linear-gradient(to top, #120f22 0%, rgba(18,15,34,0.6) 38%, rgba(18,15,34,0) 75%);
+}
+.thumb-light .project-shell {
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(124,58,237,0.10), transparent 70%),
+    linear-gradient(180deg, #f6f3ff, #efeef8);
+  box-shadow: 0 0 0 1px rgba(124,58,237,0.22), 0 30px 70px -40px rgba(76,29,149,0.35);
+}
+.thumb-light .project-hero-fade {
+  background: linear-gradient(to top, rgba(18,12,40,0.92) 0%, rgba(18,12,40,0.5) 40%, rgba(18,12,40,0) 75%);
 }
 .project-chip {
   display: inline-flex;
