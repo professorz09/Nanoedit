@@ -1611,7 +1611,8 @@ const ThumbnailStudio: React.FC<Props> = ({
           <nav className={`thumb-menu rounded-[28px] p-2.5 max-h-[calc(100dvh-100px)] overflow-y-auto no-scrollbar origin-top transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${sidebarOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-[0.98]'}`}>
             <div className="grid sm:grid-cols-2 gap-0.5">
               {([
-                { key: 'home', label: 'Home', icon: I.Wand, active: section === 'home', onClick: goHome },
+                // the landing page is for visitors; a signed-in user's menu starts at the tools (user-requested)
+                ...(configured && user ? [] : [{ key: 'home', label: 'Home', icon: I.Wand, active: section === 'home', onClick: goHome }]),
                 { key: 'shorts', label: 'Shorts Maker', icon: I.Play, active: section === 'shorts', onClick: goShorts },
                 { key: 'generate', label: 'Thumbnail Maker', icon: I.Bolt, active: section === 'generate', onClick: goGenerate },
                 { key: 'title', label: 'Title Generator', icon: I.Text, active: section === 'title', onClick: goTitle },

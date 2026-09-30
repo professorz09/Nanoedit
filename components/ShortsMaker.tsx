@@ -214,7 +214,7 @@ const ShortCard: React.FC<{
   onDownload: (c: ShortClip) => void;
   cost: number;
   projectLook: ShortsLook;
-  onRemake: (c: ShortClip, look: ShortsLook | null) => void;
+  onRemake: (c: ShortClip, look: ShortsLook | null, remake: boolean) => void;
 }> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake }) => {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -237,6 +237,7 @@ const ShortCard: React.FC<{
   // (not saved: once it's sent, this goes back to "Same as project")
   const [customLook, setCustomLook] = useState<ShortsLook | null>(null);
   const made = clip.status === 'ready' && !!clip.view && viewFailed !== clip.view;
+  const remakeable = clip.status === 'ready' && clip.paid;  // made and still kept: the Remake section
   // user-requested: each card shows a frame from its own moment; the video's thumbnail until that's taken
   const [frameFailed, setFrameFailed] = useState<string | null>(null);
   const ytThumb = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : undefined;
@@ -359,45 +360,46 @@ const ShortCard: React.FC<{
               <Nudge which={which} d={5} text="+5" />
             </div>
           ))}
+          {/* user-requested: a made Short is remade from here — as it is, or in a style changed first (for that
+              make only); user-decided: every remake is the whole video again and costs credits like a first make.
+              A Short not made yet (or whose file expired) just gets "Video style" for its next make. */}
           <div className="pt-2.5 mt-1 border-t border-thumb-line space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Video style</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">{remakeable ? 'Remake' : 'Video style'}</span>
               {customLook
                 ? <button type="button" onClick={() => setCustomLook(null)} className="inline-flex items-center gap-1 text-[11px] font-bold text-thumb-red hover:underline">
                     <Ic.Reset className="w-3 h-3" /> Same as project
                   </button>
-                : <span className="text-[12px] font-bold text-thumb-sub">Same as project</span>}
+                : <span className="text-[12px] font-bold text-thumb-sub">{remakeable ? 'Style: same as project' : 'Same as project'}</span>}
             </div>
-            {customLook ? (
+            {customLook
+              ? <LookBar look={customLook} onChange={setCustomLook} thumb={videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null} perShort />
+              : (
+                <button type="button" disabled={busy} onClick={() => setCustomLook(projectLook)}
+                  className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors">
+                  {remakeable ? 'Change the style first (optional)' : 'Change style for this Short'}
+                </button>
+              )}
+            {remakeable ? (
               <>
-                <LookBar look={customLook} onChange={setCustomLook} thumb={videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null} perShort />
-                <button type="button" disabled={busy} onClick={() => { onRemake(clip, customLook); setCustomLook(null); }}
+                <button type="button" disabled={busy} onClick={() => { onRemake(clip, customLook, true); setCustomLook(null); }}
+                  className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px] disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
+                  <Ic.Reset className="w-4 h-4" /> {customLook ? 'Remake in this style' : 'Remake this Short'} · {cost} credit{cost === 1 ? '' : 's'}
+                </button>
+                <p className="text-[11px] text-thumb-sub text-center">
+                  The whole video is made again from the start{customLook ? ' — this style is only for this make' : ', in the same style'}.
+                </p>
+              </>
+            ) : customLook && (
+              <>
+                <button type="button" disabled={busy} onClick={() => { onRemake(clip, customLook, false); setCustomLook(null); }}
                   className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px] disabled:opacity-50">
-                  {clip.paid
-                    ? `${clip.status === 'ready' ? 'Remake' : 'Make'} in this style · free`
-                    : `Make in this style · ${cost} credit${cost === 1 ? '' : 's'}`}
+                  {clip.paid ? 'Make in this style · free' : `Make in this style · ${cost} credit${cost === 1 ? '' : 's'}`}
                 </button>
                 <p className="text-[11px] text-thumb-sub text-center">Only for this make — next time it's the project's style again.</p>
               </>
-            ) : (
-              <button type="button" disabled={busy} onClick={() => setCustomLook(projectLook)}
-                className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors">
-                Change style for this Short
-              </button>
             )}
           </div>
-          {/* user-requested: a made Short can simply be made again — the whole video from the start, same moment
-              and style; user-decided: it costs credits like a first make */}
-          {clip.status === 'ready' && clip.paid && !customLook && (
-            <div className="pt-2.5 mt-1 border-t border-thumb-line space-y-2">
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Remake</span>
-              <button type="button" disabled={busy} onClick={() => onRemake(clip, null)}
-                className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-1.5">
-                <Ic.Reset className="w-3.5 h-3.5" /> Make this Short again · {cost} credit{cost === 1 ? '' : 's'}
-              </button>
-              <p className="text-[11px] text-thumb-sub text-center">Not happy with it? The whole video is made again from the start, in the same style.</p>
-            </div>
-          )}
           </div>
           )}
         </div>
@@ -719,19 +721,15 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     }
   };
 
-  // l: the one-off style to make it in; null: make it again as it is (a made Short's "Remake")
-  const onRemake = async (clip: ShortClip, l: ShortsLook | null) => {
+  // l: a one-off style for this make (null: the project's); remake: a made Short made again, paid again
+  const onRemake = async (clip: ShortClip, l: ShortsLook | null, remake: boolean) => {
     setNote(null);
     // a first make, and every Remake (user-decided: a remake is paid like a first make), takes credits
-    if (configured && (!clip.paid || !l) && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
+    if (configured && (!clip.paid || remake) && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
     try {
       await flushTrim(clip);
-      if (l) {
-        const r = lookToRequest(l);
-        await renderShort(clip.id, { style: r.style, subtitles: r.subtitles, bg: r.bg, caption_look: r.caption_look, fx: r.fx, sfx: r.sfx, fit: r.fit });
-      } else {
-        await renderShort(clip.id, undefined, true);
-      }
+      const r = l ? lookToRequest(l) : null;
+      await renderShort(clip.id, r ? { style: r.style, subtitles: r.subtitles, bg: r.bg, caption_look: r.caption_look, fx: r.fx, sfx: r.sfx, fit: r.fit } : undefined, remake);
       updateClip(clip.id, { status: 'queued', stage: 'In line', error: null });
       refreshProfile();
       poke();

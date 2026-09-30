@@ -419,20 +419,23 @@ export default function EditorView(props: EditorViewProps) {
   return (
     <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans animate-fade-in`}>
 
-      {/* Mobile header — back + brand. */}
-      <header className={`lg:hidden sticky top-0 z-30 px-4 h-14 flex items-center gap-2.5 thumb-glass border-b border-thumb-line transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      {/* Mobile header — back + brand, the same floating glass pill as the rest of the site */}
+      <header className={`lg:hidden sticky top-0 z-30 px-3 pt-3 transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className="thumb-navglass rounded-full h-[62px] pl-2 pr-4 flex items-center gap-2.5">
           <button
             onClick={() => setView('studio')}
             title="Back to PodcastFlux"
-            className="group w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink hover:border-thumb-red/40 transition-all"
+            aria-label="Back to PodcastFlux"
+            className="group w-11 h-11 shrink-0 flex items-center justify-center rounded-full bg-thumb-soft border border-thumb-line text-thumb-ink/80 hover:text-thumb-ink hover:border-thumb-red/40 transition-all"
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
-          <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
-          <div className="leading-tight">
-            <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink">PodcastFlux Editor</div>
+          <div className="leading-tight min-w-0">
+            <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink truncate">PodcastFlux Editor</div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Canvas Editor</div>
           </div>
+          <div className="thumb-btn ml-auto w-11 h-11 rounded-full flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
+        </div>
       </header>
 
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 pt-4 sm:pt-6 pb-44 lg:pb-16">
