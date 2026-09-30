@@ -2320,7 +2320,7 @@ const ThumbnailStudio: React.FC<Props> = ({
                   <input
                     value={titleText}
                     onChange={e => setTitleText(e.target.value)}
-                    placeholder={mode === 'templates' ? "e.g. A gaming video about a crazy comeback" : "e.g. Put my face in · title 'MODI JI'"}
+                    placeholder={mode === 'templates' ? "e.g. A gaming video about a crazy comeback" : "e.g. Put my face in · title 'I QUIT MY JOB'"}
                     className="thumb-field w-full h-[52px] rounded-2xl px-4 outline-none text-[15px] placeholder-thumb-sub/50"
                   />
                 </div>

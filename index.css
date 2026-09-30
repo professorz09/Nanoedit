@@ -155,9 +155,11 @@ button:active:not(:disabled) { transform: scale(0.97); }
     0 8px 22px -6px rgba(255,45,80,0.62),
     0 20px 42px -12px rgba(160,10,36,0.65);
 }
+/* not ready yet (e.g. nothing typed): the same red, dimmed — not a grey slab (user-requested) */
 .thumb-btn:disabled {
-  background: #26262c;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  opacity: 0.45;
+  filter: saturate(0.8);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
   cursor: not-allowed;
 }
 
