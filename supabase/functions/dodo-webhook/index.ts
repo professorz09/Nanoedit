@@ -163,11 +163,9 @@ Deno.serve(async (req) => {
         'webhook-signature': webhookHeaders['webhook-signature'] ? `[present, len=${webhookHeaders['webhook-signature'].length}]` : '[missing]',
       };
       console.error('dodo_signature_invalid', detail, 'headers_received:', JSON.stringify(safeHeaders));
-      // TEMPORARY: surfacing the real verification failure reason in the
-      // response body (instead of a generic message) so it shows up in
-      // Dodo's own webhook delivery log while we're debugging why every
-      // delivery fails despite a confirmed-correct DODO_WEBHOOK_SECRET.
-      return json(400, { error: 'Invalid webhook signature', detail, headers_received: safeHeaders });
+      // The reason stays in the function's own log above; the public response says only that it failed
+      // (it used to echo the verification detail back to whoever called this public endpoint).
+      return json(400, { error: 'Invalid webhook signature' });
     }
 
     const event = JSON.parse(rawBody);
