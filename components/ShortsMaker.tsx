@@ -297,7 +297,8 @@ const ShortCard: React.FC<{
   cost: number;
   projectLook: ShortsLook;
   onRemake: (c: ShortClip, look: ShortsLook | null, remake: boolean) => void;
-}> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake }) => {
+  tall?: boolean;  // the Made tab: a made Short plays upright (9:16), like a real Short
+}> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake, tall }) => {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   // how long this make has been going, counted from when the card first saw it busy
@@ -351,7 +352,7 @@ const ShortCard: React.FC<{
 
   return (
     <div className="thumb-glass rounded-3xl overflow-hidden flex flex-col animate-fade-in-up">
-      <div className="relative aspect-video bg-black">
+      <div className={`relative bg-black ${made && tall ? 'flex justify-center' : 'aspect-video'}`}>
         {made ? (
           <video
             ref={videoRef}
@@ -363,7 +364,7 @@ const ShortCard: React.FC<{
             playsInline
             preload="metadata"
             onError={() => setViewFailed(clip.view!)}
-            className="absolute inset-0 w-full h-full object-contain bg-black"
+            className={made && tall ? 'block h-[min(70vh,560px)] aspect-[9/16] max-w-full object-contain bg-black' : 'absolute inset-0 w-full h-full object-contain bg-black'}
           />
         ) : playing && videoId ? (
           <>
@@ -879,8 +880,9 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   }, [project]);
   useEffect(() => { readySeen.current = new Set(); }, [openId]);
 
-  // user-requested: sort a project's Shorts
-  const [sortBy, setSortBy] = useState<'score' | 'order' | 'made'>('score');
+  // user-requested: two tabs — every moment found (previewed from YouTube, best first) and the ones made
+  const [tab, setTab] = useState<'all' | 'made'>('all');
+  useEffect(() => { setTab('all'); }, [openId]);
 
   // ── one project (on a desktop: the right-hand panel, next to the link box) ──
   const renderProject = () => {
@@ -950,34 +952,43 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
               </div>
             )}
 
-            {project && project.status !== 'failed' && (
-              <div className="flex items-center gap-3 px-1.5 sm:px-0 pt-1">
-                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-thumb-sub whitespace-nowrap">Shorts</span>
-                <span className="flex-1 h-px bg-gradient-to-r from-white/15 to-transparent" />
-                <div className="flex items-center gap-1 p-1 rounded-full bg-black/40 border border-white/[0.07]" role="group" aria-label="Sort">
-                  {([['score', '🔥 Best'], ['order', 'In order'], ['made', 'Made']] as const).map(([k, label]) => (
-                    <button key={k} type="button" onClick={() => setSortBy(k)} aria-pressed={sortBy === k}
-                      className={`h-7 px-2.5 rounded-full text-[11.5px] font-bold transition-colors ${sortBy === k ? 'bg-white text-[#0b0b0d]' : 'text-thumb-sub hover:text-thumb-ink'}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
+            {project && project.status !== 'failed' && project.status !== 'finding' && (
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-black/40 border border-white/[0.07]" role="tablist" aria-label="Shorts">
+                {([['all', 'All moments', shorts.length], ['made', 'Made', made + working]] as const).map(([k, label, n]) => (
+                  <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                    className={`h-10 rounded-xl text-[13.5px] font-bold inline-flex items-center justify-center gap-1.5 transition-colors ${tab === k ? 'bg-white text-[#0b0b0d]' : 'text-thumb-sub hover:text-thumb-ink'}`}>
+                    {label}
+                    <span className={`min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-black inline-flex items-center justify-center ${tab === k ? 'bg-[#0b0b0d] text-white' : 'bg-white/10 text-thumb-ink'}`}>{n}</span>
+                  </button>
+                ))}
               </div>
             )}
 
-            <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
-              {!project
-                ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
-                : project.status === 'finding'
-                ? <FindingMoments since={project.created_at} />
-                : [...shorts].sort((a, b) =>
-                    sortBy === 'score' ? (b.score ?? 0) - (a.score ?? 0) || a.idx - b.idx
-                    : sortBy === 'made' ? Number(b.status === 'ready') - Number(a.status === 'ready') || a.idx - b.idx
-                    : a.idx - b.idx).map(s => (
-                  <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
-                    projectLook={lookFromProject(project)} onRemake={onRemake} />
-                ))}
-            </div>
+            {(() => {
+              if (!project) return <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">{Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)}</div>;
+              if (project.status === 'finding') return <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5"><FindingMoments since={project.created_at} /></div>;
+              const best = (a: ShortClip, b: ShortClip) => (b.score ?? 0) - (a.score ?? 0) || a.idx - b.idx;
+              const list = tab === 'all'
+                ? [...shorts].sort(best)
+                // made ones first, then the ones still being made
+                : shorts.filter(s => s.status === 'ready' || s.status === 'queued' || s.status === 'rendering')
+                    .sort((a, b) => Number(b.status === 'ready') - Number(a.status === 'ready') || best(a, b));
+              if (!list.length && tab === 'made') return (
+                <div className="rounded-3xl bg-thumb-soft border border-thumb-line px-6 py-10 text-center">
+                  <p className="text-[15px] font-bold text-thumb-ink">Nothing made yet</p>
+                  <p className="text-[13px] text-thumb-sub mt-1">Tap <b className="text-thumb-ink">Make Short</b> on a moment and it shows up here.</p>
+                  <button type="button" onClick={() => setTab('all')} className="mt-4 h-10 px-4 rounded-xl bg-white text-[#0b0b0d] text-[13px] font-bold">See all moments</button>
+                </div>
+              );
+              return (
+                <div className="grid sm:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
+                  {list.map(s => (
+                    <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
+                      projectLook={lookFromProject(project)} onRemake={onRemake} tall={tab === 'made'} />
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
