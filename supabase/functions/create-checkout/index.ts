@@ -110,6 +110,36 @@ Deno.serve(async (req) => {
         billing_currency: 'USD',
         // Read back by dodo-webhook to know who to credit and for what.
         metadata: { uid, item: itemId },
+        // user-requested: Dodo's hosted page in the site's own look — dark, the site's black/red, rounded
+        // like its cards (fields per the dodopayments SDK's CheckoutSessionCustomization / ThemeConfig)
+        customization: {
+          theme: 'dark',
+          show_on_demand_tag: false,
+          theme_config: {
+            dark: {
+              bg_primary: '#030304',
+              bg_secondary: '#16161a',
+              border_primary: '#232328',
+              border_secondary: '#2a2a31',
+              button_primary: '#ff3355',
+              button_primary_hover: '#e01840',
+              button_text_primary: '#ffffff',
+              button_secondary: '#16161a',
+              button_secondary_hover: '#232328',
+              button_text_secondary: '#f5f5f8',
+              input_focus_border: '#ff3355',
+              text_primary: '#f5f5f8',
+              text_secondary: '#a2a2b4',
+              text_placeholder: '#6b6b7a',
+              text_error: '#ff6b81',
+              text_success: '#2ee6a6',
+            },
+            radius: '14px',
+            pay_button_text: `Pay $${item.usd} · get ${item.credits} credits`,
+          },
+        },
+        // the charge is always USD (billing_currency above) — no currency picker that can't change it
+        feature_flags: { allow_currency_selection: false },
         // NOT confirm:true — that requires complete billing/customer info
         // supplied upfront (we only know the email), and was rejected
         // outright without it. Leaving this unconfirmed lets Dodo's own
