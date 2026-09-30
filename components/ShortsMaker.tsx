@@ -37,9 +37,10 @@ const CopyButton: React.FC<{ text: string; label: string }> = ({ text, label }) 
       type="button"
       onClick={() => { navigator.clipboard?.writeText(text); setDone(true); setTimeout(() => setDone(false), 1500); }}
       aria-label={`Copy ${label}`}
-      className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${done ? 'bg-thumb-greenSoft text-thumb-green border-thumb-green/30' : 'bg-thumb-soft border-thumb-line text-thumb-ink hover:border-thumb-red/40'}`}
+      title={done ? 'Copied' : `Copy ${label}`}
+      className={`shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-xl border transition-colors ${done ? 'bg-thumb-greenSoft text-thumb-green border-thumb-green/30' : 'bg-white/[0.05] border-white/10 text-thumb-ink hover:border-thumb-red/40'}`}
     >
-      {done ? <><Ic.Check className="w-3.5 h-3.5" /> Copied</> : <><Ic.Copy className="w-3.5 h-3.5" /> Copy</>}
+      {done ? <Ic.Check className="w-4 h-4" /> : <Ic.Copy className="w-4 h-4" />}
     </button>
   );
 };
@@ -147,6 +148,72 @@ const ClipPlayer: React.FC<{ videoId: string; start: number; end: number; onPlay
   );
 };
 
+// user-requested: start & end on one track — drag either end (the fine ±1 s buttons stay under it). The track
+// spans a minute either side of the moment the AI picked; the change is sent when the finger lets go.
+const TrimRange: React.FC<{ clip: ShortClip; duration: number | null; disabled: boolean; onCommit: (start: number, end: number) => void }> = ({ clip, duration, disabled, onCommit }) => {
+  const max = duration || clip.orig_end + 60;
+  const lo = Math.max(0, Math.min(clip.start, clip.orig_start - 60));
+  const hi = Math.min(max, Math.max(clip.end, clip.orig_end + 60));
+  const [draft, setDraft] = useState<{ start: number; end: number } | null>(null);
+  const cur = draft || { start: clip.start, end: clip.end };
+  const track = useRef<HTMLDivElement>(null);
+  const drag = useRef<'start' | 'end' | null>(null);
+  const pct = (t: number) => ((t - lo) / (hi - lo)) * 100;
+  const timeAt = (clientX: number) => {
+    const box = track.current!.getBoundingClientRect();
+    return Math.round((lo + Math.min(1, Math.max(0, (clientX - box.left) / box.width)) * (hi - lo)) * 10) / 10;
+  };
+  const move = (e: React.PointerEvent) => {
+    if (!drag.current) return;
+    const t = timeAt(e.clientX);
+    setDraft(d => {
+      const base = d || { start: clip.start, end: clip.end };
+      return drag.current === 'start'
+        ? { ...base, start: Math.min(t, base.end - 5) }
+        : { ...base, end: Math.max(t, base.start + 5) };
+    });
+  };
+  const end = () => {
+    if (!drag.current) return;
+    drag.current = null;
+    if (draft && (draft.start !== clip.start || draft.end !== clip.end)) onCommit(draft.start, draft.end);
+    setDraft(null);
+  };
+  const Handle = ({ which }: { which: 'start' | 'end' }) => (
+    <span
+      role="slider"
+      aria-label={which === 'start' ? 'Start' : 'End'}
+      aria-valuenow={Math.round(cur[which])}
+      onPointerDown={e => { if (disabled) return; drag.current = which; (e.currentTarget.parentElement as HTMLElement).setPointerCapture(e.pointerId); e.preventDefault(); }}
+      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-9 rounded-lg bg-white shadow-[0_2px_10px_rgba(0,0,0,0.6)] flex items-center justify-center touch-none ${disabled ? 'opacity-50' : 'cursor-ew-resize'}`}
+      style={{ left: `${pct(cur[which])}%` }}
+    >
+      <span className="w-0.5 h-4 rounded-full bg-black/30" />
+    </span>
+  );
+  return (
+    <div
+      ref={track}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+      className="relative h-12 mx-3 select-none touch-none"
+    >
+      <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-2 rounded-full bg-white/10" />
+      {/* the AI's own pick, faintly */}
+      <span className="absolute top-1/2 -translate-y-1/2 h-2 rounded-full bg-white/15" style={{ left: `${pct(clip.orig_start)}%`, width: `${pct(clip.orig_end) - pct(clip.orig_start)}%` }} />
+      <span className="absolute top-1/2 -translate-y-1/2 h-2 rounded-full bg-thumb-red shadow-[0_0_12px_rgba(255,51,85,0.6)]" style={{ left: `${pct(cur.start)}%`, width: `${pct(cur.end) - pct(cur.start)}%` }} />
+      <Handle which="start" />
+      <Handle which="end" />
+      {draft && (
+        <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[11px] font-black text-white bg-black/80 rounded-md px-1.5 py-0.5 tabular-nums">
+          {fmtTime(cur.start)} – {fmtTime(cur.end)} · {fmtTime(cur.end - cur.start)}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const projectFromUrl = (): number | null => {
   const n = Number(new URLSearchParams(window.location.search).get('project'));
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -232,7 +299,8 @@ const ShortCard: React.FC<{
     window.addEventListener(PLAY_EVENT, onOtherPlay);
     return () => window.removeEventListener(PLAY_EVENT, onOtherPlay);
   }, [clip.id]);
-  const [showTrim, setShowTrim] = useState(false); // start/end live under "Advanced settings" (user-requested)
+  const [showTrim, setShowTrim] = useState(false);
+  const [showDesc, setShowDesc] = useState(false); // start/end live under "Advanced settings" (user-requested)
   // user-requested: once made, the card plays the real Short, same size as the preview; when its file expires (no
   // view link any more) or the link stops working, it's the YouTube preview of that part again
   const [viewFailed, setViewFailed] = useState<string | null>(null);
@@ -264,7 +332,7 @@ const ShortCard: React.FC<{
 
   const Nudge = ({ which, d, text }: { which: 'start' | 'end'; d: number; text: string }) => (
     <button type="button" disabled={busy} onClick={() => nudge(which, d)}
-      className="w-10 h-10 rounded-xl bg-thumb-soft border border-thumb-line text-thumb-ink font-black text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors">
+      className="w-9 h-9 shrink-0 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-ink font-black text-[12px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors">
       {text}
     </button>
   );
@@ -321,16 +389,19 @@ const ShortCard: React.FC<{
       </div>
 
       <div className="p-4 sm:p-5 flex flex-col gap-3.5 flex-1">
-        <div className="flex items-start gap-2">
-          <p className="flex-1 text-[15px] font-black text-thumb-ink leading-snug">{clip.title}</p>
-          <CopyButton text={clip.title} label="title" />
-        </div>
-        {clip.description && (
-          <div className="flex items-start gap-2">
-            <p className="flex-1 text-[13px] text-thumb-sub leading-relaxed line-clamp-3">{clip.description}</p>
-            <CopyButton text={clip.description} label="description" />
+        {/* user-requested: one copy for both — the title, a blank line, the description — and a shorter card */}
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-black text-thumb-ink leading-snug">{clip.title}</p>
+            {clip.description && (
+              <button type="button" onClick={() => setShowDesc(v => !v)} className="block text-left mt-1">
+                <span className={`text-[13px] text-thumb-sub leading-relaxed ${showDesc ? '' : 'line-clamp-2'}`}>{clip.description}</span>
+                {!showDesc && clip.description.length > 90 && <span className="text-[12px] font-bold text-thumb-ink/70">more</span>}
+              </button>
+            )}
           </div>
-        )}
+          <CopyButton text={clip.description ? `${clip.title}\n\n${clip.description}` : clip.title} label="title and description" />
+        </div>
 
         {/* trim — folded under "Advanced settings" (user-requested: not out front) */}
         <div className="bg-thumb-soft border border-thumb-line rounded-2xl">
@@ -353,16 +424,19 @@ const ShortCard: React.FC<{
               </button>
             )}
           </div>
-          {(['start', 'end'] as const).map(which => (
-            <div key={which} className="flex items-center gap-2">
-              <span className="w-12 text-[12px] font-bold text-thumb-sub capitalize">{which}</span>
-              <Nudge which={which} d={-5} text="−5" />
-              <Nudge which={which} d={-1} text="−1" />
-              <span className="flex-1 text-center text-[14px] font-black text-thumb-ink tabular-nums">{fmtTime(which === 'start' ? clip.start : clip.end)}</span>
-              <Nudge which={which} d={1} text="+1" />
-              <Nudge which={which} d={5} text="+5" />
-            </div>
-          ))}
+          <TrimRange clip={clip} duration={duration} disabled={busy} onCommit={(a, b) => { setPlaying(false); onTrim(clip, a, b); }} />
+          <div className="grid grid-cols-2 gap-2">
+            {(['start', 'end'] as const).map(which => (
+              <div key={which} className="flex items-center gap-1.5 rounded-xl bg-black/30 border border-white/[0.06] p-1.5">
+                <Nudge which={which} d={-1} text="−1" />
+                <span className="flex-1 text-center leading-tight">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-thumb-sub">{which}</span>
+                  <span className="block text-[14px] font-black text-thumb-ink tabular-nums">{fmtTime(which === 'start' ? clip.start : clip.end)}</span>
+                </span>
+                <Nudge which={which} d={1} text="+1" />
+              </div>
+            ))}
+          </div>
           {/* user-requested: a made Short is remade from here — as it is, or in a style changed first (for that
               make only); user-decided: every remake is the whole video again and costs credits like a first make.
               A Short not made yet (or whose file expired) just gets "Video style" for its next make. */}
@@ -762,9 +836,48 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     }
   };
 
-  const noteBox = note && (
-    <div className="text-[13px] bg-thumb-redSoft text-thumb-red border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>
+  // user-requested: messages pop up at the bottom of the screen (an in-page box above could be scrolled out of sight)
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 6000);
+    return () => clearTimeout(t);
+  }, [note]);
+  const toast = note && (
+    <div className="fixed inset-x-0 bottom-5 z-[70] flex justify-center px-4 pointer-events-none">
+      <button type="button" onClick={() => setNote(null)}
+        className="pointer-events-auto max-w-md w-full flex items-start gap-3 text-left rounded-2xl px-4 py-3.5 bg-[#1a1114]/95 backdrop-blur-xl border border-thumb-red/35 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.9)] animate-fade-in-up">
+        <span className="w-6 h-6 shrink-0 rounded-full bg-thumb-red text-white text-[13px] font-black flex items-center justify-center">!</span>
+        <span className="flex-1 text-[13.5px] text-thumb-ink leading-snug">{note}</span>
+        <span className="text-thumb-sub text-[12px] font-bold shrink-0 mt-0.5">✕</span>
+      </button>
+    </div>
   );
+
+  // user-requested: a Short made while this tab is in the background marks the tab's title (and a soft chime)
+  const readySeen = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const shorts = project?.shorts || [];
+    const newlyReady = shorts.filter(x => x.status === 'ready' && !readySeen.current.has(x.id));
+    const first = readySeen.current.size === 0;
+    shorts.filter(x => x.status === 'ready').forEach(x => readySeen.current.add(x.id));
+    if (first || !newlyReady.length || !document.hidden) return;
+    const base = document.title.replace(/^✓ .*? · /, '');
+    document.title = `✓ ${newlyReady.length === 1 ? 'Short ready' : `${newlyReady.length} Shorts ready`} · ${base}`;
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.frequency.value = 880; g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+      o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.5);
+    } catch { /* no sound: fine */ }
+    const back = () => { if (!document.hidden) { document.title = base; document.removeEventListener('visibilitychange', back); } };
+    document.addEventListener('visibilitychange', back);
+  }, [project]);
+  useEffect(() => { readySeen.current = new Set(); }, [openId]);
+
+  // user-requested: sort a project's Shorts
+  const [sortBy, setSortBy] = useState<'score' | 'order' | 'made'>('score');
 
   // ── one project (on a desktop: the right-hand panel, next to the link box) ──
   const renderProject = () => {
@@ -810,7 +923,6 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           </div>
 
           <div className="relative p-2.5 sm:p-5 pt-4 sm:pt-5 space-y-5">
-            {noteBox}
             {project?.status === 'failed' && project.error && (
               <div className="rounded-3xl bg-thumb-soft border border-thumb-line p-8 text-center">
                 <p className="text-base font-bold text-thumb-ink">{project.error}</p>
@@ -837,8 +949,16 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
 
             {project && project.status !== 'failed' && (
               <div className="flex items-center gap-3 px-1.5 sm:px-0 pt-1">
-                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-thumb-sub">Shorts in this project</span>
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-thumb-sub whitespace-nowrap">Shorts</span>
                 <span className="flex-1 h-px bg-gradient-to-r from-white/15 to-transparent" />
+                <div className="flex items-center gap-1 p-1 rounded-full bg-black/40 border border-white/[0.07]" role="group" aria-label="Sort">
+                  {([['score', '🔥 Best'], ['order', 'In order'], ['made', 'Made']] as const).map(([k, label]) => (
+                    <button key={k} type="button" onClick={() => setSortBy(k)} aria-pressed={sortBy === k}
+                      className={`h-7 px-2.5 rounded-full text-[11.5px] font-bold transition-colors ${sortBy === k ? 'bg-white text-[#0b0b0d]' : 'text-thumb-sub hover:text-thumb-ink'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -847,7 +967,10 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
                 ? Array.from({ length: 6 }, (_, i) => <ShortSkeleton key={i} />)
                 : project.status === 'finding'
                 ? <FindingMoments since={project.created_at} />
-                : shorts.map(s => (
+                : [...shorts].sort((a, b) =>
+                    sortBy === 'score' ? (b.score ?? 0) - (a.score ?? 0) || a.idx - b.idx
+                    : sortBy === 'made' ? Number(b.status === 'ready') - Number(a.status === 'ready') || a.idx - b.idx
+                    : a.idx - b.idx).map(s => (
                   <ShortCard key={s.id} clip={s} videoId={project.video_id} duration={project.duration} onTrim={onTrim} onDownload={onDownload} cost={cost}
                     projectLook={lookFromProject(project)} onRemake={onRemake} />
                 ))}
@@ -872,7 +995,6 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           className="w-full bg-transparent px-2 pt-2 text-[17px] text-thumb-ink placeholder:text-thumb-sub/60 outline-none resize-none"
         />
         <LookBar look={look} onChange={setLook} brollOk={brollOk} onUpgrade={onBuyCredits} thumb={extractYouTubeId(url.trim()) ? `https://i.ytimg.com/vi/${extractYouTubeId(url.trim())}/hqdefault.jpg` : null} />
-        {openId == null && noteBox}
         <button type="button" onClick={() => generate()} disabled={busy}
           className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
           {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
@@ -930,6 +1052,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         <div className="min-w-0">{openId != null && signedIn ? renderProject() : projectsPanel}</div>
       </div>
       {openId == null && (!signedIn || (projects && projects.length === 0)) && <GettingStarted />}
+      {toast}
     </div>
   );
 };
