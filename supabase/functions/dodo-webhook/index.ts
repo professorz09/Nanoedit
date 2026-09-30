@@ -282,6 +282,22 @@ Deno.serve(async (req) => {
       return json(500, { error: 'Payment succeeded but crediting failed.' });
     }
 
+    // user-requested: the next checkout comes filled in — keep this payment's name and billing address
+    // (best-effort: a failure here never touches the credits just granted)
+    try {
+      const b = event.data?.billing || {};
+      if (b.country) {
+        await admin.from('profiles').update({
+          billing: {
+            name: event.data?.customer?.name ?? null,
+            country: b.country, street: b.street ?? null, city: b.city ?? null, state: b.state ?? null, zipcode: b.zipcode ?? null,
+          },
+        }).eq('id', uid);
+      }
+    } catch (e: any) {
+      console.error('dodo_save_billing_failed', paymentId, e?.message || String(e));
+    }
+
     return json(200, { ok: true, credits: item.credits, item: itemId });
   } catch (e: any) {
     console.error('dodo_webhook_unhandled', e?.message || String(e));

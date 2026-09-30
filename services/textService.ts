@@ -43,9 +43,7 @@ export const generateText = async (prompt: string, op: TextOp): Promise<string> 
     return data.text as string;
   }
 
-  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supaUrl || !supabase) throw new Error('Please sign in to use this tool.');
+  if (!supabase) throw new Error('Please sign in to use this tool.');
 
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -94,13 +92,8 @@ export const generateText = async (prompt: string, op: TextOp): Promise<string> 
   );
   if (viaVercel !== 'skip') return viaVercel;
 
-  const viaSupabase = await tryEndpoint(
-    `${supaUrl}/functions/v1/text`,
-    { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
-    () => false,
-  );
-  if (viaSupabase !== 'skip') return viaSupabase;
-  throw new Error('No text generated.');
+  // user-decided: everything runs on our own server (Oracle) — no Supabase Edge Function fallback
+  throw new Error('Could not reach the server. Please try again.');
 };
 
 /**

@@ -90,6 +90,16 @@ Deno.serve(async (req) => {
     // Dodo Payments amounts are in the smallest currency unit (cents for USD).
     const amountCents = Math.round(item.usd * 100);
 
+    // user-requested: details already filled in — the name from the login, and the billing address of the
+    // last payment (saved by dodo-webhook in profiles.billing)
+    const { data: saved } = await admin.from('profiles').select('billing').eq('id', uid).maybeSingle();
+    const billing: any = saved?.billing || null;
+    const meta: any = userData.user.user_metadata || {};
+    const name = String(billing?.name || meta.full_name || meta.name || '').trim() || null;
+    const billingAddress = billing?.country
+      ? { country: billing.country, street: billing.street ?? null, city: billing.city ?? null, state: billing.state ?? null, zipcode: billing.zipcode ?? null }
+      : null;
+
     const resp = await fetch(`${base}/checkouts`, {
       method: 'POST',
       headers: {
@@ -98,7 +108,8 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         product_cart: [{ product_id: DODO_PRODUCT_ID, quantity: 1, amount: amountCents }],
-        customer: email ? { email } : null,
+        customer: email ? { email, name } : null,
+        ...(billingAddress ? { billing_address: billingAddress } : {}),
         return_url: `${appUrl}/?dodo_checkout=return&item=${encodeURIComponent(itemId)}`,
         // Without this, Dodo can resolve a different billing currency for
         // the customer (their card's country, IP geolocation, etc.) and
@@ -110,40 +121,41 @@ Deno.serve(async (req) => {
         billing_currency: 'USD',
         // Read back by dodo-webhook to know who to credit and for what.
         metadata: { uid, item: itemId },
-        // user-requested: a clean Stripe-style page — white, light grey lines, dark text, small corners, the
-        // button in the brand red like Stripe uses the merchant's colour (fields per the dodopayments SDK's
-        // CheckoutSessionCustomization / ThemeConfig)
+        // user-requested: Dodo's page in the site's own dark look — black background, the brand red on every
+        // button (Dodo draws "Continue to Payment" in the secondary colours, so those are red too), bigger bold
+        // text (fields per the dodopayments SDK's CheckoutSessionCustomization / ThemeConfig)
         customization: {
-          theme: 'light',
+          theme: 'dark',
           show_on_demand_tag: false,
           show_order_details: true,
           theme_config: {
-            light: {
-              bg_primary: '#ffffff',
-              bg_secondary: '#f6f9fc',
-              border_primary: '#e3e8ee',
-              border_secondary: '#eef1f5',
+            dark: {
+              bg_primary: '#030304',
+              bg_secondary: '#16161a',
+              border_primary: '#2a2a31',
+              border_secondary: '#232328',
               button_primary: '#ff3355',
               button_primary_hover: '#e01840',
               button_text_primary: '#ffffff',
-              button_secondary: '#ffffff',
-              button_secondary_hover: '#f6f9fc',
-              button_text_secondary: '#30313d',
+              button_secondary: '#ff3355',
+              button_secondary_hover: '#e01840',
+              button_text_secondary: '#ffffff',
               input_focus_border: '#ff3355',
-              text_primary: '#30313d',
-              text_secondary: '#6a7383',
-              text_placeholder: '#a3acb9',
-              text_error: '#df1b41',
-              text_success: '#1a9f6e',
+              text_primary: '#f5f5f8',
+              text_secondary: '#a2a2b4',
+              text_placeholder: '#6b6b7a',
+              text_error: '#ff6b81',
+              text_success: '#2ee6a6',
             },
-            radius: '6px',
-            font_size: 'sm',
-            font_weight: 'medium',
+            radius: '12px',
+            font_size: 'md',
+            font_weight: 'bold',
             pay_button_text: `Pay $${item.usd}`,
           },
         },
         // the charge is always USD (billing_currency above) — no currency picker that can't change it
-        feature_flags: { allow_currency_selection: false },
+        // fewer fields: no phone number, no "purchasing as a business" / tax id
+        feature_flags: { allow_currency_selection: false, allow_phone_number_collection: false, allow_tax_id: false },
         // NOT confirm:true — that requires complete billing/customer info
         // supplied upfront (we only know the email), and was rejected
         // outright without it. Leaving this unconfirmed lets Dodo's own

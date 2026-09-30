@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { postFunction } from './functionsClient';
 
 interface CheckoutResponse {
   checkout_url: string;
@@ -7,9 +8,6 @@ interface CheckoutResponse {
 
 const authedFetch = async (path: string, body: unknown) => {
   if (!supabase) throw new Error('Please sign in to continue.');
-  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supaUrl) throw new Error('Payments are not configured. Please contact support.');
 
   // getSession() can itself throw (corrupted/expired local session, a network
   // blip refreshing the token) instead of just returning a null session —
@@ -29,16 +27,8 @@ const authedFetch = async (path: string, body: unknown) => {
   const timer = setTimeout(() => ctrl.abort(), 25_000);
   let resp: Response;
   try {
-    resp = await fetch(`${supaUrl}/functions/v1/${path}`, {
-      signal: ctrl.signal,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: supaAnon ?? '',
-      },
-      body: JSON.stringify(body),
-    });
+    // our own API server (Oracle) — user-decided: payments don't go through Supabase functions
+    resp = await postFunction(path, body, token, { signal: ctrl.signal });
   } catch {
     const err: any = new Error('Could not reach the payment server. Check your connection and try again.');
     err.retryable = true;

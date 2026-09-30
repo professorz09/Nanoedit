@@ -1,5 +1,6 @@
 
 import { EditorSettings } from "../types";
+import { postFunction } from './functionsClient';
 import { supabase } from "./supabase";
 
 // our own API server (server/api-server.ts on Oracle, e.g. https://api.podcastflux.com); empty = same site
@@ -261,9 +262,7 @@ export const editImageWithGemini = async (
   //   2. Supabase Edge Function — used until the Vercel secrets are added
   //      (api/generate.ts self-reports 501 "not_configured" until then), or
   //      if the Vercel route isn't deployed yet.
-  const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supaUrl || !supabase) throw new Error("Sign-in is required to generate. Please log in.");
+  if (!supabase) throw new Error("Sign-in is required to generate. Please log in.");
 
   // getSession() can itself throw (corrupted/expired local session, a
   // network blip refreshing the token) rather than just returning a null
@@ -333,17 +332,8 @@ export const editImageWithGemini = async (
     throw friendlyError(error);
   }
 
-  try {
-    const viaSupabase = await tryEndpoint(
-      `${supaUrl}/functions/v1/generate`,
-      { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
-      () => false
-    );
-    if (viaSupabase !== 'skip') return viaSupabase;
-    throw new Error('No image generated.');
-  } catch (error: any) {
-    throw friendlyError(error);
-  }
+  // user-decided: everything runs on our own server (Oracle) — no Supabase Edge Function fallback
+  throw new Error('Could not reach the server. Please try again.');
 };
 
 // Best-effort server-side cleanup for a deleted thumbnail (Storage object +
@@ -357,21 +347,10 @@ export const editImageWithGemini = async (
 export const deleteGenerationOnServer = async (url: string): Promise<void> => {
   try {
     if (!supabase) return;
-    const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-    const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-    if (!supaUrl) return;
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) return;
-    await fetch(`${supaUrl}/functions/v1/delete-generation`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: supaAnon ?? '',
-      },
-      body: JSON.stringify({ url }),
-    });
+    await postFunction('delete-generation', { url }, token);  // our own server (Oracle)
   } catch (e) {
     console.warn('deleteGenerationOnServer failed (non-fatal)', e);
   }
