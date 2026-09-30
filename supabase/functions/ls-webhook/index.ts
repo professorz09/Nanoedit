@@ -17,11 +17,18 @@ import { CATALOG } from '../_shared/pricing.ts';
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });
 
-function renewsAt(cycle?: string): string {
-  const d = new Date();
+// user-reported: a plan buy set renews_at to "now + cycle" even when the plan already ran longer (a yearly Starter
+// buying monthly Creator lost 11 months — and, at that early expiry, all its plan credits). Now the time already
+// paid for is never cut: the same plan again adds its cycle on top of the current end; another plan ends at
+// whichever is later, the current end or now + its cycle.
+function renewsAt(cycle: string | undefined, current?: string | null, samePlan = false): string {
+  const now = Date.now();
+  const end = current ? Date.parse(current) : NaN;
+  const active = Number.isFinite(end) && end > now;
+  const d = new Date(samePlan && active ? end : now);
   if (cycle === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
-  else d.setUTCMonth(d.getUTCMonth() + 1);
-  return d.toISOString();
+  else d.setUTCMonth(d.getUTCMonth() + 1); // default: monthly
+  return new Date(active ? Math.max(d.getTime(), end) : d.getTime()).toISOString();
 }
 
 const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -130,11 +137,11 @@ Deno.serve(async (req) => {
     }
     try {
       if (item.kind === 'plan') {
-        const { data: prof, error: readErr } = await admin.from('profiles').select('credits').eq('id', uid).single();
+        const { data: prof, error: readErr } = await admin.from('profiles').select('credits, plan, renews_at').eq('id', uid).single();
         if (readErr) throw readErr;
         const { error } = await admin.from('profiles').update({
           plan: item.plan, credits: (prof?.credits ?? 0) + item.credits,
-          renews_at: renewsAt(item.cycle), updated_at: new Date().toISOString(),
+          renews_at: renewsAt(item.cycle, prof?.renews_at, prof?.plan === item.plan), updated_at: new Date().toISOString(),
         }).eq('id', uid);
         if (error) throw error;
       } else {
