@@ -48,6 +48,43 @@ const SECTION_PATHS: Record<Section, string> = {
   home: '/', generate: '/thumbnail-maker', preview: '/feed-test', title: '/title-generator', chapters: '/chapters',
   shorts: '/shorts', pricing: '/pricing', account: '/account', admin: '/admin',
 };
+// each page's own title / description (user-requested SEO: /shorts, /thumbnail-maker … were all telling search
+// engines "I'm the home page" — the same title and a canonical of "/"); account/admin/feed-test aren't indexed
+const PAGE_META: Partial<Record<Section, { title: string; description: string }>> = {
+  home: { title: 'Free AI Shorts Maker & Auto Clipping — PodcastFlux',
+    description: 'PodcastFlux is a free AI Shorts maker for automatic clipping: paste a podcast or YouTube link and AI finds the best moments, cuts them into vertical Shorts, Reels and TikToks, and adds animated captions, effects and titles.' },
+  shorts: { title: 'AI Shorts Maker — Turn Podcasts & YouTube Videos into Shorts Free | PodcastFlux',
+    description: 'Paste a podcast or YouTube link and get up to 20 ready Shorts: AI clipping, speaker tracking, 80+ stylish animated caption looks and a viral score for each. Free to start, zero editing.' },
+  generate: { title: 'AI YouTube Thumbnail Maker — Click-worthy Thumbnails from a Link | PodcastFlux',
+    description: 'Make HD 16:9 YouTube thumbnails with AI: paste your video link or describe it, pick a style, add your face, and get click-worthy thumbnails in seconds.' },
+  title: { title: 'AI YouTube Title Generator | PodcastFlux',
+    description: 'Generate catchy, click-worthy YouTube titles with AI from your video topic or link.' },
+  chapters: { title: 'YouTube Timestamps & Chapters Maker (AI) | PodcastFlux',
+    description: 'Paste a YouTube link and AI writes the chapters with timestamps, ready to paste into your description.' },
+  pricing: { title: 'Pricing — AI Shorts Maker & Thumbnail Maker | PodcastFlux',
+    description: 'Start free with free credits. Plans for creators who make Shorts, thumbnails, titles and timestamps every week.' },
+};
+
+const setHeadTag = (selector: string, make: () => HTMLElement, attr: string, value: string) => {
+  let el = document.head.querySelector(selector) as HTMLElement | null;
+  if (!el) { el = make(); document.head.appendChild(el); }
+  el.setAttribute(attr, value);
+};
+
+const applyPageMeta = (section: Section) => {
+  const meta = PAGE_META[section];
+  const url = `https://podcastflux.com${SECTION_PATHS[section] === '/' ? '/' : SECTION_PATHS[section]}`;
+  const tag = (name: string, attr = 'name') => () => { const m = document.createElement('meta'); m.setAttribute(attr, name); return m; };
+  setHeadTag('meta[name="robots"]', tag('robots'), 'content', meta ? 'index, follow, noimageindex' : 'noindex, follow');
+  if (!meta) return;
+  document.title = meta.title;
+  setHeadTag('meta[name="description"]', tag('description'), 'content', meta.description);
+  setHeadTag('link[rel="canonical"]', () => { const l = document.createElement('link'); l.rel = 'canonical'; return l; }, 'href', url);
+  setHeadTag('meta[property="og:url"]', tag('og:url', 'property'), 'content', url);
+  setHeadTag('meta[property="og:title"]', tag('og:title', 'property'), 'content', meta.title);
+  setHeadTag('meta[property="og:description"]', tag('og:description', 'property'), 'content', meta.description);
+};
+
 const sectionFromPath = (path: string): Section => {
   const clean = path.replace(/\/+$/, '') || '/';
   const hit = (Object.keys(SECTION_PATHS) as Section[]).find(k => SECTION_PATHS[k] === clean);
@@ -477,6 +514,7 @@ const ThumbnailStudio: React.FC<Props> = ({
       window.history[replaceUrl.current ? 'replaceState' : 'pushState']({ section }, '', path + window.location.search);
     }
     replaceUrl.current = false;
+    applyPageMeta(section);
   }, [section]);
   useEffect(() => {
     const onBack = () => setSection(sectionFromPath(window.location.pathname));
