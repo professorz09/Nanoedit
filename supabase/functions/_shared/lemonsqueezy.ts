@@ -49,15 +49,12 @@ export const lemonCheckout = async (opts: {
           receipt_link_url: opts.appUrl,
           enabled_variants: [Number(variantId)],
         },
-        // the site's dark look, every accent in the brand red
+        // user-requested: one clean page — on a phone LS paints background_color only on the order summary at
+        // the top (the payment form below stays white), so no dark colours: its own light page, with the
+        // button, links and checks in the brand red
         checkout_options: {
-          embed: false, media: true, logo: true, desc: true, discount: false,
-          background_color: '#030304',
-          headings_color: '#f5f5f8',
-          primary_text_color: '#f5f5f8',
-          secondary_text_color: '#a2a2b4',
+          embed: false, media: false, logo: true, desc: true, discount: false,
           links_color: '#ff3355',
-          borders_color: '#2a2a31',
           checkbox_color: '#ff3355',
           active_state_color: '#ff3355',
           button_color: '#ff3355',
