@@ -92,7 +92,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
 
       <div className="text-center mt-8">
         <h2 className="text-[28px] sm:text-[40px] font-black tracking-[-0.02em] text-thumb-ink leading-tight">Simple pricing. <span className="text-thumb-red">1 credit = 1 Short.</span></h2>
-        <p className="text-thumb-sub mt-2 text-[15px]">Preview every moment for free — you only spend a credit on the Shorts you download.</p>
+        <p className="text-thumb-sub mt-2 text-[15px]">1 credit finds the Shorts in a video (back if none are found) — then a credit for each Short you download.</p>
       </div>
 
       {/* Plan cards: Free, then the two paid plans */}

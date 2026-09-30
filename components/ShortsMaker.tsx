@@ -205,6 +205,9 @@ const MakingOverlay: React.FC<{ clip: ShortClip; picture?: string; elapsed: numb
 
 // user-reported: two Shorts could play at once — starting one (a YouTube preview or a made Short) now stops
 // every other card's
+// credits to find the Shorts in one video (the server's SHORTS_WEB_FIND_CREDITS); back if none are found
+const FIND_CREDITS = 1;
+
 const PLAY_EVENT = 'pf-short-play';
 const announcePlay = (id: number) => window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: id }));
 
@@ -531,7 +534,7 @@ const GettingStarted: React.FC = () => (
     <div className="grid sm:grid-cols-3 gap-3">
       {[
         { n: '1', t: 'Paste a link', d: 'Any YouTube video or podcast — long ones are fine.' },
-        { n: '2', t: 'Pick the best moments', d: 'AI finds them and scores each one. Preview, trim, and choose — free.' },
+        { n: '2', t: 'Pick the best moments', d: 'AI finds them and scores each one. Preview, trim and choose the ones you want.' },
         { n: '3', t: 'Download & post', d: 'Captions, effects and a title are done. One by one or all as a ZIP.' },
       ].map(x => (
         <div key={x.n} className="thumb-glass rounded-2xl p-4 flex gap-3">
@@ -661,12 +664,15 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     if (!extractYouTubeId(link.trim())) { setNote('Paste a valid YouTube link.'); return; }
     if (!isShortsConfigured) { setNote('The Shorts server is not connected yet. Please try again later.'); return; }
     if (!signedIn) { onRequireLogin('Log in to make Shorts.'); return; }
+    // user-decided: finding the Shorts in a video costs a credit (given back if none are found)
+    if (configured && totalCredits < FIND_CREDITS) { setNote(`You need ${credits(FIND_CREDITS)} to find the Shorts in a video.`); onBuyCredits(); return; }
     setBusy(true);
     try {
       const id = await createProject({ url: link.trim(), ...lookToRequest({ ...look, broll: look.broll && brollOk }) });
       setUrl('');
       setOpenId(id);
       loadProjects();
+      refreshProfile();  // the credit it took shows at once
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e: any) {
       setNote(e.message);
@@ -870,7 +876,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
         <button type="button" onClick={() => generate()} disabled={busy}
           className="thumb-btn w-full h-[60px] rounded-2xl text-white font-black text-[18px] flex items-center justify-center gap-2.5 disabled:text-white/70">
           {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Starting…</>
-            : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts</>}
+            : <><Ic.Scissors className="w-5 h-5" /> Generate Shorts <span className="text-[13px] font-bold opacity-80">· {credits(FIND_CREDITS)}</span></>}
         </button>
       </div>
     </div>

@@ -228,7 +228,7 @@ const TESTIMONIALS = [
 
 const FAQS = [
   { q: "What is PodcastFlux?", a: "PodcastFlux is an AI Shorts maker: it turns long YouTube videos and podcasts into ready-to-post YouTube Shorts, TikToks and Instagram Reels. Paste a link and the AI finds the best clips, adds animated captions and effects, and writes the title — no editing app needed." },
-  { q: "How do I turn a YouTube video into Shorts?", a: "Paste the YouTube link into the AI Shorts Maker. The AI watches the whole video, picks the moments most likely to go viral and gives each one a viral score. Preview them for free, trim the start and end if you like, then download one Short or all of them as a ZIP." },
+  { q: "How do I turn a YouTube video into Shorts?", a: "Paste the YouTube link into the AI Shorts Maker. The AI watches the whole video, picks the moments most likely to go viral and gives each one a viral score. Finding them takes 1 credit (you get it back if none are found). Preview them, trim the start and end if you like, then download one Short or all of them as a ZIP." },
   { q: "Can I turn a podcast into Shorts?", a: "Yes — PodcastFlux is built for podcast clips. Long episodes are fine: the AI goes through the whole podcast, finds the best moments, and crops the video to follow whoever is speaking." },
   { q: "Does it add captions to my Shorts automatically?", a: "Yes. Every Short gets auto captions with word-by-word animated subtitles. Choose from 25+ caption styles — Hormozi, MrBeast, karaoke, sticky notes, neon and more — or let the AI pick one." },
   { q: "What effects can the AI Shorts maker add?", a: "Zooms, card moves, word highlights and sound effects, picked by the AI to fit each clip. You can also turn on AI explainer designs (fact cards, numbers that count up, money stacks), AI stickers and, on the Creator plan, AI B-roll." },
@@ -1695,7 +1695,7 @@ const ThumbnailStudio: React.FC<Props> = ({
               </button>
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-thumb-sub">
-              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Preview free</span>
+              <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> 1 credit per video</span>
               <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Pay only for what you download</span>
               <span className="inline-flex items-center gap-1.5"><I.Check className="w-4 h-4 text-thumb-green" /> Captions, effects & speaker tracking</span>
             </div>
