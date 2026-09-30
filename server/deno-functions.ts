@@ -42,10 +42,6 @@ export const FUNCTIONS: Record<string, () => boolean> = {
   // tagging + embedding: Google Cloud and/or OpenRouter, per the admin's text provider setting
   'index-style': () => hasGoogle() || !!process.env.OPENROUTER_API_KEY,
   'admin-styles': () => hasGoogle() || !!process.env.OPENROUTER_API_KEY,
-  // payments (Dodo) and thumbnail deletes — user-decided: these run here too, not as Supabase functions
-  'create-checkout': () => !!process.env.DODO_PAYMENTS_API_KEY,
-  'dodo-webhook': () => !!process.env.DODO_WEBHOOK_SECRET,
-  'delete-generation': () => true,
 };
 
 const handlers = new Map<string, Promise<Handler>>();

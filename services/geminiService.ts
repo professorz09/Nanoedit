@@ -1,6 +1,5 @@
 
 import { EditorSettings } from "../types";
-import { postFunction } from './functionsClient';
 import { supabase } from "./supabase";
 
 // our own API server (server/api-server.ts on Oracle, e.g. https://api.podcastflux.com); empty = same site
@@ -347,10 +346,18 @@ export const editImageWithGemini = async (
 export const deleteGenerationOnServer = async (url: string): Promise<void> => {
   try {
     if (!supabase) return;
+    // on Supabase with the payments (the Supabase function delete-generation)
+    const supaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+    const supaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+    if (!supaUrl) return;
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) return;
-    await postFunction('delete-generation', { url }, token);  // our own server (Oracle)
+    await fetch(`${supaUrl}/functions/v1/delete-generation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: supaAnon ?? '' },
+      body: JSON.stringify({ url }),
+    });
   } catch (e) {
     console.warn('deleteGenerationOnServer failed (non-fatal)', e);
   }
