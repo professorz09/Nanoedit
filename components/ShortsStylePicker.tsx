@@ -136,33 +136,28 @@ const StyleThumb: React.FC<{ id: string; w: number }> = ({ id, w }) => {
 };
 
 type Bg = { id: string; label: string; css: React.CSSProperties; dark?: boolean };
-const grid = (line: string, base: string): React.CSSProperties => ({
-  backgroundColor: base,
-  backgroundImage: `linear-gradient(${line} 1px, transparent 1px), linear-gradient(90deg, ${line} 1px, transparent 1px)`,
-  backgroundSize: '12px 12px',
-});
-const wall = (c: string): React.CSSProperties => ({
-  backgroundColor: c,
-  backgroundImage: `radial-gradient(circle at 30% 20%, rgba(255,255,255,.16), transparent 55%), repeating-linear-gradient(45deg, rgba(0,0,0,.10) 0 2px, transparent 2px 5px)`,
-});
+// user-reported (the swatches didn't match the Shorts): each background is a picture drawn by the render
+// server's own code (pipeline/shorts_split.py _grid_background / the Poster walls), its colour underneath
+const real = (id: string, base: string): React.CSSProperties =>
+  ({ background: `${base} url(/shorts-looks/bg-${id}.webp) center / cover no-repeat` });
 const BGS: Bg[] = [
   { id: 'ai', label: 'AI', css: { background: 'conic-gradient(from 200deg, #FDE047, #F9A8D4, #93C5FD, #86EFAC, #FDE047)' } },
-  { id: 'white', label: 'White', css: { background: '#FFFFFF' } },
-  { id: 'white_grid', label: 'White grid', css: grid('rgba(0,0,0,.08)', '#FFFFFF') },
-  { id: 'yellow', label: 'Yellow', css: { background: '#FDE047' } },
-  { id: 'blue', label: 'Blue', css: { background: '#93C5FD' } },
-  { id: 'green', label: 'Green', css: { background: '#86EFAC' } },
-  { id: 'pink', label: 'Pink', css: { background: '#F9A8D4' } },
-  { id: 'glass', label: 'Glass', css: { ...grid('rgba(255,255,255,.35)', '#D6CFE6'), backgroundImage: `radial-gradient(circle at 50% 45%, rgba(255,255,255,.9), transparent 55%), linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px)`, backgroundSize: '100% 100%, 12px 12px, 12px 12px' } },
-  { id: 'black', label: 'Black', dark: true, css: { background: '#0B0B0F' } },
-  { id: 'black_grid', label: 'Black grid', dark: true, css: grid('rgba(255,255,255,.09)', '#0B0B0F') },
-  { id: 'wall_red', label: 'Red wall', dark: true, css: wall('#A3111B') },
-  { id: 'wall_maroon', label: 'Maroon', dark: true, css: wall('#5B0F1A') },
-  { id: 'wall_navy', label: 'Navy', dark: true, css: wall('#0F1E4A') },
-  { id: 'wall_emerald', label: 'Emerald', dark: true, css: wall('#064E3B') },
-  { id: 'wall_purple', label: 'Purple', dark: true, css: wall('#3B0764') },
-  { id: 'wall_teal', label: 'Teal', dark: true, css: wall('#0B4F5C') },
-  { id: 'wall_charcoal', label: 'Charcoal', dark: true, css: wall('#1C1C1E') },
+  { id: 'white', label: 'White', css: real('white', '#FFFDF7') },
+  { id: 'white_grid', label: 'White grid', css: real('white_grid', '#FFFFFF') },
+  { id: 'yellow', label: 'Yellow', css: real('yellow', '#FDE047') },
+  { id: 'blue', label: 'Blue', css: real('blue', '#93C5FD') },
+  { id: 'green', label: 'Green', css: real('green', '#86EFAC') },
+  { id: 'pink', label: 'Pink', css: real('pink', '#F9A8D4') },
+  { id: 'glass', label: 'Glass', css: real('glass', '#D6CFE6') },
+  { id: 'black', label: 'Black', dark: true, css: real('black', '#0B0B0F') },
+  { id: 'black_grid', label: 'Black grid', dark: true, css: real('black_grid', '#0B0B0F') },
+  { id: 'wall_red', label: 'Red wall', dark: true, css: real('wall_red', '#A3111B') },
+  { id: 'wall_maroon', label: 'Maroon', dark: true, css: real('wall_maroon', '#5B0F1A') },
+  { id: 'wall_navy', label: 'Navy', dark: true, css: real('wall_navy', '#0F1E4A') },
+  { id: 'wall_emerald', label: 'Emerald', dark: true, css: real('wall_emerald', '#064E3B') },
+  { id: 'wall_purple', label: 'Purple', dark: true, css: real('wall_purple', '#3B0764') },
+  { id: 'wall_teal', label: 'Teal', dark: true, css: real('wall_teal', '#0B4F5C') },
+  { id: 'wall_charcoal', label: 'Charcoal', dark: true, css: real('wall_charcoal', '#1C1C1E') },
 ];
 
 // a caption look: how the key word and the other words are drawn
