@@ -136,14 +136,14 @@ export const quickProject = async (id: number): Promise<ShortsProject | null> =>
   }
 };
 
-// A file download without leaving the page (the server sends it as an attachment)
+// A file download without leaving the page (the server sends it as an attachment) — through a hidden frame, not a link click: the file is on the render server (another site), and a link to it
+// counts as leaving the page, so phone Chrome kept its page-loading bar stuck after the download had finished.
 export const startDownload = (url: string) => {
-  const a = document.createElement('a');
-  a.href = url;
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const f = document.createElement('iframe');
+  f.style.display = 'none';
+  f.src = url;
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 60_000);  // long enough for the download to have started
 };
 
 export const fmtTime = (sec: number): string => {
