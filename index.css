@@ -139,21 +139,22 @@ button:active:not(:disabled) { transform: scale(0.97); }
    the bottom which read cheap. This keeps a rich vibrant red with a crisp
    top highlight and a soft red halo for a jewel-like, premium feel. */
 .thumb-btn {
-  background: linear-gradient(180deg, #ff4d63 0%, #f51f3e 48%, #d80f30 100%);
+  /* user-requested (a reference button): a deep crimson, less pink — a glossy lighter top, a thin darker rim and a
+     soft red shadow underneath */
+  background: linear-gradient(180deg, #ff2d52 0%, #ec0a36 45%, #d4002b 100%);
+  border: 1px solid rgba(110, 0, 20, 0.45);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.38),
-    inset 0 -2px 6px rgba(120,0,20,0.35),
-    0 6px 16px -6px rgba(255,45,80,0.5),
-    0 14px 30px -12px rgba(160,10,36,0.55);
-  transition: box-shadow .3s ease, filter .2s ease, transform .12s ease;
+    inset 0 1.5px 0 rgba(255,255,255,0.32),
+    inset 0 -3px 8px rgba(120,0,24,0.25),
+    0 8px 22px -10px rgba(220,0,40,0.7);
+  transition: box-shadow .25s ease, filter .2s ease, transform .12s ease;
 }
 .thumb-btn:hover:not(:disabled) {
-  filter: brightness(1.06) saturate(1.05);
+  filter: brightness(1.06);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.45),
-    inset 0 -2px 6px rgba(120,0,20,0.35),
-    0 8px 22px -6px rgba(255,45,80,0.62),
-    0 20px 42px -12px rgba(160,10,36,0.65);
+    inset 0 1.5px 0 rgba(255,255,255,0.36),
+    inset 0 -3px 8px rgba(120,0,24,0.25),
+    0 12px 26px -10px rgba(220,0,40,0.8);
 }
 /* not ready yet (e.g. nothing typed): the same red, dimmed — not a grey slab (user-requested) */
 .thumb-btn:disabled {
@@ -711,12 +712,13 @@ button:active:not(:disabled) { transform: scale(0.97); }
 /* buttons: the popular plan's is solid red with a pressed-down edge; the others white */
 .price-cta-hot {
   color: #fff;
-  background: linear-gradient(180deg, #ff4d63, #f01c3c);
-  box-shadow: 0 4px 0 #a30f2a, 0 14px 30px -10px rgba(255,51,85,0.6), inset 0 1px 0 rgba(255,255,255,0.35);
+  background: linear-gradient(180deg, #ff2d52 0%, #ec0a36 45%, #d4002b 100%);
+  border: 1px solid rgba(110, 0, 20, 0.45);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.32), inset 0 -3px 8px rgba(120,0,24,0.25), 0 8px 22px -10px rgba(220,0,40,0.7);
   transition: transform .1s ease, box-shadow .1s ease, filter .2s ease;
 }
 .price-cta-hot:hover:not(:disabled) { filter: brightness(1.06); }
-.price-cta-hot:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #a30f2a, 0 8px 20px -10px rgba(255,51,85,0.6); }
+.price-cta-hot:active:not(:disabled) { transform: scale(0.98); }
 .price-cta-plain {
   color: #0b0b0d;
   background: #fff;

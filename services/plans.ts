@@ -24,7 +24,7 @@ export interface Plan {
 
 // New (free) users get enough credits for ONE Short (user-decided) — the signup trigger
 // (supabase/migrations/0022_free_one_short.sql) grants the same number.
-export const TRIAL_CREDITS = 1;
+export const TRIAL_CREDITS = 2;
 
 // The two purchasable plans. Yearly = 10× the monthly price (2 months free).
 export const PLANS: Plan[] = [

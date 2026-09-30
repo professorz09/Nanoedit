@@ -120,7 +120,7 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
             <span className="text-[14px] text-thumb-sub">no card needed</span>
           </div>
           <ul className="price-box mt-5 rounded-2xl px-4 py-3.5 space-y-2.5 flex-1">
-            {[`${TRIAL_CREDITS} free Short when you sign up`, 'Viral score for every moment', 'All styles, captions & effects', 'Standard (slower) generation'].map(f => (
+            {[`${TRIAL_CREDITS} free credits when you sign up — enough for your first Short`, 'Viral score for every moment', 'All styles, captions & effects', 'Standard (slower) generation'].map(f => (
               <li key={f} className="flex items-start gap-2.5 text-[14px] text-thumb-ink/90"><Tick /> {f}</li>
             ))}
           </ul>
