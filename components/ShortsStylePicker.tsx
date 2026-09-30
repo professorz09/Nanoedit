@@ -23,7 +23,7 @@ export interface ShortsLook {
 }
 
 export const DEFAULT_LOOK: ShortsLook = {
-  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], fxOff: [], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
+  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], fxOff: ['marker', 'scribble'], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
 };
 
 // "Mix" (random) was folded into the one AI background — an old pick of it shows as AI
@@ -43,7 +43,7 @@ export const lookFromProject = (p: { style?: string | null; subtitles?: string |
     fxMode: 'auto',
     explain: fx ? fx.includes('facts') : true,
     stickers: fx ? fx.includes('stickers') : true,
-    fxOff: fx ? MOTION_FX.filter(k => !fx.includes(k)) : [],
+    fxOff: fx ? MOTION_FX.filter(k => !fx.includes(k)) : DEFAULT_LOOK.fxOff,
     broll: false,
     sfx: o.sfx !== false,
     fit: o.fit || 'full',
