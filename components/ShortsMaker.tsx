@@ -5,18 +5,19 @@ import {
   ShortClip, ShortsProject, createProject, fmtTime, getProject, isShortsConfigured, listProjects,
   quickProject, quickProjects, renderAll, renderShort, startDownload, trimShort,
 } from '../services/shortsService';
-import { DEFAULT_LOOK, LookBar, ShortsLook, lookFromProject, lookToRequest } from './ShortsStylePicker';
+import { DEFAULT_LOOK, LookBar, ShortsLook, fixBg, lookFromProject, lookToRequest } from './ShortsStylePicker';
 import { HOME_SHORTS } from './homeShorts';
 import VideoPhone from './VideoPhone';
 
 const LOOK_KEY = 'shorts_look_v2'; // v2: everyone starts again on the defaults (White background)
 const savedLook = (): ShortsLook => {
-  try { return { ...DEFAULT_LOOK, ...JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') }; } catch { return DEFAULT_LOOK; }
+  try { const l = { ...DEFAULT_LOOK, ...JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') }; return { ...l, bg: fixBg(l.bg) || DEFAULT_LOOK.bg }; } catch { return DEFAULT_LOOK; }
 };
 
 // Shorts Maker: paste a YouTube link → a project with the best Short-worthy moments. Each one is previewed
-// straight from YouTube (nothing is rendered to preview it), its start/end can be nudged, and it's made
-// only when it's downloaded (1 credit the first time). "Download all" makes the rest and hands over a ZIP.
+// straight from YouTube (nothing is rendered to preview it), its start/end can be nudged, and "Make Short"
+// makes it (1 credit the first time) — the made Short plays in its card, then Download hands it over.
+// "Download all" makes the rest and hands over a ZIP.
 
 const Ic = {
   Scissors: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" /></svg>),
@@ -27,6 +28,7 @@ const Ic = {
   Play: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" /></svg>),
   Back: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m15 18-6-6 6-6" /></svg>),
   Fire: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2s1 3.5-1.5 6.5S7 12 7 15a5 5 0 0 0 10 0c0-2.2-1-3.7-2-5 0 1.5-.8 2.6-2 3 .7-2.6.2-6.4-1-11Z" /></svg>),
+  Sparkle: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" /></svg>),
   Reset: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>),
 };
 
@@ -503,8 +505,8 @@ const ShortCard: React.FC<{
           ) : (
             <button type="button" onClick={() => onDownload(clip)}
               className="thumb-btn w-full h-[52px] rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2">
-              <Ic.Download className="w-5 h-5" />
-              {clip.status === 'ready' ? 'Download' : clip.paid ? 'Download · free re-make' : `Download · ${cost} credit${cost === 1 ? '' : 's'}`}
+              {clip.status === 'ready' ? <Ic.Download className="w-5 h-5" /> : <Ic.Sparkle className="w-5 h-5" />}
+              {clip.status === 'ready' ? 'Download' : clip.paid ? 'Make Short · free re-make' : `Make Short · ${cost} credit${cost === 1 ? '' : 's'}`}
             </button>
           )}
         </div>
@@ -681,7 +683,6 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   const cost = project?.options?.real_images && brollOk ? 2 : 1;  // credits for a Short the first time
   const credits = (n: number) => `${n} credit${n === 1 ? '' : 's'}`;
   const [wantZip, setWantZip] = useState(false);
-  const wantShorts = useRef<Set<number>>(new Set());
   const trimTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const signedIn = !configured || !!user;
   // re-arms the polling below after an action (a new render)
@@ -723,13 +724,6 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           const pending = trimTimers.current;
           return { ...p, shorts: p.shorts.map(s => (pending[s.id] ? prev.shorts!.find(x => x.id === s.id) || s : s)) };
         });
-        for (const s of p.shorts || []) {
-          if (s.status === 'ready' && s.download && wantShorts.current.has(s.id)) {
-            wantShorts.current.delete(s.id);
-            startDownload(s.download);
-          }
-          if (s.status === 'failed') wantShorts.current.delete(s.id);
-        }
         const working = p.status === 'finding' || (p.shorts || []).some(s => s.status === 'queued' || s.status === 'rendering');
         if (p.zip && wantZipRef.current) { wantZipRef.current = false; setWantZip(false); startDownload(p.zip); }
         if (!working && wantZipRef.current && !p.zip) { wantZipRef.current = false; setWantZip(false); }
@@ -798,11 +792,10 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   const onDownload = async (clip: ShortClip) => {
     setNote(null);
     if (clip.status === 'ready' && clip.download) { startDownload(clip.download); return; }
-    if (configured && !clip.paid && totalCredits < cost) { setNote(`You need ${credits(cost)} to download this Short.`); onBuyCredits(); return; }
+    if (configured && !clip.paid && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
     try {
       await flushTrim(clip);
       await renderShort(clip.id);
-      wantShorts.current.add(clip.id);
       updateClip(clip.id, { status: 'queued', stage: 'In line', error: null });
       refreshProfile();
       poke();
@@ -952,7 +945,7 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
                   </button>
                 )}
                 <p className="text-center text-[12px] text-thumb-sub">
-                  {unpaid ? `${credits(unpaid)} for the Shorts not made yet · ` : ''}Each Short is made when you download it and kept for 24 hours.
+                  {unpaid ? `${credits(unpaid)} for the Shorts not made yet · ` : ''}Each Short is made when you tap Make Short and kept for 24 hours.
                 </p>
               </div>
             )}

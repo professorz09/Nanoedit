@@ -25,6 +25,9 @@ export const DEFAULT_LOOK: ShortsLook = {
   style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
 };
 
+// "Mix" (random) was folded into the one AI background — an old pick of it shows as AI
+export const fixBg = (bg?: string | null) => (bg === 'random' ? 'ai' : bg);
+
 // a project's own picks (the server's project JSON) as a ShortsLook — where one Short's own style starts from
 export const lookFromProject = (p: { style?: string | null; subtitles?: string | null; options?: any }): ShortsLook => {
   const o = p.options || {};
@@ -34,7 +37,7 @@ export const lookFromProject = (p: { style?: string | null; subtitles?: string |
   return {
     ...DEFAULT_LOOK,
     style,
-    bg: o.bg || DEFAULT_LOOK.bg,
+    bg: fixBg(o.bg) || DEFAULT_LOOK.bg,
     caption: studio ? (p.subtitles === 'off' ? 'off' : (o.caption_look || 'auto')) : (p.subtitles || 'auto'),
     fxMode: 'auto',
     explain: fx ? fx.includes('facts') : true,
@@ -78,7 +81,7 @@ const STYLES = [
   { id: 'boxed', label: 'Boxed', note: 'Dark page, video in a rounded box' },
 ];
 
-type Bg = { id: string; label: string; css: React.CSSProperties; dark?: boolean; tag?: string };
+type Bg = { id: string; label: string; css: React.CSSProperties; dark?: boolean };
 const grid = (line: string, base: string): React.CSSProperties => ({
   backgroundColor: base,
   backgroundImage: `linear-gradient(${line} 1px, transparent 1px), linear-gradient(90deg, ${line} 1px, transparent 1px)`,
@@ -90,8 +93,7 @@ const wall = (c: string): React.CSSProperties => ({
 });
 const BGS: Bg[] = [
   { id: 'white', label: 'White', css: { background: '#FFFFFF' } },
-  { id: 'ai', label: 'Auto', tag: 'AI', css: { background: 'conic-gradient(from 200deg, #FDE047, #F9A8D4, #93C5FD, #86EFAC, #FDE047)' } },
-  { id: 'random', label: 'Mix', tag: '🎲', css: { background: 'linear-gradient(135deg,#fff 0 25%,#FDE047 25% 50%,#0B0B0F 50% 75%,#A3111B 75%)' } },
+  { id: 'ai', label: 'AI', css: { background: 'conic-gradient(from 200deg, #FDE047, #F9A8D4, #93C5FD, #86EFAC, #FDE047)' } },
   { id: 'white_grid', label: 'White grid', css: grid('rgba(0,0,0,.08)', '#FFFFFF') },
   { id: 'yellow', label: 'Yellow', css: { background: '#FDE047' } },
   { id: 'blue', label: 'Blue', css: { background: '#93C5FD' } },
@@ -110,26 +112,29 @@ const BGS: Bg[] = [
 ];
 
 // a caption look: how the key word and the other words are drawn
-type Cap = { id: string; label: string; key: React.CSSProperties; soft?: React.CSSProperties; wrap?: React.CSSProperties; font?: string };
+// tile: the picker card's colour when a look doesn't show on the usual dark card (dark: draw the other words white)
+type Cap = { id: string; label: string; key: React.CSSProperties; soft?: React.CSSProperties; wrap?: React.CSSProperties; font?: string; tile?: { bg: string; dark?: boolean } };
+const LIGHT_TILE = { bg: '#FFFFFF' };
+const GREY_TILE = { bg: '#52525B', dark: true };  // black-outlined words vanish on the dark card
 const IMPACT = '"Anton", "Bebas Neue", Impact, "Arial Black", sans-serif';
 const ROUND = '"Fredoka", "Poppins", "Arial Rounded MT Bold", sans-serif';
 const SERIF = '"DM Serif Display", Georgia, serif';
 const MONO = '"Courier New", ui-monospace, monospace';
 const HAND = '"Caveat", "Comic Sans MS", cursive';
 const CAPS: Cap[] = [
-  { id: 'auto', label: 'Auto mix', font: IMPACT, key: { color: '#EF4444' } },
+  { id: 'auto', label: 'AI', font: IMPACT, key: { color: '#EF4444' } },
   { id: 'sticky_blue', label: 'Blue sticky notes', font: HAND, key: { color: '#111', background: '#7DD3FC', padding: '0 6px', transform: 'rotate(-3deg)', display: 'inline-block' } },
-  { id: 'underline_swipe', label: 'Underline swipe', font: '"Inter", system-ui, sans-serif', key: { color: '#111', borderBottom: '3px solid #84CC16' } },
+  { id: 'underline_swipe', label: 'Underline swipe', font: '"Inter", system-ui, sans-serif', key: { color: '#111', borderBottom: '3px solid #84CC16' }, tile: LIGHT_TILE },
   { id: 'chalkboard', label: 'Chalkboard', font: HAND, key: { color: '#fff' }, wrap: { background: '#123524', padding: '4px 8px' }, soft: { color: '#d1fae5' } },
-  { id: 'hormozi', label: 'Hormozi', font: ROUND, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '0 2px 0 #111' } },
-  { id: 'mrbeast', label: 'MrBeast', font: IMPACT, key: { color: '#22C55E', WebkitTextStroke: '1px #111', textShadow: '0 2px 0 #111' } },
+  { id: 'hormozi', label: 'Hormozi', font: ROUND, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '0 2px 0 #111' }, tile: GREY_TILE },
+  { id: 'mrbeast', label: 'MrBeast', font: IMPACT, key: { color: '#22C55E', WebkitTextStroke: '1px #111', textShadow: '0 2px 0 #111' }, tile: GREY_TILE },
   { id: 'neon_green', label: 'Neon glow', font: IMPACT, key: { color: '#4ADE80', textShadow: '0 0 6px #39FF14, 0 0 14px #39FF14' } },
   { id: 'glass', label: 'Liquid glass', font: ROUND, key: { color: '#111', background: 'rgba(255,255,255,.55)', border: '1px solid rgba(255,255,255,.9)', borderRadius: 10, padding: '0 6px', backdropFilter: 'blur(4px)', boxShadow: '0 4px 14px rgba(0,0,0,.15)' } },
   { id: 'red_box', label: 'Red box', font: IMPACT, key: { color: '#fff', background: '#DC2626', padding: '0 6px', borderRadius: 4 } },
   { id: 'black_box', label: 'Black blocks', font: IMPACT, key: { color: '#fff', background: '#111', padding: '0 6px' }, soft: { color: '#fff', background: '#111', padding: '0 4px' } },
-  { id: 'karaoke', label: 'Karaoke fill', font: IMPACT, key: { background: 'linear-gradient(90deg,#FACC15 55%,#fff 55%)', WebkitBackgroundClip: 'text', color: 'transparent', WebkitTextStroke: '1px #111' } },
+  { id: 'karaoke', label: 'Karaoke fill', font: IMPACT, key: { background: 'linear-gradient(90deg,#FACC15 55%,#fff 55%)', WebkitBackgroundClip: 'text', color: 'transparent', WebkitTextStroke: '1px #111' }, tile: GREY_TILE },
   { id: 'highlighter', label: 'Highlighter', font: IMPACT, key: { color: '#111', background: 'linear-gradient(100deg,transparent 4%,#FDE047 4% 96%,transparent 96%)', padding: '0 4px', transform: 'rotate(-2deg)', display: 'inline-block' } },
-  { id: 'comic', label: 'Comic', font: ROUND, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '2px 2px 0 #EC4899', transform: 'rotate(-3deg)', display: 'inline-block' } },
+  { id: 'comic', label: 'Comic', font: ROUND, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '2px 2px 0 #EC4899', transform: 'rotate(-3deg)', display: 'inline-block' }, tile: GREY_TILE },
   { id: 'fire', label: 'Fire', font: IMPACT, key: { background: 'linear-gradient(0deg,#DC2626,#F97316,#FACC15)', WebkitBackgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 4px rgba(249,115,22,.7))' } },
   { id: 'ice', label: 'Ice', font: IMPACT, key: { background: 'linear-gradient(0deg,#0EA5E9,#A5F3FC,#fff)', WebkitBackgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 4px rgba(14,165,233,.7))' } },
   { id: 'gold', label: 'Luxury gold', font: SERIF, key: { background: 'linear-gradient(180deg,#FDE68A,#CA8A04,#FDE68A)', WebkitBackgroundClip: 'text', color: 'transparent' } },
@@ -138,15 +143,15 @@ const CAPS: Cap[] = [
   { id: 'chat_bubble', label: 'Chat bubble', font: ROUND, key: { color: '#fff', background: '#3B82F6', borderRadius: 14, padding: '0 8px' }, soft: { color: '#fff', background: '#3B82F6', borderRadius: 14, padding: '0 6px' } },
   { id: 'sticky_note', label: 'Sticky note', font: HAND, key: { color: '#DC2626' }, wrap: { background: '#FDE68A', padding: '4px 8px', transform: 'rotate(-2deg)', boxShadow: '0 4px 10px rgba(0,0,0,.18)' } },
   { id: 'news_bar', label: 'News bar', font: IMPACT, key: { color: '#EF4444' }, wrap: { background: '#111', padding: '3px 8px' }, soft: { color: '#fff' } },
-  { id: 'pop_art', label: 'Pop art', font: IMPACT, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '2px 2px 0 #EC4899' } },
-  { id: 'rgb_split', label: 'RGB glitch', font: IMPACT, key: { color: '#111', textShadow: '-2px 0 #EF4444, 2px 0 #3B82F6' } },
+  { id: 'pop_art', label: 'Pop art', font: IMPACT, key: { color: '#FACC15', WebkitTextStroke: '1px #111', textShadow: '2px 2px 0 #EC4899' }, tile: GREY_TILE },
+  { id: 'rgb_split', label: 'RGB glitch', font: IMPACT, key: { color: '#111', textShadow: '-2px 0 #EF4444, 2px 0 #3B82F6' }, tile: LIGHT_TILE },
   { id: 'minimal', label: 'Minimal', font: '"Inter", system-ui, sans-serif', key: { fontWeight: 600, letterSpacing: 0 }, soft: { fontWeight: 400 } },
   { id: 'poster_words', label: 'Poster words', font: IMPACT, key: { fontSize: '1.5em', lineHeight: 1 } },
   { id: 'off', label: 'No subtitles', key: {} },
 ];
 const SH = '0 1px 0 #000, 0 0 3px rgba(0,0,0,.9), 0 2px 6px rgba(0,0,0,.6)';
 const SIMPLE_CAPS: Cap[] = [
-  { id: 'auto', label: 'Auto mix', font: IMPACT, key: { color: '#FACC15', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
+  { id: 'auto', label: 'AI', font: IMPACT, key: { color: '#FACC15', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
   { id: 'animated', label: 'Animated', font: IMPACT, key: { color: '#4ADE80', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
   { id: 'simple', label: 'Simple', font: '"Arial Black", sans-serif', key: { color: '#fff', textShadow: SH }, soft: { color: '#fff', textShadow: SH } },
   { id: 'off', label: 'No subtitles', key: {} },
@@ -508,7 +513,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
     </button>
   );
 
-  const bgLabel = look.bg === 'ai' ? 'AI auto' : bg.label;
+  const bgLabel = bg.label;
   const buttons = [
     <Chip key="style" panel="style" label="Style" value={style.label} icon={ICONS.style} />,
     studio
@@ -546,16 +551,21 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
       )}
 
       {open === 'bg' && (
-        <Popup title={TITLES.bg} hint="🤖 Auto: AI reads each clip’s mood and picks · 🎲 Mix: a different one every Short" onClose={() => setOpen(null)}>
+        <Popup title={TITLES.bg} hint="AI: picks a background that fits each Short" onClose={() => setOpen(null)}>
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
             {BGS.map(b => (
               <button key={b.id} type="button" onClick={() => pickOne({ bg: b.id })} className={`${cardCls(look.bg === b.id)} p-1.5 bg-thumb-soft flex flex-col items-center`}>
                 <Tick on={look.bg === b.id} />
                 <div className="relative">
-                  {HAS_IMG.has(`bg-${b.id}`)
+                  {b.id === 'ai'
+                    ? <div className="rounded-[12px] bg-thumb-card border border-thumb-line flex flex-col items-center justify-center gap-1.5 text-center px-2" style={{ width: small ? 82 : 104, aspectRatio: '9 / 16' }}>
+                        <span className="text-[26px] leading-none">✨</span>
+                        <span className="text-[13px] font-black text-thumb-ink">AI</span>
+                        <span className="text-[10px] leading-tight text-thumb-sub">picks one for each Short</span>
+                      </div>
+                    : HAS_IMG.has(`bg-${b.id}`)
                     ? <RealShot name={`bg-${b.id}`} className="rounded-[12px]" style={{ width: small ? 82 : 104, aspectRatio: '9 / 16' }} />
                     : <PhonePreview look={{ ...look, style: 'split', bg: b.id, fxMode: 'auto' }} width={small ? 82 : 104} still frame={false} />}
-                  {b.tag && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-black">{b.tag === '🎲' ? '🎲 MIX' : '🤖 AI'}</span>}
                 </div>
                 <p className="mt-1.5 text-[11.5px] font-bold text-thumb-ink truncate max-w-full">{b.label}</p>
               </button>
@@ -566,15 +576,21 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
 
       {open === 'caption' && (
         <Popup title={TITLES.caption} onClose={() => setOpen(null)}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
             {caps.map(c => (
               <button key={c.id} type="button" onClick={() => pickOne({ caption: c.id })} className={`${cardCls(look.caption === c.id)} overflow-hidden`}>
                 <Tick on={look.caption === c.id} />
-                {HAS_IMG.has(`${studio ? 'cap' : 'simple'}-${c.id}`)
-                  ? <RealShot name={`${studio ? 'cap' : 'simple'}-${c.id}`} className="h-[76px]" focusY={studio ? 44 : 60} />
+                {c.id === 'auto'
+                  ? (
+                    <div className="h-[64px] bg-[#262626] flex flex-col items-center justify-center gap-0.5 px-2 text-center">
+                      <span className="text-[20px] leading-none">✨</span>
+                      <span className="text-[10px] leading-tight text-white/60">picks for each Short</span>
+                    </div>
+                  )
                   : (
-                    <div className="h-[76px] overflow-hidden flex items-center justify-center px-1" style={{ background: studio ? '#FFFFFF' : 'linear-gradient(160deg,#334155,#0F172A)' }}>
-                      <CaptionSample cap={c} dark={!studio} size={small ? 12 : 14} animate={look.caption === c.id} />
+                    // just the words on a plain card — no photo behind them (user-requested)
+                    <div className="h-[64px] overflow-hidden flex items-center justify-center px-1" style={{ background: c.tile?.bg || '#262626' }}>
+                      <CaptionSample cap={c} dark={c.tile ? !!c.tile.dark : true} size={small ? 11 : 13} animate={look.caption === c.id} />
                     </div>
                   )}
                 <p className="px-2 py-1.5 text-[11.5px] font-bold text-thumb-ink truncate bg-thumb-card">{c.label}</p>

@@ -435,10 +435,8 @@ export default function EditorView(props: EditorViewProps) {
             <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
           <div className="leading-tight min-w-0">
-            <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink truncate">PodcastFlux Editor</div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Canvas Editor</div>
+            <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink truncate">Image Editor</div>
           </div>
-          <div className="thumb-btn ml-auto w-11 h-11 rounded-full flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
         </div>
       </header>
 
@@ -465,7 +463,7 @@ export default function EditorView(props: EditorViewProps) {
                     </button>
                     <p className="thumb-label justify-center mt-7 mb-2.5">Or try</p>
                     <div className="flex flex-wrap justify-center gap-2 max-w-md">
-                      {['A podcast studio with neon lights, cinematic', 'A shocked man pointing at a glowing chart', 'Remove the background', 'Add sunglasses and a gold chain', 'Make it look like a movie poster'].map(ex => (
+                      {['A podcast studio with neon lights, cinematic', 'A shocked man pointing at a glowing chart', 'A cozy coffee shop at sunrise, film look', 'Add sunglasses and a gold chain', 'Make it look like a movie poster'].map(ex => (
                         <button key={ex} type="button" onClick={() => setPrompt(ex)}
                           className="px-3.5 py-2 rounded-full bg-white/[0.05] border border-white/[0.08] text-[12.5px] font-semibold text-thumb-ink/85 hover:border-thumb-red/40 hover:text-thumb-ink transition-colors">
                           {ex}
@@ -681,7 +679,7 @@ export default function EditorView(props: EditorViewProps) {
         </div>
 
       <div className={`hidden lg:block order-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto no-scrollbar transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <div className="thumb-glass p-4 sm:p-5 rounded-3xl flex flex-col gap-4">
+        <div className="thumb-glass p-4 sm:p-5 rounded-3xl flex flex-col gap-4 lg:min-h-[calc(100vh-3rem)]">
 
           {/* Brand + back — desktop keeps this inside the sidebar (no top header). */}
           <div className="flex items-center gap-2.5">
@@ -694,8 +692,7 @@ export default function EditorView(props: EditorViewProps) {
               </button>
               <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"><IconSparkles /></div>
               <div className="leading-tight min-w-0 flex-1">
-                <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink truncate">PodcastFlux Editor</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-thumb-sub">Canvas Editor</div>
+                <div className="font-extrabold tracking-tight text-[15px] text-thumb-ink truncate">Image Editor</div>
               </div>
               {configured && loggedIn && (
                 <button
@@ -715,7 +712,7 @@ export default function EditorView(props: EditorViewProps) {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image to generate..."}
-                  className="thumb-field w-full min-h-[120px] lg:min-h-[200px] text-thumb-ink rounded-2xl px-4 py-3 outline-none text-[15px] leading-relaxed resize-none no-scrollbar"
+                  className="thumb-field w-full min-h-[120px] lg:min-h-[140px] text-thumb-ink rounded-2xl px-4 py-3 outline-none text-[15px] leading-relaxed resize-none no-scrollbar"
                   onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleGenerateClick()}
               />
           </div>
@@ -728,13 +725,18 @@ export default function EditorView(props: EditorViewProps) {
               {isProcessing ? 'Add to queue' : 'Generate'}
               <span className="text-[13px] font-bold opacity-80">· {costLabel}</span>
           </button>
+          {!prompt.trim() && <p className="-mt-2 text-center text-[11.5px] text-thumb-sub">Type a prompt above to generate</p>}
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 flex-1">
               <button
                 onClick={() => setIsImageMode(!isImageMode)}
+                title="Turn on to upload your own photo and edit it"
                 className={`flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${isImageMode ? 'thumb-liquid' : 'bg-thumb-soft border-thumb-line text-thumb-sub hover:text-thumb-ink'}`}
               >
-                 <span>Image input</span>
+                 <span className="flex flex-col items-start leading-tight text-left">
+                   Edit my own photo
+                   <span className="text-[11px] font-medium opacity-70">Upload a photo and describe the change</span>
+                 </span>
                  {isImageMode ? <IconToggleRight /> : <IconToggleLeft />}
               </button>
 
@@ -815,7 +817,7 @@ export default function EditorView(props: EditorViewProps) {
                   </div>
               )}
 
-              <button onClick={() => setShowHelp(!showHelp)} className="self-start flex items-center gap-2 px-3 py-1.5 border rounded-xl text-xs font-medium bg-thumb-soft border-thumb-line text-thumb-sub hover:text-thumb-ink transition-all" title="Help & Shortcuts (⌘ + /)">? Shortcuts</button>
+              <button onClick={() => setShowHelp(!showHelp)} className="self-start mt-auto flex items-center gap-2 px-3 py-1.5 border rounded-xl text-xs font-medium bg-thumb-soft border-thumb-line text-thumb-sub hover:text-thumb-ink transition-all" title="Help & Shortcuts (⌘ + /)">? Shortcuts</button>
           </div>
         </div>
       </div>
@@ -851,23 +853,22 @@ export default function EditorView(props: EditorViewProps) {
 
               {/* the everyday settings stay in view as chips; the rest opens under "More" (user-requested) */}
               <div className="flex items-center gap-2 px-1">
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0">
                       <button
                         onClick={() => setIsImageMode(!isImageMode)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border transition-all whitespace-nowrap shrink-0 ${isImageMode ? 'thumb-liquid' : 'bg-thumb-soft border-thumb-line text-thumb-sub'}`}
+                        title="Upload your own photo and edit it"
+                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-bold border transition-all whitespace-nowrap shrink-0 ${isImageMode ? 'thumb-liquid' : 'bg-thumb-soft border-thumb-line text-thumb-sub'}`}
                       >
-                         Image {isImageMode ? <IconToggleRight /> : <IconToggleLeft />}
+                         Photo {isImageMode ? <IconToggleRight /> : <IconToggleLeft />}
                       </button>
-                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line shrink-0">
-                          <IconSettings />
+                      <div className="flex items-center bg-thumb-soft rounded-lg px-2.5 py-2 border border-thumb-line shrink-0">
                           <select value={settings.resolution} onChange={(e) => setSettings(prev => ({...prev, resolution: e.target.value as any, modelType: (e.target.value === '1K' ? 'flash' : 'pro')}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer">
                               <option value="1K" className="bg-thumb-card text-thumb-ink">Fast</option>
                               <option value="2K" className="bg-thumb-card text-thumb-ink">HD</option>
                               <option value="4K" className="bg-thumb-card text-thumb-ink">4K</option>
                           </select>
                       </div>
-                      <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line shrink-0">
-                          <IconAspectRatio />
+                      <div className="flex items-center bg-thumb-soft rounded-lg px-2.5 py-2 border border-thumb-line shrink-0">
                           <select value={settings.aspectRatio} onChange={(e) => setSettings(prev => ({...prev, aspectRatio: e.target.value}))} className="bg-transparent text-xs font-medium text-thumb-ink outline-none cursor-pointer">
                               {ASPECT_RATIOS.map(ratio => (<option key={ratio.value} value={ratio.value} className="bg-thumb-card text-thumb-ink">{ratio.label}</option>))}
                           </select>
