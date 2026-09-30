@@ -520,20 +520,12 @@ const ThumbnailStudio: React.FC<Props> = ({
   // credits — a failure here only ever means checkout couldn't even start.
   const startCheckout = async (plan: Plan, cycle: BillingCycle) => {
     if (!user || !supabase) { requireLogin('Log in to upgrade.'); return; }
-    try {
-      await buyItem(`plan:${plan.id}:${cycle}`);
-    } catch (e: any) {
-      setNoteText(e?.message || 'Could not start checkout. Please try again.');
-    }
+    await buyItem(`plan:${plan.id}:${cycle}`);  // an error shows on the Pricing page itself
   };
 
   const buyAddon = async (addonId: string) => {
     if (!user || !supabase) { requireLogin('Log in to buy credits.'); return; }
-    try {
-      await buyItem(`addon:${addonId}`);
-    } catch (e: any) {
-      setNoteText(e?.message || 'Could not start checkout. Please try again.');
-    }
+    await buyItem(`addon:${addonId}`);  // an error shows on the Pricing page itself
   };
 
   // YouTube feed preview

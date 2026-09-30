@@ -24,15 +24,28 @@ const authedFetch = async (path: string, body: unknown) => {
   }
   if (!token) throw new Error('Please sign in to continue.');
 
-  const resp = await fetch(`${supaUrl}/functions/v1/${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      apikey: supaAnon ?? '',
-    },
-    body: JSON.stringify(body),
-  });
+  // a request that never answers used to leave the button spinning then stop with nothing said
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25_000);
+  let resp: Response;
+  try {
+    resp = await fetch(`${supaUrl}/functions/v1/${path}`, {
+      signal: ctrl.signal,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: supaAnon ?? '',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    const err: any = new Error('Could not reach the payment server. Check your connection and try again.');
+    err.retryable = true;
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   // A bare non-2xx with no parseable JSON body (edge-function cold-start
   // timeout, gateway hiccup) is exactly what produced the unhelpful
   // "Something went wrong" — tag it as retryable so the caller below can

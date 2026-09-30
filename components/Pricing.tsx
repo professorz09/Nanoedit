@@ -21,6 +21,9 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
   // as "nothing happened," so an impatient second click fires a second
   // session and often surfaces as a confusing "Something went wrong."
   const [busy, setBusy] = useState<string | null>(null);
+  // user-reported ("dabne se kuch nahi hota"): a checkout that couldn't start put its error in the thumbnail
+  // panel's note, which isn't on this page — so nothing showed. It shows here now.
+  const [error, setError] = useState<string | null>(null);
   // the sliding pill under the Monthly / Yearly toggle: measured from the picked button
   const tabRefs = useRef<Record<BillingCycle, HTMLButtonElement | null>>({ monthly: null, yearly: null });
   const [pill, setPill] = useState({ left: 6, width: 0 });
@@ -43,8 +46,11 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
     if (!user) { onRequireLogin(); return; }
     if (busy) return;
     setBusy(`plan:${plan.id}`);
+    setError(null);
     try {
       await onCheckout(plan, cycle);
+    } catch (e: any) {
+      setError(e?.message || 'Could not start checkout. Please try again.');
     } finally {
       setBusy(null);
     }
@@ -54,8 +60,11 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
     if (!user) { onRequireLogin(); return; }
     if (busy) return;
     setBusy(`addon:${addonId}`);
+    setError(null);
     try {
       await onBuyAddon(addonId);
+    } catch (e: any) {
+      setError(e?.message || 'Could not start checkout. Please try again.');
     } finally {
       setBusy(null);
     }
@@ -90,6 +99,13 @@ const Pricing: React.FC<Props> = ({ onCheckout, onBuyAddon, onRequireLogin, onSt
           ))}
         </div>
       </div>
+
+      {error && (
+        <div role="alert" className="max-w-xl mx-auto mt-5 px-4 py-3 rounded-2xl bg-thumb-redSoft border border-thumb-red/30 text-[13.5px] text-red-300 flex items-start gap-3">
+          <span className="flex-1">{error}</span>
+          <button type="button" onClick={() => setError(null)} aria-label="Close" className="shrink-0 text-red-300/70 hover:text-red-200 font-bold">✕</button>
+        </div>
+      )}
 
       {/* Plan cards (user-requested: bold like higgsfield.ai's — the heading lines above them are gone). On a phone
           the popular plan comes first; each card: big name + badge, the price (the monthly one struck through
