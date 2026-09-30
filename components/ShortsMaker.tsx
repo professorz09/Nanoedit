@@ -243,6 +243,41 @@ const makeSteps = (clip: ShortClip) => {
   return { steps, at };
 };
 
+// user-requested: each step moves in its own way instead of one spinner throughout
+const StepAnim: React.FC<{ step: string }> = ({ step }) => {
+  const box = 'h-9 flex items-center justify-center';
+  if (step === 'In line') return (
+    <span className={`${box} gap-1.5`}>{[0, 1, 2].map(i => <span key={i} className="mk-dot w-2.5 h-2.5 rounded-full bg-thumb-red" style={{ animationDelay: `${i * 0.15}s` }} />)}</span>
+  );
+  if (step === 'Getting the video') return (
+    <span className={`${box} w-9 flex-col`}>
+      <svg viewBox="0 0 24 24" className="mk-drop w-6 h-6 text-thumb-red" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v11M7 11l5 5 5-5" /></svg>
+      <span className="w-6 h-[3px] rounded-full bg-thumb-red/60 -mt-0.5" />
+    </span>
+  );
+  if (step === 'Adding AI visuals') return (
+    <span className={`${box} gap-1`}>{[14, 22, 14].map((sz, i) => (
+      <svg key={i} viewBox="0 0 24 24" className="mk-twinkle text-thumb-red" style={{ width: sz, height: sz, animationDelay: `${i * 0.25}s` }} fill="currentColor"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" /></svg>
+    ))}</span>
+  );
+  if (step === 'Adding captions') return (
+    <span className={`${box} w-12 flex-col items-start gap-1.5`}>{[100, 70, 85].map((w, i) => (
+      <span key={i} className="mk-type h-[4px] rounded-full bg-thumb-red" style={{ width: `${w}%`, animationDelay: `${i * 0.3}s` }} />
+    ))}</span>
+  );
+  if (step === 'Rendering') return (
+    <span className={`${box} gap-1`}>{[0, 1, 2, 3, 4].map(i => (
+      <span key={i} className="mk-wave w-[4px] h-8 rounded-full bg-thumb-red" style={{ animationDelay: `${i * 0.12}s` }} />
+    ))}</span>
+  );
+  return (  // Finishing up: a tick drawn in a pulsing ring
+    <span className={`${box} w-9 relative`}>
+      <span className="mk-ring absolute inset-0 rounded-full border-2 border-thumb-red" />
+      <svg viewBox="0 0 24 24" className="w-6 h-6 text-thumb-red" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path className="mk-draw" d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+    </span>
+  );
+};
+
 // user-requested: a plain black screen (no blurred picture, no score in the corners), one clear line for the
 // step it's on, a bar for how far along it is; a tap anywhere plays the preview (no label for it, user-requested)
 const MakingOverlay: React.FC<{ clip: ShortClip; elapsed: number; onPreview: () => void }> = ({ clip, elapsed, onPreview }) => {
@@ -252,7 +287,7 @@ const MakingOverlay: React.FC<{ clip: ShortClip; elapsed: number; onPreview: () 
   return (
     <button type="button" onClick={onPreview} className="absolute inset-0 w-full h-full bg-black" aria-label={`Watch the preview of ${clip.title}`}>
       <span className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-        <span className="w-8 h-8 border-[3px] border-thumb-red border-t-transparent rounded-full animate-spin" />
+        <StepAnim step={waiting ? 'In line' : steps[at]} />
         <span className="text-white font-black text-[16px] leading-tight">
           {waiting ? (clip.position ? `#${clip.position} in line` : 'In line') : steps[at]}
         </span>
