@@ -45,6 +45,108 @@ const CopyButton: React.FC<{ text: string; label: string }> = ({ text, label }) 
 };
 
 // ── one Short ────────────────────────────────────────────────────────────────────────────────────
+// user-requested ("video me kewal utna hi part dikhe jitna chahiye"): the preview plays only this Short's part — the
+// YouTube player with its own controls hidden (they show the whole video's timeline), and our own bar for just this
+// part; at its end it goes back to the Short's start and stops.
+let youTubeApi: Promise<any> | null = null;
+const loadYouTubeApi = (): Promise<any> => {
+  const w = window as any;
+  if (w.YT?.Player) return Promise.resolve(w.YT);
+  if (!youTubeApi) {
+    youTubeApi = new Promise(resolve => {
+      const previous = w.onYouTubeIframeAPIReady;
+      w.onYouTubeIframeAPIReady = () => { previous?.(); resolve(w.YT); };
+      const script = document.createElement('script');
+      script.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(script);
+    });
+  }
+  return youTubeApi;
+};
+
+const ClipPlayer: React.FC<{ videoId: string; start: number; end: number }> = ({ videoId, start, end }) => {
+  const host = useRef<HTMLDivElement>(null);
+  const player = useRef<any>(null);
+  const [now, setNow] = useState(start);
+  const [paused, setPaused] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    let timer = 0;
+    loadYouTubeApi().then(YT => {
+      if (!alive || !host.current) return;
+      const mount = document.createElement('div');
+      host.current.appendChild(mount);
+      player.current = new YT.Player(mount, {
+        videoId, width: '100%', height: '100%', host: 'https://www.youtube-nocookie.com',
+        playerVars: {
+          start: Math.floor(start), end: Math.ceil(end), autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0,
+          modestbranding: 1, playsinline: 1, iv_load_policy: 3,
+        },
+        events: {
+          onReady: () => alive && setReady(true),
+          onStateChange: (e: any) => {
+            if (!alive) return;
+            setPaused(e.data !== YT.PlayerState.PLAYING);
+            if (e.data === YT.PlayerState.ENDED) { e.target.seekTo(start, true); e.target.pauseVideo(); }
+          },
+        },
+      });
+      timer = window.setInterval(() => {
+        const p = player.current;
+        if (!p?.getCurrentTime) return;
+        const t = p.getCurrentTime();
+        setNow(t);
+        if (t >= end) { p.pauseVideo(); p.seekTo(start, true); }
+      }, 250);
+    });
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      try { player.current?.destroy(); } catch { /* already gone */ }
+      player.current = null;
+      if (host.current) host.current.innerHTML = '';
+    };
+  }, [videoId, start, end]);
+
+  const length = Math.max(1, end - start);
+  const at = Math.min(length, Math.max(0, now - start));
+  const toggle = () => {
+    const p = player.current;
+    if (!p?.getPlayerState) return;
+    if (paused) p.playVideo(); else p.pauseVideo();
+  };
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+    player.current?.seekTo?.(start + frac * length, true);
+    setNow(start + frac * length);
+  };
+
+  return (
+    <div className="absolute inset-0">
+      <div ref={host} className="absolute inset-0 [&_iframe]:w-full [&_iframe]:h-full" />
+      {/* taps land here, never on YouTube's own UI (which would show the whole video) */}
+      <button type="button" onClick={toggle} aria-label={paused ? 'Play' : 'Pause'} className="absolute inset-0 w-full h-full">
+        {(paused || !ready) && (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="thumb-btn w-14 h-14 rounded-full flex items-center justify-center text-white">
+              <Ic.Play className="w-6 h-6 ml-0.5" />
+            </span>
+          </span>
+        )}
+      </button>
+      <div className="absolute left-0 right-0 bottom-0 px-3 pb-2.5 pt-6 bg-gradient-to-t from-black/80 to-transparent">
+        <div onClick={seek} className="relative h-1.5 rounded-full bg-white/25 cursor-pointer">
+          <div className="absolute inset-y-0 left-0 rounded-full bg-thumb-red" style={{ width: `${(at / length) * 100}%` }} />
+        </div>
+        <div className="mt-1.5 text-[11px] font-bold text-white tabular-nums">{fmtTime(at)} / {fmtTime(length)}</div>
+      </div>
+    </div>
+  );
+};
+
 const ShortCard: React.FC<{
   clip: ShortClip; videoId: string | null; duration: number | null;
   onTrim: (c: ShortClip, start: number, end: number) => void;
@@ -52,6 +154,7 @@ const ShortCard: React.FC<{
   cost: number;
 }> = ({ clip, videoId, duration, onTrim, onDownload, cost }) => {
   const [playing, setPlaying] = useState(false);
+  const [showTrim, setShowTrim] = useState(false); // start/end live under "Advanced settings" (user-requested)
   const busy = clip.status === 'queued' || clip.status === 'rendering';
   const len = clip.end - clip.start;
   const trimmed = clip.start !== clip.orig_start || clip.end !== clip.orig_end;
@@ -62,9 +165,6 @@ const ShortCard: React.FC<{
     setPlaying(false);
     onTrim(clip, start, end);
   };
-  const embed = videoId
-    ? `https://www.youtube-nocookie.com/embed/${videoId}?start=${Math.floor(clip.start)}&end=${Math.ceil(clip.end)}&autoplay=1&rel=0&modestbranding=1&playsinline=1`
-    : '';
 
   const Nudge = ({ which, d, text }: { which: 'start' | 'end'; d: number; text: string }) => (
     <button type="button" disabled={busy} onClick={() => nudge(which, d)}
@@ -76,15 +176,8 @@ const ShortCard: React.FC<{
   return (
     <div className="thumb-glass rounded-3xl overflow-hidden flex flex-col animate-fade-in-up">
       <div className="relative aspect-video bg-black">
-        {playing && embed ? (
-          <iframe
-            key={`${clip.start}-${clip.end}`}
-            src={embed}
-            title={clip.title}
-            className="absolute inset-0 w-full h-full"
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
+        {playing && videoId ? (
+          <ClipPlayer key={`${clip.start}-${clip.end}`} videoId={videoId} start={clip.start} end={clip.end} />
         ) : (
           <button type="button" onClick={() => setPlaying(true)} className="group absolute inset-0 w-full h-full" aria-label={`Preview ${clip.title}`}>
             {videoId && <img src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`} alt="" className="w-full h-full object-cover opacity-90" loading="lazy" />}
@@ -118,18 +211,26 @@ const ShortCard: React.FC<{
           </div>
         )}
 
-        {/* trim */}
-        <div className="bg-thumb-soft border border-thumb-line rounded-2xl p-3 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Length</span>
+        {/* trim — folded under "Advanced settings" (user-requested: not out front) */}
+        <div className="bg-thumb-soft border border-thumb-line rounded-2xl">
+          <button type="button" onClick={() => setShowTrim(v => !v)} aria-expanded={showTrim}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Advanced settings</span>
             <span className="flex items-center gap-2">
+              {trimmed && <span className="text-[11px] font-bold text-thumb-red">Edited</span>}
               <span className="text-[13px] font-black text-thumb-ink tabular-nums">{fmtTime(len)}</span>
-              {trimmed && !busy && (
-                <button type="button" onClick={() => onTrim(clip, clip.orig_start, clip.orig_end)} className="inline-flex items-center gap-1 text-[11px] font-bold text-thumb-red hover:underline">
-                  <Ic.Reset className="w-3 h-3" /> Reset
-                </button>
-              )}
+              <svg viewBox="0 0 24 24" className={`w-4 h-4 text-thumb-sub transition-transform ${showTrim ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
             </span>
+          </button>
+          {showTrim && (
+          <div className="px-3 pb-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Start &amp; end</span>
+            {trimmed && !busy && (
+              <button type="button" onClick={() => onTrim(clip, clip.orig_start, clip.orig_end)} className="inline-flex items-center gap-1 text-[11px] font-bold text-thumb-red hover:underline">
+                <Ic.Reset className="w-3 h-3" /> Reset
+              </button>
+            )}
           </div>
           {(['start', 'end'] as const).map(which => (
             <div key={which} className="flex items-center gap-2">
@@ -141,6 +242,8 @@ const ShortCard: React.FC<{
               <Nudge which={which} d={5} text="+5" />
             </div>
           ))}
+          </div>
+          )}
         </div>
 
         <div className="mt-auto space-y-2">
