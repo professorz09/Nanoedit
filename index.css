@@ -666,7 +666,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 /* the Image mode's upload box: a compact row */
 .thumb-drop {
   background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015));
-  border: 1px dashed rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.09);
   transition: border-color .2s ease, background .2s ease;
 }
 .thumb-drop:hover { border-color: rgba(255,51,85,0.5); background: rgba(255,51,85,0.05); }
