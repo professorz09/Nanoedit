@@ -13,7 +13,8 @@ export interface ShortsLook {
   fxMode: 'auto' | 'pick';
   fx: string[];
   sfx: boolean;
-  explain: boolean;     // 📊 AI explainer designs: fact cards, number counters, money stacks
+  explain: boolean;     // 📊 AI explainer designs: fact cards
+  keywords?: boolean;   // 🎯 Keyword triggers: money, numbers, time, years, % and feelings animate as they're said
   broll: boolean;       // 🔬 AI B-roll: a real, labelled picture of what is explained
   stickers: boolean;    // 🎨 AI stickers
   fxOff?: string[];     // motion effects switched off (all of MOTION_FX are on unless listed here)
@@ -23,7 +24,7 @@ export interface ShortsLook {
 }
 
 export const DEFAULT_LOOK: ShortsLook = {
-  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], fxOff: ['marker', 'scribble'], sfx: true, explain: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
+  style: 'split', bg: 'white', caption: 'auto', fxMode: 'auto', fx: [], fxOff: ['marker', 'scribble'], sfx: true, explain: true, keywords: true, broll: false, stickers: true, fit: 'full', length: 'auto', count: 'auto',
 };
 
 // "Mix" (random) was folded into the one AI background — an old pick of it shows as AI
@@ -42,6 +43,7 @@ export const lookFromProject = (p: { style?: string | null; subtitles?: string |
     caption: studio ? (p.subtitles === 'off' ? 'off' : (o.caption_look || 'auto')) : (p.subtitles || 'auto'),
     fxMode: 'auto',
     explain: fx ? fx.includes('facts') : true,
+    keywords: fx ? fx.includes('keywords') || fx.includes('counter') : true,
     stickers: fx ? fx.includes('stickers') : true,
     fxOff: fx ? MOTION_FX.filter(k => !fx.includes(k)) : DEFAULT_LOOK.fxOff,
     broll: false,
@@ -60,7 +62,7 @@ export const lookToRequest = (l: ShortsLook) => {
     bg: l.bg,
     caption_look: studio && l.caption !== 'off' ? l.caption : 'auto',
     // the motion effects the user left on (the AI picks among them per clip); the four switches add their own groups
-    fx: [...MOTION_FX.filter(k => !(l.fxOff || []).includes(k)), ...(l.explain ? EXPLAIN_FX : []), ...(l.stickers ? ['stickers'] : []), ...(l.broll ? ['real_images'] : [])],
+    fx: [...MOTION_FX.filter(k => !(l.fxOff || []).includes(k)), ...(l.explain ? EXPLAIN_FX : []), ...(l.keywords !== false ? KEYWORD_FX : []), ...(l.stickers ? ['stickers'] : []), ...(l.broll ? ['real_images'] : [])],
     sfx: l.sfx,
     fit: studio ? 'full' : l.fit,
     count: l.count === 'auto' ? undefined : Number(l.count),
@@ -69,18 +71,23 @@ export const lookToRequest = (l: ShortsLook) => {
 
 // the Effects popup: four extras, then each motion effect (on by default, the AI picks among them per clip)
 const MOTION_FX = ['hook_freeze', 'card_drop', 'card_move', 'push_in', 'zoom_punch', 'cascade', 'marker', 'scribble', 'burst', 'audio_react', 'progress'];
-const EXPLAIN_FX = ['facts', 'counter', 'scramble', 'money_stack'];
+const EXPLAIN_FX = ['facts'];
+// user-requested ("money, number alag alag toggles — ek hi kar keyword trigger"): one switch; the server's
+// 🎯 "keywords" turns on the counter, money stack, scramble, emoji and the time / year / % triggers itself
+const KEYWORD_FX = ['keywords'];
 const fxIcon = (d: React.ReactNode) => (
   <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 );
 const FX_ICONS: Record<string, React.ReactNode> = {
+  keywords: fxIcon(<><path d="M4 7V4h3M20 7V4h-3M4 17v3h3M20 17v3h-3" /><path d="M9 12h6M12 9v6" /></>),
   explain: fxIcon(<><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></>),
   broll: fxIcon(<><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></>),
   stickers: fxIcon(<><path d="M15.5 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h7l8-8V6a3 3 0 0 0-3-3z" /><path d="M13 21v-5a3 3 0 0 1 3-3h5" /><path d="M8.5 10h.01M13.5 10h.01" /></>),
   sfx: fxIcon(<><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></>),
 };
-const FX_SWITCHES: { key: 'explain' | 'broll' | 'stickers' | 'sfx'; label: string; note: string }[] = [
-  { key: 'explain', label: 'AI explainer designs', note: 'Fact cards, counting numbers, money stacks' },
+const FX_SWITCHES: { key: 'keywords' | 'explain' | 'broll' | 'stickers' | 'sfx'; label: string; note: string }[] = [
+  { key: 'keywords', label: 'Keyword triggers', note: 'Money, numbers, time, years, % and feelings animate as they are said' },
+  { key: 'explain', label: 'AI fact cards', note: "The clip's numbers and comparisons as a small infographic" },
   { key: 'broll', label: 'AI B-roll', note: 'A real picture of what is being explained' },
   { key: 'stickers', label: 'AI stickers', note: 'A drawn sticker of what is said, in every Short' },
   { key: 'sfx', label: 'Sound effects', note: 'Whooshes and pops on the big moments' },
@@ -654,8 +661,9 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           <div className="flex flex-col gap-2">
             {fxSwitches.map(f => {
               const locked = (f.key === 'broll' || f.key === 'stickers') && !brollOk;  // both are Creator-plan extras
-              const on = look[f.key] && !locked;
-              const toggle = () => (locked ? onUpgrade?.() : set({ [f.key]: !look[f.key] } as Partial<ShortsLook>));
+              const value = !!(look[f.key] ?? f.key === 'keywords');  // (a look saved before the switch existed: on)
+              const on = value && !locked;
+              const toggle = () => (locked ? onUpgrade?.() : set({ [f.key]: !value } as Partial<ShortsLook>));
               return (
                 <div key={f.key} onClick={toggle}
                   className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-colors ${on ? 'border-thumb-red/40 bg-thumb-redSoft' : 'border-thumb-line bg-thumb-soft hover:border-thumb-red/30'}`}>
