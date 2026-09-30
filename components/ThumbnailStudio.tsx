@@ -8,6 +8,7 @@ import { extractYouTubeId, urlToBase64, fetchYouTubeTitle, fetchYouTubeThumb } f
 import AuthModal from './AuthModal';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { I } from './ThumbIcons';
+import TrackingDemo from './TrackingDemo';
 import ResultThumb from './ResultThumb';
 import ChangeFaceModal from './ChangeFaceModal';
 import SketchCanvas from './SketchCanvas';
@@ -1807,6 +1808,16 @@ const ThumbnailStudio: React.FC<Props> = ({
               </div>
             ))}
           </div>
+        </section>
+        )}
+
+        {/* ── AI person tracking: a drawn two-person shot, the 9:16 crop following whoever talks ── */}
+        {section === 'home' && (
+        <section className="pb-16 max-w-5xl mx-auto">
+          <p className="thumb-label justify-center text-center">AI person tracking</p>
+          <h2 className="text-center mt-2 text-[26px] sm:text-[34px] font-black tracking-[-0.02em] leading-tight">It finds every face and follows the speaker</h2>
+          <p className="text-center mt-2 mb-8 text-[14px] text-thumb-sub max-w-lg mx-auto leading-relaxed">Two people in a wide shot? The AI tracks each of them and moves the 9:16 frame to whoever is talking, so your Short never cuts anyone off.</p>
+          <TrackingDemo />
         </section>
         )}
 
