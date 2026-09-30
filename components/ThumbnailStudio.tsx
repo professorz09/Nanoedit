@@ -1781,6 +1781,30 @@ const ThumbnailStudio: React.FC<Props> = ({
         </section>
         )}
 
+        {/* ── Two real clips (user-provided): AI reframing keeps the speaker in frame, and one video in every
+            format (that one plays forward then back, a ping-pong loop). Faded out on every side into the page. ── */}
+        {section === 'home' && (
+        <section className="pb-16 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-10 md:gap-8">
+            {[
+              { src: '/home/reframe', poster: '/home/reframe.jpg', eyebrow: 'AI reframing', title: 'The speaker always stays in frame', text: 'A wide video becomes a sharp 9:16 Short — the frame follows whoever is talking.' },
+              { src: '/home/formats', poster: '/home/formats.jpg', eyebrow: 'Every format', title: 'One video, every size', text: '9:16 for Shorts, Reels and TikTok, 1:1 for feeds, 16:9 for YouTube.' },
+            ].map(v => (
+              <div key={v.src} className="text-center">
+                <video poster={v.poster} autoPlay muted loop playsInline preload="metadata"
+                  className="home-fade-video w-full aspect-video object-cover" aria-hidden="true">
+                  <source src={`${v.src}.webm`} type="video/webm" />
+                  <source src={`${v.src}.mp4`} type="video/mp4" />
+                </video>
+                <p className="thumb-label justify-center mt-3">{v.eyebrow}</p>
+                <h3 className="mt-2 text-[22px] sm:text-[26px] font-black tracking-[-0.02em] text-thumb-ink leading-tight">{v.title}</h3>
+                <p className="mt-2 text-[14px] text-thumb-sub max-w-sm mx-auto leading-relaxed">{v.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+        )}
+
         {/* ── Post anywhere: platforms + a moving strip of Shorts (real ones from attached_assets/shorts-showcase/) ── */}
         {section === 'home' && (
         <section className="pb-16">
