@@ -89,6 +89,7 @@ export interface OneOffLook { style: string; subtitles: string; bg: string; capt
 /** look: a one-off style for this make; remake: make an already made Short again as it is */
 export const renderShort = (id: number, look?: OneOffLook, remake = false) =>
   call<{ queued: number[] }>(`/api/shorts/${id}/render`, { ...(look ? { look } : {}), ...(remake ? { remake: true } : {}) });
+export const deleteProject = (id: number) => call<{ deleted: number }>(`/api/projects/${id}/delete`, {});
 export const renderAll = (projectId: number) => call<{ queued: number[] }>(`/api/projects/${projectId}/render_all`, {});
 
 // user-requested ("user ko turant kholne me bhi asani hogi"): the projects and their Shorts are kept in Supabase

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { extractYouTubeId } from '../services/youtubeService';
 import {
-  ShortClip, ShortsProject, createProject, fmtTime, getProject, isShortsConfigured, listProjects,
+  ShortClip, ShortsProject, createProject, deleteProject, fmtTime, getProject, isShortsConfigured, listProjects,
   quickProject, quickProjects, renderAll, renderShort, startDownload, trimShort,
 } from '../services/shortsService';
 import { DEFAULT_LOOK, LookBar, ShortsLook, fixBg, lookFromProject, lookToRequest } from './ShortsStylePicker';
@@ -29,6 +29,8 @@ const Ic = {
   Back: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m15 18-6-6 6-6" /></svg>),
   Fire: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2s1 3.5-1.5 6.5S7 12 7 15a5 5 0 0 0 10 0c0-2.2-1-3.7-2-5 0 1.5-.8 2.6-2 3 .7-2.6.2-6.4-1-11Z" /></svg>),
   Sparkle: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" /></svg>),
+  More: (p: any) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>),
+  Trash: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>),
   Reset: (p: any) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>),
 };
 
@@ -821,6 +823,42 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
     }
   };
 
+  // user-requested: a project's ⋯ menu — find new moments again (a new project, same link and look) or delete
+  // it; both ask first, so a stray tap does nothing
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [ask, setAsk] = useState<{ kind: 'delete' | 'regen'; p: ShortsProject } | null>(null);
+  const [asking, setAsking] = useState(false);
+  const confirmAsk = async () => {
+    if (!ask) return;
+    const { kind, p } = ask;
+    setAsking(true);
+    try {
+      if (kind === 'delete') {
+        await deleteProject(p.id);
+        setProjects(prev => prev ? prev.filter(x => x.id !== p.id) : prev);
+        if (openId === p.id) setOpenId(null);
+      } else {
+        if (configured && totalCredits < FIND_CREDITS) { setAsk(null); setNote(`You need ${credits(FIND_CREDITS)} to find the Shorts in a video.`); onBuyCredits(); return; }
+        const o = p.options || {};
+        const fx = Array.isArray(o.fx) ? [...o.fx, ...(o.real_images && brollOk ? ['real_images'] : [])] : 'auto' as const;
+        const id = await createProject({
+          url: p.url, length: p.length || 'auto', subtitles: p.subtitles || 'auto', style: p.style || 'split',
+          bg: o.bg, caption_look: o.caption_look, fx, sfx: o.sfx !== false, fit: o.fit,
+        });
+        setOpenId(id);
+        refreshProfile();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      loadProjects();
+      setAsk(null);
+    } catch (e: any) {
+      setAsk(null);
+      setNote(e.message);
+    } finally {
+      setAsking(false);
+    }
+  };
+
   // a link typed on the home page: made straight away with the saved (or default) look
   const started = useRef(false);
   useEffect(() => {
@@ -1104,26 +1142,52 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
             </div>
           ))
           : projects.map(p => (
-            <button key={p.id} type="button" onClick={() => setOpenId(p.id)}
-              className="project-tile group rounded-3xl overflow-hidden text-left">
-              <div className="relative aspect-video bg-black overflow-hidden">
-                {p.thumb && <img src={p.thumb} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />}
-                <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-white">
-                  <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'finding' ? 'bg-amber-400 animate-pulse' : p.status === 'failed' ? 'bg-white/40' : 'bg-thumb-green'}`} />
-                  {p.status === 'finding' ? 'Finding moments…' : p.status === 'failed' ? 'Failed' : 'Ready'}
-                </span>
-                {p.status === 'ready' && (
-                  <span className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 text-[12px] font-black px-2.5 py-1 rounded-lg bg-thumb-red text-white">
-                    <Ic.Scissors className="w-3.5 h-3.5" /> {p.count ?? 0} Shorts
+            <div key={p.id} className="project-tile group relative rounded-3xl overflow-hidden">
+              <button type="button" onClick={() => setOpenId(p.id)} className="block w-full text-left">
+                <div className="relative aspect-video bg-black overflow-hidden">
+                  {p.thumb && <img src={p.thumb} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" loading="lazy" />}
+                  <span className="absolute inset-0 bg-gradient-to-t from-[#0f0f12] via-black/10 to-black/30" />
+                  <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-full bg-black/55 backdrop-blur-md border border-white/10 text-white">
+                    <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'finding' ? 'bg-amber-400 animate-pulse' : p.status === 'failed' ? 'bg-white/40' : 'bg-thumb-green'}`} />
+                    {p.status === 'finding' ? 'Finding moments…' : p.status === 'failed' ? 'Failed' : 'Ready'}
                   </span>
-                )}
-              </div>
-              <div className="p-4">
-                <p className="text-[15px] font-black text-thumb-ink line-clamp-2 leading-snug">{p.title}</p>
-                {p.created_at && <p className="text-[12px] text-thumb-sub mt-1">{ago(p.created_at)}</p>}
-              </div>
-            </button>
+                </div>
+                <div className="px-4 pt-3 pb-4">
+                  <p className="text-[15px] font-black text-thumb-ink line-clamp-2 leading-snug">{p.title}</p>
+                  <div className="mt-2 flex items-center gap-2 text-[12px] text-thumb-sub font-semibold">
+                    {p.status === 'ready' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-thumb-redSoft text-thumb-red font-black">
+                        <Ic.Scissors className="w-3 h-3" /> {p.count ?? 0} Shorts
+                      </span>
+                    )}
+                    {p.duration ? <span>{fmtTime(p.duration)}</span> : null}
+                    {p.duration && p.created_at ? <span className="opacity-50">·</span> : null}
+                    {p.created_at && <span>{ago(p.created_at)}</span>}
+                  </div>
+                </div>
+              </button>
+              {p.status !== 'finding' && (
+                <button type="button" aria-label="Project options" onClick={() => setMenuFor(menuFor === p.id ? null : p.id)}
+                  className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/55 backdrop-blur-md border border-white/10 text-white flex items-center justify-center hover:bg-black/75">
+                  <Ic.More className="w-4 h-4" />
+                </button>
+              )}
+              {menuFor === p.id && (
+                <>
+                  <div className="fixed inset-0 z-[40]" onClick={() => setMenuFor(null)} />
+                  <div className="absolute top-14 right-3 z-[41] w-52 rounded-2xl p-1.5 bg-[#18181c] border border-white/10 shadow-[0_18px_40px_-10px_rgba(0,0,0,0.9)] animate-fade-in-up">
+                    <button type="button" onClick={() => { setMenuFor(null); setAsk({ kind: 'regen', p }); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-[13.5px] font-bold text-thumb-ink hover:bg-white/5">
+                      <Ic.Reset className="w-4 h-4 text-thumb-sub" /> Find new moments
+                    </button>
+                    <button type="button" onClick={() => { setMenuFor(null); setAsk({ kind: 'delete', p }); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-[13.5px] font-bold text-thumb-red hover:bg-thumb-redSoft">
+                      <Ic.Trash className="w-4 h-4" /> Delete project
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           ))}
       </div>
     </div>
@@ -1137,6 +1201,30 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
       </div>
       {openId == null && (!signedIn || (projects && projects.length === 0)) && <GettingStarted />}
       {toast}
+      {ask && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => !asking && setAsk(null)}>
+          <div className="w-full max-w-sm rounded-3xl p-5 bg-[#141417] border border-white/10 animate-fade-in-up" onClick={e => e.stopPropagation()}>
+            <span className={`w-11 h-11 rounded-2xl flex items-center justify-center ${ask.kind === 'delete' ? 'bg-thumb-redSoft text-thumb-red' : 'bg-white/5 text-thumb-ink'}`}>
+              {ask.kind === 'delete' ? <Ic.Trash className="w-5 h-5" /> : <Ic.Reset className="w-5 h-5" />}
+            </span>
+            <p className="mt-3 text-[17px] font-black text-thumb-ink">{ask.kind === 'delete' ? 'Delete this project?' : 'Find new moments?'}</p>
+            <p className="mt-1 text-[13.5px] text-thumb-sub leading-snug line-clamp-2">{ask.p.title}</p>
+            <p className="mt-2 text-[13px] text-thumb-sub leading-snug">
+              {ask.kind === 'delete'
+                ? 'Its Shorts and downloads are removed for good. This can’t be undone.'
+                : `The video is read again for a fresh set of Shorts, as a new project. Uses ${credits(FIND_CREDITS)}.`}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button type="button" disabled={asking} onClick={() => setAsk(null)}
+                className="h-11 rounded-xl bg-white/5 border border-white/10 text-thumb-ink font-bold text-[14px]">Cancel</button>
+              <button type="button" disabled={asking} onClick={confirmAsk}
+                className="thumb-btn h-11 rounded-xl text-white font-black text-[14px] disabled:opacity-60">
+                {asking ? 'Please wait…' : ask.kind === 'delete' ? 'Delete' : 'Find again'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
