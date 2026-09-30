@@ -72,7 +72,6 @@ const fxIcon = (d: React.ReactNode) => (
   <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 );
 const FX_ICONS: Record<string, React.ReactNode> = {
-  auto: fxIcon(<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z" />),
   explain: fxIcon(<><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></>),
   broll: fxIcon(<><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></>),
   stickers: fxIcon(<><path d="M15.5 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h7l8-8V6a3 3 0 0 0-3-3z" /><path d="M13 21v-5a3 3 0 0 1 3-3h5" /><path d="M8.5 10h.01M13.5 10h.01" /></>),
@@ -548,7 +547,7 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
           icon={<span className="block w-4 h-4 rounded-full ring-1 ring-black/15" style={bg.css} />} />
       : <Chip key="fit" panel="fit" label="Fit" value={FITS.find(f => f.id === look.fit)?.label || 'Full video'} icon={ICONS.fit} />,
     <Chip key="caption" panel="caption" label="Subtitles" value={cap.label} icon={ICONS.caption} />,
-    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = fxSwitches.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length; return n ? `Auto + ${n}` : 'Auto'; })()} icon={ICONS.fx} />] : []),
+    ...(studio ? [<Chip key="fx" panel="fx" label="Effects" value={(() => { const n = fxSwitches.filter(f => look[f.key] && (f.key !== 'broll' || brollOk)).length; return n ? `${n} extra${n === 1 ? '' : 's'}` : 'Basic'; })()} icon={ICONS.fx} />] : []),
     ...(perShort ? [] : [
       <Chip key="count" panel="count" label="Shorts" value={look.count === 'auto' ? 'Auto' : `${look.count} Shorts`} icon={ICONS.count} />,
       <Chip key="length" panel="length" label="Length" value={LENGTHS.find(l => l.id === look.length)?.label || 'Auto'} icon={ICONS.length} />,
@@ -622,18 +621,10 @@ export const LookBar: React.FC<{ look: ShortsLook; onChange: (l: ShortsLook) => 
       )}
 
       {open === 'fx' && (
-        <Popup title={TITLES.fx} hint="Auto effects are always on — add the extras you want" onClose={() => setOpen(null)}
+        <Popup title={TITLES.fx} hint="Zooms and word highlights are added to every Short. Turn on the extras you want." onClose={() => setOpen(null)}
           footer={<button type="button" onClick={() => setOpen(null)} className="thumb-btn w-full h-11 rounded-xl text-white font-black text-[14px]">Done</button>}>
           {/* clean rows — an icon, what it does, and the app's own switch; no photos (user-requested) */}
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-3 p-3 rounded-2xl border border-thumb-line bg-thumb-soft">
-              <span className="w-10 h-10 shrink-0 rounded-xl bg-thumb-redSoft text-thumb-red flex items-center justify-center">{FX_ICONS.auto}</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-bold text-thumb-ink leading-tight">Auto effects</p>
-                <p className="text-[12px] text-thumb-sub leading-snug mt-0.5">Zooms, card moves and word highlights</p>
-              </div>
-              <span className="shrink-0 px-2 py-1 rounded-lg bg-thumb-card border border-thumb-line text-[10px] font-black text-thumb-sub uppercase tracking-wide">Always on</span>
-            </div>
             {fxSwitches.map(f => {
               const locked = f.key === 'broll' && !brollOk;
               const on = look[f.key] && !locked;
