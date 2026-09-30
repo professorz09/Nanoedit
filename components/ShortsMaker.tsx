@@ -214,6 +214,16 @@ const TrimRange: React.FC<{ clip: ShortClip; duration: number | null; disabled: 
   );
 };
 
+// "just now", "3 hours ago", "2 days ago", then the date
+const ago = (unixSec: number) => {
+  const m = Math.max(0, (Date.now() / 1000 - unixSec) / 60);
+  if (m < 1) return 'Just now';
+  if (m < 60) return `${Math.floor(m)} min ago`;
+  if (m < 60 * 24) return `${Math.floor(m / 60)} hour${Math.floor(m / 60) === 1 ? '' : 's'} ago`;
+  if (m < 60 * 24 * 7) return `${Math.floor(m / 1440)} day${Math.floor(m / 1440) === 1 ? '' : 's'} ago`;
+  return new Date(unixSec * 1000).toLocaleDateString();
+};
+
 const projectFromUrl = (): number | null => {
   const n = Number(new URLSearchParams(window.location.search).get('project'));
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -1028,16 +1038,23 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
           ))
           : projects.map(p => (
             <button key={p.id} type="button" onClick={() => setOpenId(p.id)}
-              className="thumb-glass rounded-3xl overflow-hidden text-left hover:ring-2 hover:ring-thumb-red/40 transition-all">
-              <div className="relative aspect-video bg-thumb-soft">
-                {p.thumb && <img src={p.thumb} alt="" className="w-full h-full object-cover" loading="lazy" />}
-                <span className={`absolute bottom-2.5 left-2.5 text-[12px] font-black px-2.5 py-1 rounded-lg ${p.status === 'failed' ? 'bg-black/75 text-white' : 'bg-thumb-red text-white'}`}>
-                  {p.status === 'finding' ? 'Finding moments…' : p.status === 'failed' ? 'Failed' : `${p.count ?? 0} Shorts`}
+              className="project-tile group rounded-3xl overflow-hidden text-left">
+              <div className="relative aspect-video bg-black overflow-hidden">
+                {p.thumb && <img src={p.thumb} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />}
+                <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-white">
+                  <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'finding' ? 'bg-amber-400 animate-pulse' : p.status === 'failed' ? 'bg-white/40' : 'bg-thumb-green'}`} />
+                  {p.status === 'finding' ? 'Finding moments…' : p.status === 'failed' ? 'Failed' : 'Ready'}
                 </span>
+                {p.status === 'ready' && (
+                  <span className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 text-[12px] font-black px-2.5 py-1 rounded-lg bg-thumb-red text-white">
+                    <Ic.Scissors className="w-3.5 h-3.5" /> {p.count ?? 0} Shorts
+                  </span>
+                )}
               </div>
               <div className="p-4">
                 <p className="text-[15px] font-black text-thumb-ink line-clamp-2 leading-snug">{p.title}</p>
-                {p.created_at && <p className="text-[12px] text-thumb-sub mt-1">{new Date(p.created_at * 1000).toLocaleDateString()}</p>}
+                {p.created_at && <p className="text-[12px] text-thumb-sub mt-1">{ago(p.created_at)}</p>}
               </div>
             </button>
           ))}

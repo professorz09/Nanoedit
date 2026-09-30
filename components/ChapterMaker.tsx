@@ -141,34 +141,34 @@ ${context}`;
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">YouTube link</label>
+          <label className="thumb-label">YouTube link</label>
           <input
             value={url}
             onChange={e => setUrl(e.target.value)}
             placeholder="https://youtube.com/watch?v=…"
-            className="w-full bg-thumb-soft border border-thumb-line rounded-xl px-4 py-3 text-sm text-thumb-ink placeholder:text-thumb-sub/60 focus:border-thumb-red/50 outline-none transition-colors"
+            className="w-full thumb-field rounded-xl px-4 py-3 text-[15px] text-thumb-ink outline-none"
           />
           <p className="text-[12px] text-thumb-sub">We analyze the video's captions and mark where each topic starts.</p>
         </div>
 
         {needPaste && (
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Transcript (with timestamps)</label>
+            <label className="thumb-label">Transcript (with timestamps)</label>
             <textarea
               value={transcript}
               onChange={e => setTranscript(e.target.value)}
               rows={5}
               placeholder="[00:00] intro… [01:20] next topic…"
-              className="w-full bg-thumb-soft border border-thumb-line rounded-xl px-4 py-3 text-sm text-thumb-ink placeholder:text-thumb-sub/60 focus:border-thumb-red/50 outline-none transition-colors resize-none"
+              className="w-full thumb-field rounded-xl px-4 py-3 text-[15px] text-thumb-ink outline-none resize-none"
             />
           </div>
         )}
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Detail</label>
-          <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
+          <label className="thumb-label">Detail</label>
+          <div className="flex gap-1 p-1 bg-black/40 border border-white/[0.07] rounded-2xl shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]">
             {DETAIL.map(d => (
-              <button key={d.id} type="button" onClick={() => setDetail(d.id)} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-all ${detail === d.id ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>{d.label}</button>
+              <button key={d.id} type="button" onClick={() => setDetail(d.id)} className={`flex-1 h-10 rounded-xl text-[13px] font-bold transition-all ${detail === d.id ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>{d.label}</button>
             ))}
           </div>
         </div>
@@ -176,9 +176,8 @@ ${context}`;
         {note && <div className="text-xs bg-thumb-redSoft text-red-300 border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>}
 
         <button onClick={run} disabled={busy} className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70">
-          {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analyzing video…</> : <><Ic.Wand className="w-5 h-5" /> Generate Chapters</>}
+          {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analyzing video…</> : <><Ic.Wand className="w-5 h-5" /> Generate Chapters <span className="text-[14px] font-bold opacity-80">· {CHAPTERS_COST} credit{CHAPTERS_COST === 1 ? "" : "s"}</span></>}
         </button>
-        <p className="text-center text-[12px] text-thumb-sub -mt-1">Uses {CHAPTERS_COST} credits per generation</p>
       </div>
 
       {/* ── Results — saved runs, grouped by video title, collapsed by default ── */}

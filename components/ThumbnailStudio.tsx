@@ -24,7 +24,6 @@ const TitleGenerator = React.lazy(() => import('./TitleGenerator'));
 const ChapterMaker = React.lazy(() => import('./ChapterMaker'));
 const ShortsMaker = React.lazy(() => import('./ShortsMaker'));
 const ShortsFlow = React.lazy(() => import('./ShortsFlow'));
-const TimeGraph = React.lazy(() => import('./TimeGraph'));
 import HeroRotator from './HeroRotator';
 const ShortsShowcase = React.lazy(() => import('./ShortsShowcase'));
 const AdminStyles = React.lazy(() => import('./AdminStyles'));
@@ -404,6 +403,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const ytFetchCache = useRef<Record<string, [string | null, string | null, Awaited<ReturnType<typeof fetchTranscript>>]>>({});
   const [legal, setLegal] = useState<null | 'about' | 'privacy' | 'terms'>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);  // the header's credits card
   // lock background scroll while the sidebar (mobile drawer) or the legal popup is open
   useScrollLock(!!legal || sidebarOpen);
   // one theme only — the black one (user-decided: the light/dark switch is gone)
@@ -1589,7 +1589,7 @@ const ThumbnailStudio: React.FC<Props> = ({
           <div className="flex items-center gap-2 sm:gap-3">
             {configured && user ? (
               <>
-                <button onClick={goPricing} title="Credits — tap to top up" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-3 pr-3.5 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
+                <button onClick={() => { setSidebarOpen(false); setCreditsOpen(o => !o); }} aria-expanded={creditsOpen} title="Your credits" className="h-11 inline-flex items-center gap-1.5 bg-thumb-soft border border-thumb-line rounded-full pl-3 pr-3.5 text-sm font-bold text-thumb-ink hover:border-thumb-red/40 transition-colors">
                   <I.Bolt className="w-4 h-4 text-thumb-red" />
                   {creditsLoading
                     ? <span className="thumb-skeleton inline-block w-5 h-4 rounded align-middle" aria-label="Loading credits" />
@@ -1613,12 +1613,46 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </button>
               </>
             )}
-            <button onClick={() => setSidebarOpen(o => !o)} aria-expanded={sidebarOpen} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-full text-thumb-ink/80 hover:text-thumb-ink hover:bg-thumb-soft transition-colors" aria-label={sidebarOpen ? 'Close menu' : 'Menu'}>
+            <button onClick={() => { setCreditsOpen(false); setSidebarOpen(o => !o); }} aria-expanded={sidebarOpen} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-full text-thumb-ink/80 hover:text-thumb-ink hover:bg-thumb-soft transition-colors" aria-label={sidebarOpen ? 'Close menu' : 'Menu'}>
               {sidebarOpen ? <I.X className="w-6 h-6" /> : <I.Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
       </header>
+
+      {/* ── Credits card: taps on the header's credits (user-requested) — what's left, the plan, what things cost ── */}
+      {creditsOpen && configured && user && (
+        <div className="fixed inset-0 z-30" onClick={() => setCreditsOpen(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" />
+          <div className="absolute right-3 sm:right-5 top-[84px] w-[min(340px,calc(100vw-24px))] thumb-menu rounded-[26px] p-5 animate-fade-in-up" onClick={e => e.stopPropagation()}>
+            <p className="thumb-label">Your credits</p>
+            <p className="mt-2 text-[44px] leading-none font-black tracking-[-0.03em] text-thumb-ink">{totalCredits}</p>
+            <p className="text-[13px] text-thumb-sub mt-1.5">
+              {getPlan((profile?.plan ?? 'free') as PlanId)?.name ?? 'Free'} plan
+              {profile?.renews_at ? ` · renews ${new Date(profile.renews_at).toLocaleDateString()}` : ''}
+            </p>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <div className="rounded-2xl bg-white/[0.04] border border-white/[0.07] px-3 py-2.5">
+                <p className="text-[18px] font-black text-thumb-ink leading-none">{profile?.credits ?? 0}</p>
+                <p className="text-[11px] text-thumb-sub mt-1">plan · resets monthly</p>
+              </div>
+              <div className="rounded-2xl bg-white/[0.04] border border-white/[0.07] px-3 py-2.5">
+                <p className="text-[18px] font-black text-thumb-ink leading-none">{profile?.addon_credits ?? 0}</p>
+                <p className="text-[11px] text-thumb-sub mt-1">add-on · never expire</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-1.5 text-[12.5px]">
+              {[['Find Shorts in a video', '1'], ['Make or remake a Short', '1'], ['Thumbnail from a YouTube link', '3'], ['Other thumbnail or image', '1'], ['4K', '+2']].map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between text-thumb-sub"><span>{k}</span><span className="font-bold text-thumb-ink tabular-nums">{v}</span></div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-5">
+              <button onClick={() => { setCreditsOpen(false); goAccount(); }} className="price-cta-plain h-11 rounded-xl text-[14px] font-bold">Account</button>
+              <button onClick={() => { setCreditsOpen(false); goPricing(); }} className="price-cta-hot h-11 rounded-xl text-[14px] font-bold">Top up</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Menu: a dropdown card right under the header pill (user-requested, like agent-media's); the
           header stays on top of it, its ☰ turned into ✕ ── */}
@@ -1729,27 +1763,21 @@ const ThumbnailStudio: React.FC<Props> = ({
         {/* ── Why Shorts Maker: the pain (manual editing) and what it does instead ── */}
         {section === 'home' && (
         <section className="pb-14">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 max-w-5xl mx-auto">
+          {/* a swipeable row on a phone (user-requested: a shorter home page), four across on a desktop */}
+          <div className="flex lg:grid lg:grid-cols-4 gap-2.5 sm:gap-4 max-w-5xl mx-auto overflow-x-auto no-scrollbar snap-x snap-mandatory -mx-5 px-5 lg:mx-auto lg:px-0">
             {[
               { icon: '😩', title: 'No more manual editing', text: 'Hours of scrubbing, cutting, cropping and typing captions — done for you in minutes.' },
               { icon: '🔥', title: 'Viral score for every Short', text: 'Each moment gets a score out of 100, so you know which one to post first.' },
               { icon: '📦', title: 'Bulk: up to 20 at once', text: 'One link, many Shorts. Download them one by one or all together as a ZIP.' },
               { icon: '✨', title: 'Ready to post', text: 'Animated captions, effects, speaker tracking, a title and description to copy.' },
             ].map(f => (
-              <div key={f.title} className="thumb-glass rounded-2xl p-3.5 sm:p-5 text-left">
+              <div key={f.title} className="thumb-glass rounded-2xl p-4 sm:p-5 text-left shrink-0 w-[68%] sm:w-[42%] lg:w-auto snap-start">
                 <div className="w-10 h-10 rounded-xl bg-thumb-redSoft flex items-center justify-center text-xl">{f.icon}</div>
                 <p className="mt-2.5 text-[13.5px] sm:text-[15px] font-black text-thumb-ink leading-snug">{f.title}</p>
                 <p className="mt-1 text-[12px] sm:text-[13px] text-thumb-sub leading-relaxed">{f.text}</p>
               </div>
             ))}
           </div>
-        </section>
-        )}
-
-        {/* ── Why it matters: an illustrative hours-by-hand vs PodcastFlux chart ── */}
-        {section === 'home' && (
-        <section className="pb-16 max-w-5xl mx-auto">
-          <Suspense fallback={null}><TimeGraph /></Suspense>
         </section>
         )}
 

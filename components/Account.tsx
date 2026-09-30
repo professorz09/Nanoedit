@@ -236,17 +236,17 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
       {/* Credit summary */}
       <div className="grid sm:grid-cols-3 gap-4 mt-5">
         <div className="thumb-glass rounded-2xl p-5">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Total credits</p>
+          <p className="thumb-label">Total credits</p>
           <p className="text-4xl font-black text-thumb-ink mt-1">{totalCredits}</p>
-          <p className="text-xs text-thumb-sub mt-1">thumbnails you can still generate</p>
+          <p className="text-xs text-thumb-sub mt-1">for Shorts and thumbnails</p>
         </div>
         <div className="thumb-glass rounded-2xl p-5">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Plan credits</p>
+          <p className="thumb-label">Plan credits</p>
           <p className="text-4xl font-black text-thumb-ink mt-1">{planCredits}</p>
           <p className="text-xs text-thumb-sub mt-1">reset each billing cycle</p>
         </div>
         <div className="thumb-glass rounded-2xl p-5">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Add-on credits</p>
+          <p className="thumb-label">Add-on credits</p>
           <p className="text-4xl font-black text-thumb-ink mt-1">{addonCredits}</p>
           <p className="text-xs text-thumb-sub mt-1">never expire</p>
         </div>
@@ -255,7 +255,7 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
       {/* Plan / renewal */}
       <div className="thumb-glass rounded-2xl p-5 mt-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Renews / expires</p>
+          <p className="thumb-label">Renews / expires</p>
           <p className="text-lg font-black text-thumb-ink mt-0.5">{fmtDate(profile?.renews_at ?? null)}</p>
         </div>
         <button onClick={onUpgrade} className="thumb-btn text-white font-bold px-5 py-3 rounded-2xl flex items-center gap-2 text-sm">

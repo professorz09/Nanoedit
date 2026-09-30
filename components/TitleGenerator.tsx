@@ -154,7 +154,7 @@ ${context}`;
         </div>
 
         {/* Switches */}
-        <div className="grid grid-cols-2 gap-1 p-1.5 bg-thumb-soft border border-thumb-line rounded-2xl">
+        <div className="grid grid-cols-2 gap-1 p-1.5 bg-black/40 border border-white/[0.07] rounded-2xl shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]">
           {([['youtube', 'YouTube link', Ic.Youtube], ['transcript', 'File / transcript', Ic.Doc]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
@@ -169,12 +169,12 @@ ${context}`;
         {tab === 'youtube' ? (
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">YouTube link</label>
+              <label className="thumb-label">YouTube link</label>
               <input
                 value={url}
                 onChange={e => setUrl(e.target.value)}
                 placeholder="https://youtube.com/watch?v=…"
-                className="w-full bg-thumb-soft border border-thumb-line rounded-xl px-4 py-3 text-sm text-thumb-ink placeholder:text-thumb-sub/60 focus:border-thumb-red/50 outline-none transition-colors"
+                className="w-full thumb-field rounded-xl px-4 py-3 text-[15px] text-thumb-ink outline-none"
               />
               <p className="text-[12px] text-thumb-sub">We read the video's captions to understand it. No captions? Paste the transcript below.</p>
             </div>
@@ -184,19 +184,19 @@ ${context}`;
                 onChange={e => setTranscript(e.target.value)}
                 rows={4}
                 placeholder="Paste the video transcript here…"
-                className="w-full bg-thumb-soft border border-thumb-line rounded-xl px-4 py-3 text-sm text-thumb-ink placeholder:text-thumb-sub/60 focus:border-thumb-red/50 outline-none transition-colors resize-none"
+                className="w-full thumb-field rounded-xl px-4 py-3 text-[15px] text-thumb-ink outline-none resize-none"
               />
             )}
           </div>
         ) : (
           <div className="space-y-2.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Transcript</label>
+            <label className="thumb-label">Transcript</label>
             <textarea
               value={transcript}
               onChange={e => setTranscript(e.target.value)}
               rows={6}
               placeholder="Paste your transcript / script here…"
-              className="w-full bg-thumb-soft border border-thumb-line rounded-xl px-4 py-3 text-sm text-thumb-ink placeholder:text-thumb-sub/60 focus:border-thumb-red/50 outline-none transition-colors resize-none"
+              className="w-full thumb-field rounded-xl px-4 py-3 text-[15px] text-thumb-ink outline-none resize-none"
             />
             <button onClick={() => fileRef.current?.click()} className="text-[13px] font-bold text-thumb-red hover:underline inline-flex items-center gap-1.5">
               <Ic.Doc className="w-4 h-4" /> Upload a .txt / .srt / .vtt file
@@ -207,18 +207,18 @@ ${context}`;
 
         {/* Options */}
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Vibe</label>
-          <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
+          <label className="thumb-label">Vibe</label>
+          <div className="flex gap-1 p-1 bg-black/40 border border-white/[0.07] rounded-2xl shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]">
             {VIBES.map(v => (
-              <button key={v.id} type="button" onClick={() => setVibe(v.id)} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-all ${vibe === v.id ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>{v.label}</button>
+              <button key={v.id} type="button" onClick={() => setVibe(v.id)} className={`flex-1 h-10 rounded-xl text-[13px] font-bold transition-all ${vibe === v.id ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>{v.label}</button>
             ))}
           </div>
         </div>
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">How many</label>
-          <div className="flex gap-1 p-1 bg-thumb-soft border border-thumb-line rounded-xl">
+          <label className="thumb-label">How many</label>
+          <div className="flex gap-1 p-1 bg-black/40 border border-white/[0.07] rounded-2xl shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]">
             {[5, 8, 12].map(n => (
-              <button key={n} type="button" onClick={() => setCount(n)} className={`flex-1 py-1.5 rounded-lg text-[13px] font-bold transition-all ${count === n ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>{n}</button>
+              <button key={n} type="button" onClick={() => setCount(n)} className={`flex-1 h-10 rounded-xl text-[13px] font-bold transition-all ${count === n ? 'thumb-liquid' : 'text-thumb-sub hover:text-thumb-ink'}`}>{n}</button>
             ))}
           </div>
         </div>
@@ -226,9 +226,8 @@ ${context}`;
         {note && <div className="text-xs bg-thumb-redSoft text-red-300 border border-thumb-red/20 rounded-xl px-4 py-3 leading-relaxed">{note}</div>}
 
         <button onClick={run} disabled={busy} className="thumb-btn w-full py-4 rounded-2xl text-white font-black text-lg flex items-center justify-center gap-3 disabled:text-white/70">
-          {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analyzing…</> : <><Ic.Wand className="w-5 h-5" /> Generate Titles</>}
+          {busy ? <><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analyzing…</> : <><Ic.Wand className="w-5 h-5" /> Generate Titles <span className="text-[14px] font-bold opacity-80">· {TITLE_COST} credit{TITLE_COST === 1 ? "" : "s"}</span></>}
         </button>
-        <p className="text-center text-[12px] text-thumb-sub -mt-1">Uses {TITLE_COST} credits per generation</p>
       </div>
 
       {/* ── Results — saved runs, grouped by video title, collapsed by default ── */}
