@@ -108,6 +108,16 @@ const describePurchase = (reason: string) => {
   return plan ? `${plan.name} plan` : 'Plan purchase';
 };
 
+// the social accounts shown (locked) under Connected accounts
+const brand = (d: React.ReactNode) => <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">{d}</svg>;
+const SOCIALS: { id: string; name: string; bg: string; icon: React.ReactNode }[] = [
+  { id: 'youtube', name: 'YouTube', bg: '#FF0000', icon: brand(<path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z" />) },
+  { id: 'instagram', name: 'Instagram', bg: 'linear-gradient(45deg,#F58529,#DD2A7B 50%,#8134AF 75%,#515BD4)', icon: (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>) },
+  { id: 'tiktok', name: 'TikTok', bg: '#000000', icon: brand(<path d="M16.6 2h-3.3v13.2a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .8.1V9a6.3 6.3 0 1 0 5.4 6.2V8.6a8 8 0 0 0 4.7 1.5V6.8a4.7 4.7 0 0 1-4.7-4.8z" />) },
+  { id: 'x', name: 'X', bg: '#000000', icon: brand(<path d="M17.8 2.5h3.4l-7.4 8.5 8.7 11.5h-6.8l-5.3-7-6.1 7H1l7.9-9L.6 2.5h7l4.8 6.4 5.4-6.4zm-1.2 18h1.9L7.5 4.4h-2l11.1 16.1z" />) },
+];
+
 const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
   const { user, profile, totalCredits, signOut } = useAuth();
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
@@ -261,6 +271,27 @@ const Account: React.FC<Props> = ({ onUpgrade, onLogin }) => {
         <button onClick={onUpgrade} className="thumb-btn text-white font-bold px-5 py-3 rounded-2xl flex items-center gap-2 text-sm">
           {plan.id === 'free' ? 'Upgrade plan' : 'Buy more credits'}
         </button>
+      </div>
+
+      {/* user-requested: the social accounts to post Shorts to — shown, but locked until posting is ready */}
+      <div className="mt-6">
+        <h2 className="text-sm font-black uppercase tracking-wider text-thumb-sub mb-1">Connected accounts</h2>
+        <p className="text-xs text-thumb-sub mb-3">Post your Shorts straight to your channels. Coming soon.</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {SOCIALS.map(sc => (
+            <div key={sc.id} aria-disabled="true" className="thumb-glass rounded-2xl p-4 flex items-center gap-3 opacity-80 select-none">
+              <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white" style={{ background: sc.bg }}>{sc.icon}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-black text-thumb-ink">{sc.name}</p>
+                <p className="text-xs text-thumb-sub">Not connected</p>
+              </div>
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-thumb-soft border border-thumb-line text-[12px] font-bold text-thumb-sub">
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                Soon
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Purchase history — purchases only, no generation/usage rows */}
