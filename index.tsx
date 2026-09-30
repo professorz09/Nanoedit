@@ -4,11 +4,22 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import './index.css';
+import { isStaleBuildError, reloadForNewBuild } from './utils/staleBuild';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
+
+// a code file of an older build that's gone from the server (the site was updated while this tab was open):
+// load the new build instead of failing (Vite reports these as vite:preloadError)
+// (not preventDefault: the error still reaches the error screen, which then reads "PodcastFlux was updated")
+window.addEventListener('vite:preloadError', () => {
+  reloadForNewBuild();
+});
+window.addEventListener('unhandledrejection', (event) => {
+  if (isStaleBuildError(event.reason)) reloadForNewBuild();
+});
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
