@@ -22,6 +22,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { CATALOG, DODO_PRODUCT_ID, PLAN_RANK } from '../_shared/pricing.ts';
+import { lemonCheckout } from '../_shared/lemonsqueezy.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -40,7 +41,6 @@ Deno.serve(async (req) => {
   // real JSON error instead of an opaque, bodyless platform 502.
   try {
     const apiKey = Deno.env.get('DODO_PAYMENTS_API_KEY');
-    if (!apiKey) return json(500, { error: 'Payments are not configured.' });
     const mode = Deno.env.get('DODO_PAYMENTS_ENVIRONMENT') === 'live_mode' ? 'live_mode' : 'test_mode';
     const base = mode === 'live_mode' ? 'https://live.dodopayments.com' : 'https://test.dodopayments.com';
     const appUrl = Deno.env.get('APP_URL') || 'https://podcastflux.com';
@@ -92,13 +92,29 @@ Deno.serve(async (req) => {
 
     // user-requested: details already filled in — the name from the login, and the billing address of the
     // last payment (saved by dodo-webhook in profiles.billing)
-    const { data: saved } = await admin.from('profiles').select('billing').eq('id', uid).maybeSingle();
+    const { data: saved } = await admin.from('profiles').select('billing, is_admin').eq('id', uid).maybeSingle();
     const billing: any = saved?.billing || null;
     const meta: any = userData.user.user_metadata || {};
     const name = String(billing?.name || meta.full_name || meta.name || '').trim() || null;
     const billingAddress = billing?.country
       ? { country: billing.country, street: billing.street ?? null, city: billing.city ?? null, state: billing.state ?? null, zipcode: billing.zipcode ?? null }
       : null;
+
+    // Which payment provider: PAYMENTS_PROVIDER = dodo (default) | lemonsqueezy | lemonsqueezy_admin — the last
+    // sends only admins to Lemon Squeezy (to try its test mode) while everyone else stays on Dodo.
+    const provider = Deno.env.get('PAYMENTS_PROVIDER') || 'dodo';
+    const lsKey = Deno.env.get('LEMONSQUEEZY_API_KEY');
+    const lsVariant = Deno.env.get('LEMONSQUEEZY_VARIANT_ID');
+    const useLemon = !!(lsKey && lsVariant) &&
+      (provider === 'lemonsqueezy' || (provider === 'lemonsqueezy_admin' && saved?.is_admin === true));
+    if (useLemon) {
+      const url = await lemonCheckout({
+        apiKey: lsKey!, variantId: lsVariant!, item, itemId, uid, email, name,
+        country: billing?.country ?? null, appUrl,
+      }).catch((e: any) => { throw Object.assign(new Error(e?.message), { toUser: true }); });
+      return json(200, { checkout_url: url, label: item.label });
+    }
+    if (!apiKey) return json(500, { error: 'Payments are not configured.' });
 
     const resp = await fetch(`${base}/checkouts`, {
       method: 'POST',
@@ -172,6 +188,6 @@ Deno.serve(async (req) => {
     return json(200, { checkout_url: data.checkout_url, label: item.label });
   } catch (e: any) {
     console.error('create_checkout_unhandled', e?.message || String(e));
-    return json(500, { error: 'Could not start checkout. Please try again.' });
+    return json(500, { error: e?.toUser && e?.message ? e.message : 'Could not start checkout. Please try again.' });
   }
 });
