@@ -82,6 +82,52 @@ export const trimShort = (id: number, start: number, end: number) =>
 export const renderShort = (id: number) => call<{ queued: number[] }>(`/api/shorts/${id}/render`, {});
 export const renderAll = (projectId: number) => call<{ queued: number[] }>(`/api/projects/${projectId}/render_all`, {});
 
+// user-requested ("user ko turant kholne me bhi asani hogi"): the projects and their Shorts are kept in Supabase
+// (shorts_projects / shorts_clips, written by the render server; RLS lets a user read only their own), so the page
+// shows them straight from there at once — the render server's answer (download links, live render stages)
+// replaces it a moment later. null when Supabase or those tables aren't there, so the page just waits for the server.
+const PROJECT_COLUMNS = 'id,url,video_id,title,thumb,duration,status,error,style,subtitles,length,created_at';
+
+const clipFromRow = (r: any): ShortClip => ({
+  id: r.id, idx: r.idx, start: r.start_sec, end: r.end_sec, orig_start: r.orig_start, orig_end: r.orig_end,
+  title: r.title || '', description: r.description || '', score: r.score ?? null,
+  status: (['idle', 'queued', 'rendering', 'ready', 'failed'].includes(r.status) ? r.status : 'idle') as ShortStatus,
+  stage: '', error: r.error ?? null, paid: !!r.charged, download: null, // links come from the server
+});
+
+const projectFromRow = (r: any): ShortsProject => ({
+  id: r.id, url: r.url, video_id: r.video_id ?? null, title: r.title || 'YouTube video', thumb: r.thumb ?? null,
+  duration: r.duration ?? null, status: r.status, error: r.error ?? null, style: r.style ?? null,
+  subtitles: r.subtitles ?? null, length: r.length ?? null, created_at: r.created_at ?? null,
+  count: Array.isArray(r.shorts_clips) ? (r.shorts_clips[0]?.count ?? null) : null,
+});
+
+export const quickProjects = async (): Promise<ShortsProject[] | null> => {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('shorts_projects')
+      .select(`${PROJECT_COLUMNS},shorts_clips(count)`).order('id', { ascending: false }).limit(50);
+    return error || !data ? null : data.map(projectFromRow);
+  } catch {
+    return null;
+  }
+};
+
+export const quickProject = async (id: number): Promise<ShortsProject | null> => {
+  if (!supabase) return null;
+  try {
+    const [{ data: row, error }, { data: clips, error: clipsError }] = await Promise.all([
+      supabase.from('shorts_projects').select(PROJECT_COLUMNS).eq('id', id).maybeSingle(),
+      supabase.from('shorts_clips').select('*').eq('project_id', id).order('idx', { ascending: true }),
+    ]);
+    if (error || clipsError || !row) return null;
+    const shorts = (clips || []).map(clipFromRow);
+    return { ...projectFromRow(row), shorts, count: shorts.length };
+  } catch {
+    return null;
+  }
+};
+
 // A file download without leaving the page (the server sends it as an attachment)
 export const startDownload = (url: string) => {
   const a = document.createElement('a');

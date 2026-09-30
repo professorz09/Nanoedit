@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { extractYouTubeId } from '../services/youtubeService';
 import {
   ShortClip, ShortsProject, createProject, fmtTime, getProject, isShortsConfigured, listProjects,
-  renderAll, renderShort, startDownload, trimShort,
+  quickProject, quickProjects, renderAll, renderShort, startDownload, trimShort,
 } from '../services/shortsService';
 import { DEFAULT_LOOK, LookBar, ShortsLook, lookToRequest } from './ShortsStylePicker';
 import { HOME_SHORTS } from './homeShorts';
@@ -424,7 +424,12 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   const loadProjects = useCallback(() => {
     if (!signedIn) return;
     if (!isShortsConfigured) { setProjects([]); return; }
-    listProjects().then(setProjects).catch(e => { setProjects([]); setNote(e.message); });
+    let fromServer = false;
+    // straight from Supabase first (instant), then the render server's own list replaces it
+    quickProjects().then(quick => { if (quick && !fromServer) setProjects(prev => prev ?? quick); });
+    listProjects()
+      .then(list => { fromServer = true; setProjects(list); })
+      .catch(e => { fromServer = true; setProjects(prev => prev ?? []); setNote(e.message); });
   }, [signedIn]);
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
@@ -433,11 +438,17 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   useEffect(() => {
     if (openId == null) { setProject(null); return; }
     let stop = false;
+    let fromServer = false;
     let timer: ReturnType<typeof setTimeout>;
+    // the project straight from Supabase while the render server's answer is on its way
+    quickProject(openId).then(quick => {
+      if (quick && !stop && !fromServer) setProject(prev => (prev && prev.id === quick.id ? prev : quick));
+    });
     const tick = async () => {
       try {
         const p = await getProject(openId);
         if (stop) return;
+        fromServer = true;
         setProject(prev => {
           // keep a trim the user just made on screen until the server has it
           if (!prev?.shorts || !p.shorts) return p;
