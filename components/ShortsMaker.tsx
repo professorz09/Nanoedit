@@ -64,7 +64,7 @@ const loadYouTubeApi = (): Promise<any> => {
   return youTubeApi;
 };
 
-const ClipPlayer: React.FC<{ videoId: string; start: number; end: number }> = ({ videoId, start, end }) => {
+const ClipPlayer: React.FC<{ videoId: string; start: number; end: number; onPlay?: () => void }> = ({ videoId, start, end, onPlay }) => {
   const host = useRef<HTMLDivElement>(null);
   const player = useRef<any>(null);
   const [now, setNow] = useState(start);
@@ -115,7 +115,7 @@ const ClipPlayer: React.FC<{ videoId: string; start: number; end: number }> = ({
   const toggle = () => {
     const p = player.current;
     if (!p?.getPlayerState) return;
-    if (paused) p.playVideo(); else p.pauseVideo();
+    if (paused) { onPlay?.(); p.playVideo(); } else p.pauseVideo();
   };
   const seek = (e: React.MouseEvent<HTMLDivElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
@@ -152,6 +152,11 @@ const projectFromUrl = (): number | null => {
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
+// user-reported: two Shorts could play at once — starting one (a YouTube preview or a made Short) now stops
+// every other card's
+const PLAY_EVENT = 'pf-short-play';
+const announcePlay = (id: number) => window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: id }));
+
 const ShortCard: React.FC<{
   clip: ShortClip; videoId: string | null; duration: number | null;
   onTrim: (c: ShortClip, start: number, end: number) => void;
@@ -161,6 +166,16 @@ const ShortCard: React.FC<{
   onRemake: (c: ShortClip, look: ShortsLook) => void;
 }> = ({ clip, videoId, duration, onTrim, onDownload, cost, projectLook, onRemake }) => {
   const [playing, setPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const onOtherPlay = (e: Event) => {
+      if ((e as CustomEvent<number>).detail === clip.id) return;
+      setPlaying(false);          // the YouTube preview closes
+      videoRef.current?.pause();  // a made Short pauses where it is
+    };
+    window.addEventListener(PLAY_EVENT, onOtherPlay);
+    return () => window.removeEventListener(PLAY_EVENT, onOtherPlay);
+  }, [clip.id]);
   const [showTrim, setShowTrim] = useState(false); // start/end live under "Advanced settings" (user-requested)
   // user-requested: once made, the card plays the real Short, same size as the preview; when its file expires (no
   // view link any more) or the link stops working, it's the YouTube preview of that part again
@@ -196,6 +211,8 @@ const ShortCard: React.FC<{
       <div className="relative aspect-video bg-black">
         {made ? (
           <video
+            ref={videoRef}
+            onPlay={() => announcePlay(clip.id)}
             key={clip.view!}
             src={clip.view!}
             poster={picture}
@@ -206,9 +223,9 @@ const ShortCard: React.FC<{
             className="absolute inset-0 w-full h-full object-contain bg-black"
           />
         ) : playing && videoId ? (
-          <ClipPlayer key={`${clip.start}-${clip.end}`} videoId={videoId} start={clip.start} end={clip.end} />
+          <ClipPlayer key={`${clip.start}-${clip.end}`} videoId={videoId} start={clip.start} end={clip.end} onPlay={() => announcePlay(clip.id)} />
         ) : (
-          <button type="button" onClick={() => setPlaying(true)} className="group absolute inset-0 w-full h-full" aria-label={`Preview ${clip.title}`}>
+          <button type="button" onClick={() => { announcePlay(clip.id); setPlaying(true); }} className="group absolute inset-0 w-full h-full" aria-label={`Preview ${clip.title}`}>
             {picture && <img key={picture} src={picture} alt="" className="w-full h-full object-cover opacity-90" loading="lazy"
               onError={() => { if (clip.frame && picture === clip.frame) setFrameFailed(clip.frame); }} />}
             <span className="absolute inset-0 flex items-center justify-center">
