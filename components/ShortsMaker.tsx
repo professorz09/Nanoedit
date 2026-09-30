@@ -461,7 +461,9 @@ const ShortCard: React.FC<{
           <CopyButton text={clip.description ? `${clip.title}\n\n${clip.description}` : clip.title} label="title and description" />
         </div>
 
-        {/* trim — folded under "Advanced settings" (user-requested: not out front) */}
+        {/* trim — folded under "Advanced settings" (user-requested: not out front); not on the Made tab, which is
+            for watching and downloading — trims and new-style remakes are on All moments */}
+        {!tall && (
         <div className="bg-thumb-soft border border-thumb-line rounded-2xl">
           <button type="button" onClick={() => setShowTrim(v => !v)} aria-expanded={showTrim}
             className="w-full flex items-center justify-between gap-2 px-3 py-2.5">
@@ -537,6 +539,7 @@ const ShortCard: React.FC<{
           </div>
           )}
         </div>
+        )}
 
         <div className="mt-auto space-y-2">
           {clip.status === 'failed' && clip.error && (
