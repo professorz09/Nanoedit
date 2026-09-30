@@ -416,6 +416,10 @@ export default function EditorView(props: EditorViewProps) {
   // would sit at the bottom of the whole document instead of the screen, and
   // the picker/viewer modals would center far below the fold, leaving just
   // their backdrop visible. See index.css.
+  // what a Generate costs (the server's IMAGE_COST 1 + 4K surcharge 2, per image), shown on the button
+  const editCost = (1 + (settings.resolution === '4K' ? 2 : 0)) * Math.max(1, Number(batchCount) || 1);
+  const costLabel = `${editCost} credit${editCost === 1 ? '' : 's'}`;
+
   return (
     <div className={`thumb-scope min-h-screen bg-thumb-bg text-thumb-ink selection:bg-nano-accent selection:text-white flex flex-col font-sans animate-fade-in`}>
 
@@ -446,6 +450,28 @@ export default function EditorView(props: EditorViewProps) {
             {(generatedImages.length > 0 || queue.length > 0) && (
                 <div className="flex items-center justify-end gap-2">
                     <span className="text-xs font-bold text-thumb-sub">{isProcessing ? 'Generating…' : `${generatedImages.length} image${generatedImages.length === 1 ? '' : 's'}`}{queue.length > 0 && !isProcessing ? ` · ${queue.length} queued` : ''}</span>
+                </div>
+            )}
+
+            {/* nothing yet: what to do, with examples that fill the prompt (user-requested: not an empty box) */}
+            {generatedImages.length === 0 && queue.length === 0 && !(isImageMode && sourceImages.length > 0) && uiVisible && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-8 animate-fade-in">
+                    <div className="w-14 h-14 rounded-2xl bg-thumb-redSoft text-thumb-red flex items-center justify-center mb-4 [&_svg]:w-6 [&_svg]:h-6"><IconSparkles /></div>
+                    <h3 className="text-xl font-black text-thumb-ink">Create or edit an image</h3>
+                    <p className="text-[13px] text-thumb-sub mt-1.5 max-w-xs">Describe a new image, or upload a photo and say what to change.</p>
+                    <button type="button" onClick={() => setIsImageMode(true)}
+                      className="mt-5 h-11 px-5 rounded-full bg-white text-[#0b0b0d] text-[14px] font-bold inline-flex items-center gap-2 hover:bg-white/90 transition-colors">
+                      <IconLayers /> Upload a photo
+                    </button>
+                    <p className="thumb-label justify-center mt-7 mb-2.5">Or try</p>
+                    <div className="flex flex-wrap justify-center gap-2 max-w-md">
+                      {['A podcast studio with neon lights, cinematic', 'A shocked man pointing at a glowing chart', 'Remove the background', 'Add sunglasses and a gold chain', 'Make it look like a movie poster'].map(ex => (
+                        <button key={ex} type="button" onClick={() => setPrompt(ex)}
+                          className="px-3.5 py-2 rounded-full bg-white/[0.05] border border-white/[0.08] text-[12.5px] font-semibold text-thumb-ink/85 hover:border-thumb-red/40 hover:text-thumb-ink transition-colors">
+                          {ex}
+                        </button>
+                      ))}
+                    </div>
                 </div>
             )}
 
@@ -684,12 +710,12 @@ export default function EditorView(props: EditorViewProps) {
           </div>
 
           <div className="flex flex-col gap-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Prompt</label>
+              <label className="thumb-label">Prompt</label>
               <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image to generate..."}
-                  className="w-full min-h-[120px] lg:min-h-[200px] bg-thumb-soft text-thumb-ink placeholder-thumb-sub/60 rounded-2xl px-4 py-3 outline-none border border-thumb-line focus:border-nano-accent/50 transition-all text-sm resize-none"
+                  className="thumb-field w-full min-h-[120px] lg:min-h-[200px] text-thumb-ink rounded-2xl px-4 py-3 outline-none text-[15px] leading-relaxed resize-none no-scrollbar"
                   onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleGenerateClick()}
               />
           </div>
@@ -698,8 +724,9 @@ export default function EditorView(props: EditorViewProps) {
               disabled={!prompt.trim()}
               className={`thumb-btn w-full py-3.5 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : ''}`}
           >
-              {isProcessing ? 'Add to queue' : 'Generate'}
               <IconSparkles />
+              {isProcessing ? 'Add to queue' : 'Generate'}
+              <span className="text-[13px] font-bold opacity-80">· {costLabel}</span>
           </button>
 
           <div className="flex flex-col gap-3">
@@ -806,7 +833,7 @@ export default function EditorView(props: EditorViewProps) {
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder={isImageMode && sourceImages.length > 0 ? "Describe your edit..." : "Describe an image..."}
-                      className="flex-1 min-w-0 bg-thumb-soft text-thumb-ink placeholder-thumb-sub/60 rounded-xl px-4 py-3 outline-none border border-thumb-line focus:border-nano-accent/50 transition-all text-sm"
+                      className="thumb-field flex-1 min-w-0 h-12 text-thumb-ink rounded-xl px-4 outline-none text-[15px]"
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); handleGenerateClick(); } }}
                   />
                   <button
@@ -814,25 +841,17 @@ export default function EditorView(props: EditorViewProps) {
                       disabled={!prompt.trim()}
                       className={`thumb-btn h-12 px-5 shrink-0 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed text-sm whitespace-nowrap ${isProcessing ? 'shadow-[0_0_20px_rgba(255,51,85,0.35)]' : ''}`}
                   >
-                      {isProcessing ? 'Queue' : 'Generate'}
                       <IconSparkles />
+                      <span className="flex flex-col items-start leading-none">
+                        {isProcessing ? 'Queue' : 'Generate'}
+                        <span className="text-[10px] font-bold opacity-80 mt-0.5">{costLabel}</span>
+                      </span>
                   </button>
               </div>
 
-              {/* Show / Hide tools toggle (mobile only; tablet shows tools always) */}
-              <button
-                  onClick={() => setShowMobileTools(prev => !prev)}
-                  className="sm:hidden w-full py-2.5 rounded-xl border border-thumb-line bg-thumb-soft text-thumb-ink text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
-              >
-                  <IconSettings />
-                  {showMobileTools ? 'Hide tools' : 'Show tools'}
-                  <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform duration-300 ${showMobileTools ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-              </button>
-
-              {/* Tools — full current feature set */}
-              <div className={`tools-reveal flex-col gap-2.5 px-1 pb-1 ${showMobileTools ? 'expanded' : 'collapsed'}`}>
-                  {/* Image toggle + Quality + Ratio */}
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full">
+              {/* the everyday settings stay in view as chips; the rest opens under "More" (user-requested) */}
+              <div className="flex items-center gap-2 px-1">
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0">
                       <button
                         onClick={() => setIsImageMode(!isImageMode)}
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border transition-all whitespace-nowrap shrink-0 ${isImageMode ? 'thumb-liquid' : 'bg-thumb-soft border-thumb-line text-thumb-sub'}`}
@@ -854,7 +873,18 @@ export default function EditorView(props: EditorViewProps) {
                           </select>
                       </div>
                   </div>
+                  <button
+                      onClick={() => setShowMobileTools(prev => !prev)}
+                      className="sm:hidden shrink-0 h-9 px-3 rounded-lg border border-thumb-line bg-thumb-soft text-thumb-ink text-xs font-bold flex items-center gap-1.5"
+                      aria-expanded={showMobileTools}
+                  >
+                      {showMobileTools ? 'Less' : 'More'}
+                      <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 transition-transform duration-300 ${showMobileTools ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                  </button>
+              </div>
 
+              {/* Tools — full current feature set */}
+              <div className={`tools-reveal flex-col gap-2.5 px-1 pb-1 ${showMobileTools ? 'expanded' : 'collapsed'}`}>
                   {/* Style / Camera / Quick action / Variations */}
                   <div className="grid grid-cols-2 gap-2">
                       <div className="flex items-center gap-2 bg-thumb-soft rounded-lg px-3 py-2 border border-thumb-line">
