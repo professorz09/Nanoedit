@@ -540,3 +540,13 @@ button:active:not(:disabled) { transform: scale(0.97); }
   border-color: rgba(12,12,24,0.1);
   box-shadow: inset 0 1px 0 #fff, 0 8px 22px -14px rgba(24,24,45,0.35);
 }
+
+/* ── Header menu: a solid black card dropping from under the header pill ── */
+.thumb-menu {
+  background: linear-gradient(180deg, rgba(20,20,28,0.98), rgba(11,11,16,0.98));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 30px 80px -20px rgba(0,0,0,0.9),
+    0 0 0 1px rgba(0,0,0,0.5);
+}

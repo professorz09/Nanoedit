@@ -43,8 +43,8 @@ function App() {
   const [uiVisible, setUiVisible] = usePersistentState('nano_ui_visible', true);
   // Which screen is shown: the thumbnail studio (landing/generator) or the PodcastFlux editor
   const [view, setView] = usePersistentState<'studio' | 'editor'>('nano_view', 'studio');
-  // App-wide light/dark theme, shared with the studio via localStorage (views are mutually exclusive)
-  const [theme, setTheme] = usePersistentState<'dark' | 'light'>('nano_theme', 'light');
+  // one theme only — the black one (user-decided: no light/dark switch)
+  const theme = 'dark' as const;
   
   // Settings initialization - Defaulting to 4K/Pro as requested, ensuring all fields exist
   const [settings, setSettings] = useState<EditorSettings>(() => {

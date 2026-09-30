@@ -405,8 +405,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // lock background scroll while the sidebar (mobile drawer) or the legal popup is open
   useScrollLock(!!legal || sidebarOpen);
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => getFromLocalStorage('nano_theme', 'light'));
-  useEffect(() => { saveToLocalStorage('nano_theme', theme); }, [theme]);
+  // one theme only — the black one (user-decided: the light/dark switch is gone)
 
   // Warm the lazy tab chunks during browser idle time. The initial view paints
   // with only its critical JS; these prefetch quietly in the background so that
@@ -1536,7 +1535,7 @@ const ThumbnailStudio: React.FC<Props> = ({
   }[previewDevice];
 
   return (
-    <div className={`thumb-scope min-h-screen overflow-x-clip bg-thumb-bg text-thumb-ink font-sans antialiased ${theme === 'light' ? 'thumb-light' : ''}`}>
+    <div className="thumb-scope min-h-screen overflow-x-clip bg-thumb-bg text-thumb-ink font-sans antialiased">
       {/* ── Header ── */}
       {/* a floating liquid-glass pill; the page scrolls by behind it */}
       <header className="sticky top-0 z-40 px-3 sm:px-5 pt-3">
@@ -1597,100 +1596,74 @@ const ThumbnailStudio: React.FC<Props> = ({
                 </button>
               </>
             )}
-            <button onClick={() => setSidebarOpen(true)} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-full text-thumb-ink/70 hover:text-thumb-ink hover:bg-thumb-soft transition-colors" aria-label="Menu"><I.Menu className="w-6 h-6" /></button>
+            <button onClick={() => setSidebarOpen(o => !o)} aria-expanded={sidebarOpen} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-full text-thumb-ink/80 hover:text-thumb-ink hover:bg-thumb-soft transition-colors" aria-label={sidebarOpen ? 'Close menu' : 'Menu'}>
+              {sidebarOpen ? <I.X className="w-6 h-6" /> : <I.Menu className="w-6 h-6" />}
+            </button>
           </div>
         </div>
       </header>
 
-      {/* ── Sidebar drawer (tools) ── */}
-      <div className={`fixed inset-0 z-[60] overflow-hidden ${sidebarOpen ? '' : 'pointer-events-none'}`} aria-hidden={!sidebarOpen}>
-        <div onClick={() => setSidebarOpen(false)} className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0'}`} />
-        <aside style={{ willChange: 'transform' }} className={`thumb-glass absolute top-0 left-0 h-full w-[290px] max-w-[82vw] flex flex-col transition-transform duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="h-[68px] px-5 flex items-center justify-between border-b border-white/10 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="thumb-btn w-9 h-9 rounded-xl flex items-center justify-center text-white"><I.Wand className="w-4 h-4" /></div>
-              <span className="font-extrabold tracking-tight">PodcastFlux</span>
+      {/* ── Menu: a dropdown card right under the header pill (user-requested, like agent-media's); the
+          header stays on top of it, its ☰ turned into ✕ ── */}
+      <div className={`fixed inset-0 z-30 ${sidebarOpen ? '' : 'pointer-events-none'}`} aria-hidden={!sidebarOpen}>
+        <div onClick={() => setSidebarOpen(false)} className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0'}`} />
+        <div className="absolute inset-x-3 sm:inset-x-5 top-[84px] max-w-6xl mx-auto">
+          <nav className={`thumb-menu rounded-[28px] p-2.5 max-h-[calc(100dvh-100px)] overflow-y-auto no-scrollbar origin-top transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${sidebarOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-[0.98]'}`}>
+            <div className="grid sm:grid-cols-2 gap-0.5">
+              {([
+                { key: 'home', label: 'Home', icon: I.Wand, active: section === 'home', onClick: goHome },
+                { key: 'shorts', label: 'Shorts Maker', icon: I.Play, active: section === 'shorts', onClick: goShorts },
+                { key: 'generate', label: 'Thumbnail Maker', icon: I.Bolt, active: section === 'generate', onClick: goGenerate },
+                { key: 'title', label: 'Title Generator', icon: I.Text, active: section === 'title', onClick: goTitle },
+                { key: 'chapters', label: 'Chapter Maker', icon: I.List, active: section === 'chapters', onClick: goChapters },
+                { key: 'preview', label: 'Feed test', icon: I.Tv, active: section === 'preview', onClick: goPreview },
+                { key: 'editor', label: 'Editor', icon: I.Edit, active: false, onClick: () => onOpenEditor() },
+                { key: 'pricing', label: 'Pricing', icon: I.Star, active: section === 'pricing', onClick: goPricing },
+                ...(configured && user ? [{ key: 'account', label: 'Account', icon: I.Check, active: section === 'account', onClick: goAccount }] : []),
+                ...(profile?.is_admin ? [{ key: 'admin', label: 'Admin', icon: I.Grid, active: section === 'admin', onClick: goAdmin }] : []),
+              ] as { key: string; label: string; icon: (p: any) => React.ReactElement; active: boolean; onClick: () => void }[]).map(item => (
+                <button
+                  key={item.key}
+                  onClick={() => { setSidebarOpen(false); item.onClick(); }}
+                  className={`group w-full flex items-center gap-3.5 px-4 h-14 rounded-2xl text-[17px] font-semibold text-left transition-colors ${item.active ? 'bg-white/[0.06] text-thumb-ink' : 'text-thumb-ink/75 hover:text-thumb-ink hover:bg-white/[0.04]'}`}
+                >
+                  <item.icon className={`w-[18px] h-[18px] shrink-0 ${item.active ? 'text-thumb-red' : 'text-thumb-sub group-hover:text-thumb-ink'}`} />
+                  {item.label}
+                  {item.active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-thumb-red" />}
+                </button>
+              ))}
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="p-1.5 text-thumb-sub hover:text-thumb-ink" aria-label="Close menu"><I.X className="w-5 h-5" /></button>
-          </div>
 
-          {/* Theme switch — same solid pill used for Format/Variations/Quality
-              elsewhere, instead of the translucent nav-pill style (that one's
-              built for the bordered list items below, not a compact toggle;
-              it read as a barely-visible, mismatched highlight here). */}
-          <div className="px-3 pt-3 shrink-0">
-            <SegmentedControl
-              value={theme}
-              onChange={setTheme}
-              options={[
-                { value: 'dark', label: <><I.Moon className="w-4 h-4" /> Dark</> },
-                { value: 'light', label: <><I.Sun className="w-4 h-4" /> Light</> },
-              ]}
-            />
-          </div>
-
-          <nav className="flex-1 overflow-y-auto p-3 space-y-2">
-            <p className="px-2 pt-1 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Menu</p>
-            {([
-              { key: 'home', label: 'Home', tag: 'Landing', icon: I.Wand, active: section === 'home', onClick: goHome },
-              { key: 'shorts', label: 'Shorts Maker', tag: 'Clips', icon: I.Play, active: section === 'shorts', onClick: goShorts },
-              { key: 'generate', label: 'Generate', tag: 'Create', icon: I.Bolt, active: section === 'generate', onClick: goGenerate },
-              { key: 'title', label: 'Title Generator', tag: 'Titles', icon: I.Text, active: section === 'title', onClick: goTitle },
-              { key: 'chapters', label: 'Chapter Maker', tag: 'Timestamps', icon: I.List, active: section === 'chapters', onClick: goChapters },
-              { key: 'preview', label: 'Preview', tag: 'Feed test', icon: I.Tv, active: section === 'preview', onClick: goPreview },
-              { key: 'editor', label: 'Editor', tag: 'Canvas', icon: I.Edit, active: false, onClick: () => { setSidebarOpen(false); onOpenEditor(); } },
-              { key: 'pricing', label: 'Pricing', tag: 'Plans', icon: I.Star, active: section === 'pricing', onClick: goPricing },
-              { key: 'account', label: 'Account', tag: 'Profile', icon: I.Check, active: section === 'account', onClick: goAccount },
-              ...(profile?.is_admin ? [{ key: 'admin', label: 'Admin', tag: 'Styles', icon: I.Grid, active: section === 'admin', onClick: goAdmin }] : []),
-            ] as { key: string; label: string; tag: string; icon: (p: any) => React.ReactElement; active: boolean; onClick: () => void }[]).map(item => (
-              <button
-                key={item.key}
-                onClick={item.onClick}
-                className={`thumb-nav w-full flex items-center gap-3 pl-2.5 pr-3 py-2.5 rounded-2xl text-[14px] font-bold ${item.active ? 'thumb-nav-active text-thumb-ink' : 'text-thumb-ink'}`}
-              >
-                <span className={`thumb-nav-chip w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${item.active ? 'text-white' : 'text-thumb-ink'}`}>
-                  <item.icon className="w-[18px] h-[18px]" />
-                </span>
-                {item.label}
-                <span className={`ml-auto text-[10px] font-bold uppercase tracking-wide ${item.active ? 'text-thumb-red' : 'text-thumb-sub'}`}>{item.tag}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="p-3 border-t border-white/10 shrink-0 space-y-2.5">
-            {configured && user ? (
-              <>
-                <button onClick={goAccount} className="w-full flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/5 transition-colors text-left">
-                  <div className="w-9 h-9 rounded-xl bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0">{(user.email?.[0] || 'U').toUpperCase()}</div>
+            <div className="mt-2 pt-3 px-1.5 pb-1 border-t border-white/[0.07]">
+              {configured && user ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-thumb-red text-white flex items-center justify-center text-sm font-black shrink-0">{(user.email?.[0] || 'U').toUpperCase()}</div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-bold text-thumb-ink truncate">{user.email}</p>
-                    <p className="text-[11px] text-thumb-sub flex items-center gap-1">
+                    <p className="text-[11.5px] text-thumb-sub flex items-center gap-1">
                       {creditsLoading
                         ? <span className="thumb-skeleton inline-block w-6 h-3 rounded align-middle" aria-label="Loading credits" />
                         : totalCredits}
                       {' '}credits · {getPlan((profile?.plan ?? 'free') as PlanId)?.name ?? 'Free'}
                     </p>
                   </div>
+                  <button onClick={() => { signOut(); setSidebarOpen(false); }} className="h-10 px-4 rounded-full text-[13px] font-bold text-thumb-sub border border-white/10 hover:text-thumb-red hover:border-thumb-red/40 transition-colors">
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => { setSidebarOpen(false); requireLogin(); }} className="thumb-btn w-full h-12 text-white font-bold rounded-full flex items-center justify-center gap-2 text-[15px]">
+                  Log in with Google
                 </button>
-                <button onClick={goPricing} className="thumb-btn w-full text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm">
+              )}
+              {configured && user && (
+                <button onClick={() => { setSidebarOpen(false); goPricing(); }} className="thumb-btn mt-3 w-full h-12 text-white font-bold rounded-full flex items-center justify-center gap-2 text-[15px]">
                   <I.Bolt className="w-4 h-4" /> Upgrade / buy credits
                 </button>
-                <button onClick={() => { signOut(); setSidebarOpen(false); }} className="w-full py-2.5 rounded-xl text-sm font-bold text-thumb-sub bg-white/5 border border-white/10 hover:text-thumb-red transition-colors">
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => requireLogin()} className="thumb-btn w-full text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm">
-                  <I.Check className="w-4 h-4" /> Log in with Google
-                </button>
-                <button onClick={() => goToMode(mode)} className="w-full py-2.5 rounded-xl text-sm font-bold text-thumb-ink bg-white/5 border border-white/10 hover:border-thumb-red/40 transition-colors flex items-center justify-center gap-2">
-                  <I.Wand className="w-4 h-4" /> Generate Thumbnails
-                </button>
-              </>
-            )}
-          </div>
-        </aside>
+              )}
+            </div>
+          </nav>
+        </div>
       </div>
 
       <main className="max-w-6xl mx-auto px-5">
