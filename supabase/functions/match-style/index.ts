@@ -57,7 +57,7 @@ async function checkFreeRateLimit(admin: any, uid: string): Promise<boolean> {
     .eq('user_id', uid)
     .eq('tool', 'match-style')
     .gte('created_at', since);
-  if (error) return true; // fail open — don't block the tool over a logging hiccup
+  if (error) return false; // fail closed: this count is the only gate on a free (paid-for-by-us) call
   if ((count ?? 0) >= FREE_LIMIT) return false;
   // supabase-js's .from() builder is PromiseLike, not a real Promise — it has
   // no .catch(), so chaining one here throws a synchronous TypeError instead

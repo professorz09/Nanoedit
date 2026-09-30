@@ -70,6 +70,7 @@ const OR_MODEL_LARGE = Deno.env.get('OPENROUTER_TEXT_MODEL_LARGE') || 'google/ge
 // pair) free calls instead of just 1, so the old ceiling capped a genuine
 // user doing several 4-variation generations in an hour.
 const FREE_LIMIT = 40;
+const FREE_MAX_PROMPT_CHARS = 12000;
 const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 async function checkFreeRateLimit(admin: any, uid: string, tool: string): Promise<boolean> {
@@ -80,7 +81,8 @@ async function checkFreeRateLimit(admin: any, uid: string, tool: string): Promis
     .eq('user_id', uid)
     .eq('tool', tool)
     .gte('created_at', since);
-  if (error) return true; // fail open — don't block the tool over a logging hiccup
+  // fail closed: this is the only gate on a free op — an unreadable count must not open it up
+  if (error) return false;
   if ((count ?? 0) >= FREE_LIMIT) return false;
   // supabase-js's .from() builder is PromiseLike, not a real Promise — it has
   // no .catch(), so chaining one here throws a synchronous TypeError instead
@@ -145,6 +147,9 @@ Deno.serve(async (req) => {
 
   const uid = userData.user.id;
 
+  // a free op is the short YouTube-concept step (a ~4k-character prompt): capped well under the paid
+  // tools' 32k, and it never runs on the bigger model — otherwise it's a free general-purpose LLM
+  if (cost === 0 && prompt.length > FREE_MAX_PROMPT_CHARS) return json(400, { error: 'Input is too long.' });
   if (cost === 0) {
     const ok = await checkFreeRateLimit(admin, uid, `text:${op}`);
     if (!ok) return json(429, { error: 'Too many requests. Please wait a bit and try again.' });
@@ -163,7 +168,7 @@ Deno.serve(async (req) => {
   }
 
   const errs: string[] = [];
-  const isLargePrompt = prompt.length > LARGE_PROMPT_THRESHOLD;
+  const isLargePrompt = cost > 0 && prompt.length > LARGE_PROMPT_THRESHOLD;
 
   // Google Cloud, OpenRouter, or Google Cloud then OpenRouter — the admin's text provider setting
   const steps = providerSteps((await loadAppSettings(admin)).textProvider);

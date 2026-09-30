@@ -57,6 +57,7 @@ const COSTS: Record<string, number> = {
 // counted against the same tool_usage rows so the two paths share one budget
 // rather than handing out double.
 const FREE_LIMIT = 40;
+const FREE_MAX_PROMPT_CHARS = 12000;
 const FREE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 async function checkFreeRateLimit(admin: any, uid: string, tool: string): Promise<boolean> {
@@ -67,7 +68,8 @@ async function checkFreeRateLimit(admin: any, uid: string, tool: string): Promis
     .eq('user_id', uid)
     .eq('tool', tool)
     .gte('created_at', since);
-  if (error) return true; // fail open — don't block the tool over a logging hiccup
+  // fail closed: this is the only gate on a free op — an unreadable count must not open it up
+  if (error) return false;
   if ((count ?? 0) >= FREE_LIMIT) return false;
   try { await admin.from('tool_usage').insert({ user_id: uid, tool }); } catch (_) { /* best-effort */ }
   return true;
@@ -125,6 +127,9 @@ export default async function handler(req: any, res: any) {
   const cost = COSTS[op];
   if (cost === undefined) return res.status(400).json({ error: 'Unknown operation.' });
 
+  // a free op is the short YouTube-concept step (a ~4k-character prompt): capped well under the paid
+  // tools' 32k, and it never runs on the bigger model — otherwise it's a free general-purpose LLM
+  if (cost === 0 && prompt.length > FREE_MAX_PROMPT_CHARS) return res.status(400).json({ error: 'Input is too long.' });
   if (cost === 0) {
     const ok = await checkFreeRateLimit(admin, uid, `text:${op}`);
     if (!ok) return res.status(429).json({ error: 'Too many requests. Please wait a bit and try again.' });
@@ -143,7 +148,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const errs: string[] = [];
-  const isLargePrompt = prompt.length > LARGE_PROMPT_THRESHOLD;
+  const isLargePrompt = cost > 0 && prompt.length > LARGE_PROMPT_THRESHOLD;
   // Google Cloud, OpenRouter, or Google Cloud then OpenRouter — the admin's text provider setting
   const steps = providerSteps((await loadAppSettings(admin)).textProvider);
 
