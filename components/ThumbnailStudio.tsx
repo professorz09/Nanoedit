@@ -242,11 +242,25 @@ function wallItems() {
   return items;
 }
 
-const Initials = ({ name }: { name: string }) => (
-  <span className="w-12 h-12 rounded-full bg-thumb-card ring-2 ring-thumb-red/40 flex items-center justify-center font-black text-sm shrink-0">
-    {name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-  </span>
-);
+// an illustrated avatar per name (DiceBear "notionists" drawings — clearly drawings, not photos of the
+// reviewers) on a warm gradient, with the initials underneath while it loads or if it can't
+const AVATAR_BGS = ['from-rose-500 to-orange-400', 'from-fuchsia-500 to-rose-500', 'from-amber-400 to-rose-500',
+  'from-emerald-400 to-teal-500', 'from-sky-400 to-indigo-500'];
+const Initials = ({ name }: { name: string }) => {
+  const hash = [...name].reduce((h, c) => h + c.charCodeAt(0), 0);
+  return (
+    <span className={`relative w-12 h-12 rounded-full bg-gradient-to-br ${AVATAR_BGS[hash % AVATAR_BGS.length]} ring-2 ring-white/15 flex items-center justify-center font-black text-sm text-white shrink-0 overflow-hidden`}>
+      {name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+      <img
+        src={`https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}`}
+        alt=""
+        loading="lazy"
+        onError={e => { e.currentTarget.style.display = 'none'; }}
+        className="absolute inset-0 w-full h-full scale-110 translate-y-1"
+      />
+    </span>
+  );
+};
 
 const FAQS = [
   { q: "What is PodcastFlux?", a: "PodcastFlux is an AI Shorts maker: it turns long YouTube videos and podcasts into ready-to-post YouTube Shorts, TikToks and Instagram Reels. Paste a link and the AI finds the best clips, adds animated captions and effects, and writes the title — no editing app needed." },
