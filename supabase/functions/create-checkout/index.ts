@@ -110,32 +110,36 @@ Deno.serve(async (req) => {
         billing_currency: 'USD',
         // Read back by dodo-webhook to know who to credit and for what.
         metadata: { uid, item: itemId },
-        // user-requested: Dodo's hosted page in the site's own look — dark, the site's black/red, rounded
-        // like its cards (fields per the dodopayments SDK's CheckoutSessionCustomization / ThemeConfig)
+        // user-requested: a clean Stripe-style page — white, light grey lines, dark text, small corners, the
+        // button in the brand red like Stripe uses the merchant's colour (fields per the dodopayments SDK's
+        // CheckoutSessionCustomization / ThemeConfig)
         customization: {
-          theme: 'dark',
+          theme: 'light',
           show_on_demand_tag: false,
+          show_order_details: true,
           theme_config: {
-            dark: {
-              bg_primary: '#030304',
-              bg_secondary: '#16161a',
-              border_primary: '#232328',
-              border_secondary: '#2a2a31',
+            light: {
+              bg_primary: '#ffffff',
+              bg_secondary: '#f6f9fc',
+              border_primary: '#e3e8ee',
+              border_secondary: '#eef1f5',
               button_primary: '#ff3355',
               button_primary_hover: '#e01840',
               button_text_primary: '#ffffff',
-              button_secondary: '#16161a',
-              button_secondary_hover: '#232328',
-              button_text_secondary: '#f5f5f8',
+              button_secondary: '#ffffff',
+              button_secondary_hover: '#f6f9fc',
+              button_text_secondary: '#30313d',
               input_focus_border: '#ff3355',
-              text_primary: '#f5f5f8',
-              text_secondary: '#a2a2b4',
-              text_placeholder: '#6b6b7a',
-              text_error: '#ff6b81',
-              text_success: '#2ee6a6',
+              text_primary: '#30313d',
+              text_secondary: '#6a7383',
+              text_placeholder: '#a3acb9',
+              text_error: '#df1b41',
+              text_success: '#1a9f6e',
             },
-            radius: '14px',
-            pay_button_text: `Pay $${item.usd} · get ${item.credits} credits`,
+            radius: '6px',
+            font_size: 'sm',
+            font_weight: 'medium',
+            pay_button_text: `Pay $${item.usd}`,
           },
         },
         // the charge is always USD (billing_currency above) — no currency picker that can't change it
