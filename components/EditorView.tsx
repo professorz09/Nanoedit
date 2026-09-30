@@ -962,7 +962,8 @@ export default function EditorView(props: EditorViewProps) {
                       </div>
                       <button onClick={() => setShowStylePicker(false)} className="w-8 h-8 rounded-lg bg-thumb-soft border border-thumb-line text-thumb-sub hover:text-thumb-ink flex items-center justify-center"><IconX /></button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto no-scrollbar pr-1">
+                  <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pr-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       {styleImages.map((src, i) => (
                           <button
                               key={i}
@@ -973,6 +974,7 @@ export default function EditorView(props: EditorViewProps) {
                               <LoadedThumb src={src} alt={`Style ${i + 1}`} className="relative w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
                           </button>
                       ))}
+                  </div>
                   </div>
               </div>
           </div>
@@ -994,7 +996,8 @@ export default function EditorView(props: EditorViewProps) {
                           <div className="w-6 h-6 border-2 border-thumb-red border-t-transparent rounded-full animate-spin" />
                       </div>
                   )}
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto no-scrollbar pr-1">
+                  <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pr-1">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       {personas?.map(p => (
                           <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden border border-thumb-line group">
                               <button
@@ -1015,6 +1018,7 @@ export default function EditorView(props: EditorViewProps) {
                               </button>
                           </div>
                       ))}
+                  </div>
                   </div>
                   {personas !== null && !personas.length && (
                       <p className="text-sm text-thumb-sub text-center py-6">No saved faces yet — add one from your Profile.</p>
