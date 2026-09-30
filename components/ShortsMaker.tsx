@@ -386,15 +386,16 @@ const ShortCard: React.FC<{
               </button>
             )}
           </div>
-          {/* user-requested: a made Short can simply be made again (same moment, same style) — free, it's paid */}
+          {/* user-requested: a made Short can simply be made again — the whole video from the start, same moment
+              and style; user-decided: it costs credits like a first make */}
           {clip.status === 'ready' && clip.paid && !customLook && (
             <div className="pt-2.5 mt-1 border-t border-thumb-line space-y-2">
               <span className="block text-[11px] font-bold uppercase tracking-wider text-thumb-sub">Remake</span>
               <button type="button" disabled={busy} onClick={() => onRemake(clip, null)}
                 className="w-full h-10 rounded-xl bg-thumb-card border border-thumb-line text-thumb-ink font-bold text-[13px] hover:border-thumb-red/40 disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-1.5">
-                <Ic.Reset className="w-3.5 h-3.5" /> Make this Short again · free
+                <Ic.Reset className="w-3.5 h-3.5" /> Make this Short again · {cost} credit{cost === 1 ? '' : 's'}
               </button>
-              <p className="text-[11px] text-thumb-sub text-center">Not happy with it? It's made again from the start, in the same style.</p>
+              <p className="text-[11px] text-thumb-sub text-center">Not happy with it? The whole video is made again from the start, in the same style.</p>
             </div>
           )}
           </div>
@@ -721,7 +722,8 @@ const ShortsMaker: React.FC<{ onRequireLogin: (reason?: string) => void; onBuyCr
   // l: the one-off style to make it in; null: make it again as it is (a made Short's "Remake")
   const onRemake = async (clip: ShortClip, l: ShortsLook | null) => {
     setNote(null);
-    if (configured && !clip.paid && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
+    // a first make, and every Remake (user-decided: a remake is paid like a first make), takes credits
+    if (configured && (!clip.paid || !l) && totalCredits < cost) { setNote(`You need ${credits(cost)} to make this Short.`); onBuyCredits(); return; }
     try {
       await flushTrim(clip);
       if (l) {
